@@ -310,7 +310,7 @@ abstract class GenericKoikaDriver[A: Typable, B: Typable] extends DslDriver[A, B
   val mem_size: Int = 30
   val secret_size: Int = 10
   val secret_offset: Int = 20
-  val cache_size: Int = 0
+  val cache_size: Int = 10
 
   val stateT: String = "StateT"
 
@@ -327,7 +327,7 @@ abstract class GenericKoikaDriver[A: Typable, B: Typable] extends DslDriver[A, B
   |  int timer;
   |};""".stripMargin
 
-  val header: String = s"""
+  lazy val header: String = s"""
 #define NUM_REGS $num_regs
 #define MEM_SIZE $mem_size
 #define SECRET_SIZE $secret_size
@@ -349,13 +349,13 @@ $stateTDef
 
   val init: String
 
-  val initialize_input: String =
+  lazy val initialize_input: String =
     """
       |  int x = bounded(0, 20);
       |  s1.regs[0] = x;
       |  s2.regs[0] = x;""".stripMargin
 
-  val initialize_secret: String =
+  lazy val initialize_secret: String =
     """
       |  // initialize secret
       |  for (int i=0; i<SECRET_SIZE; i++) {
@@ -363,7 +363,7 @@ $stateTDef
       |    s2.mem[SECRET_OFFSET+i] = bounded(0, 20);
       |  }""".stripMargin
 
-  def main: String =
+  lazy val main: String =
     s"""int main(int argc, char* argv[]) {
        |  struct $stateT s1, s2;
        |  init(&s1);
