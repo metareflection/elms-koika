@@ -1,4 +1,6 @@
-val scala3Version = "3.6.4"
+name := "elms"
+
+ThisBuild / scalaVersion := "3.6.4"
 
 scalacOptions ++= Seq("-experimental")
 scalacOptions ++= Seq("-Wconf:msg=match may not be exhaustive:e")
@@ -17,17 +19,3 @@ Test / javaOptions += {
   val cp = (Test / fullClasspath).value.files.mkString(java.io.File.pathSeparator)
   s"-Dgenerated.test.classpath=$cp"
 }
-
-lazy val elms = project.in(file("vendor/elms"))
-
-lazy val root = project
-  .in(file("."))
-  .dependsOn(elms)
-  .settings(
-    name := "elms-koika",
-    version := "0.1.0-SNAPSHOT",
-
-    scalaVersion := scala3Version,
-
-    libraryDependencies += "org.scalameta" %% "munit" % "1.3.2" % Test
-  )
