@@ -1,0 +1,70 @@
+name: Continuous integration
+
+# This workflow builds the project, runs tests, and publishes artifacts to GitHub Packages.
+# It also publishes Scaladoc to GitHub Pages when changes are pushed to the main branch
+# or when a new tag is created.
+
+# This workflow is triggered on pushes.
+on:
+  push:
+    branches-ignore:
+      - gh-pages
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      packages: write
+
+    steps:
+      - name: Checkout repository with tags
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-java@v4 # Set up a JDK
+        with:
+          distribution: temurin
+          java-version: 21
+          cache: sbt # Cache the artifacts downloaded by sbt across CI runs
+      - uses: sbt/setup-sbt@v1
+
+      - name: Show project version
+        run: sbt 'show version'
+
+      - name: unit tests
+        run: sbt +test
+
+      - name: Run benchmarks
+        # Benchmarking with JMH can be time-consuming, so we run it with one fork,
+        # one warmup iteration, one measurement iteration, and a 5-second measurement time
+        # per iteration to keep the CI time reasonable.
+        run: sbt 'benchmarks/jmh:run -wi 1 -i 1 -f 1 -r 5s -p threadCount=1'
+
+      - name: Publish to GitHub Packages
+        if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/')
+        run: sbt +publish
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_ACTOR: ${{ github.actor }}
+
+      - name: Generate Scaladoc
+        run: sbt doc
+
+      - name: Set up git config for gh-pages
+        run: |
+          git config --global user.name "GitHub Actions"
+          git config --global user.email "actions@github.com"
+
+      - name: Set up GitHub authentication for gh-pages
+        run: |
+          git config --global credential.helper store
+          echo "https://${GITHUB_ACTOR}:${GITHUB_TOKEN}@github.com" > ~/.git-credentials
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_ACTOR: ${{ github.actor }}
+
+      - name: Publish API docs to GitHub Pages
+        if: github.ref == 'refs/heads/main'
+        run: sbt ghpagesPushSite

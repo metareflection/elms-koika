@@ -2,6 +2,8 @@ package elms.pipeline.eqsat
 
 import scala.collection.mutable
 
+import foresight.eqsat.{EClassCall, EClassRef}
+
 import elms.core.given
 import elms.core.{Type, Op, Name}
 import elms.core.tree as ast
@@ -11,35 +13,38 @@ import elms.util.Plumbing.*
 import elms.util.collection.*
 import elms.runtime.*
 
-import EGraph.EClass
 import Stmt.*
 
 object Builder {
-  case class Config(rules: Seq[Rule], cfg: EGraph.Config = EGraph.Config())
+  case class Config(
+      rules: Ruleset = Rules.default,
+      cfg: EGraph.Config = EGraph.Config()
+  )
   enum Handle {
     case Global(name: Name)
-    case Local(cls: EClass)
-    // The EClass here is solely so downstream users can register nodes in the
+    case Local(cls: EClassCall)
+    // The EClassCall here is solely so downstream users can register nodes in the
     // EGraph; think of it as `v <- body`
     //
     // CR cwong: This representation is very scary; we're likely to drop effects
     // if we never actually write the body back into the CFG.
-    case Region(v: Name, cls: EClass, body: Stmt)
+    case Region(v: Name, cls: EClassCall, body: Stmt)
   }
 }
 
 private class RegionBuilder(fresh: () => Name) {
-  val body: mutable.ArrayBuffer[(Name, EClass, Stmt)] = mutable.ArrayBuffer()
-  var tail: Option[EClass] = None
+  val body: mutable.ArrayBuffer[(Name, EClassCall, Stmt)] = mutable.ArrayBuffer()
+  var tail: Option[EClassCall] = None
 
   def clear(): Unit = {
     tail = None
     body.clear()
   }
 
-  def push(name: Name, cls: EClass, stmt: Stmt): Unit = { body += ((name, cls, stmt)) }
+  def push(name: Name, cls: EClassCall, stmt: Stmt): Unit =
+    body += ((name, cls, stmt))
 
-  def ret(cls: EClass): Unit = { tail = Some(cls) }
+  def ret(cls: EClassCall): Unit = { tail = Some(cls) }
 
   def extract(): Stmt = {
     val last = tail.getOrElse {
@@ -64,9 +69,9 @@ private class RegionStack(fresh: () => Name) {
     base.extract()
   }
 
-  def push(name: Name, cls: EClass, stmt: Stmt): Unit = top.push(name, cls, stmt)
+  def push(name: Name, cls: EClassCall, stmt: Stmt): Unit = top.push(name, cls, stmt)
 
-  def ret(cls: EClass): Unit = top.ret(cls)
+  def ret(cls: EClassCall): Unit = top.ret(cls)
 
   def isEmpty: Boolean = stack.isEmpty
 
@@ -75,7 +80,7 @@ private class RegionStack(fresh: () => Name) {
 
 private class FunctionBuilder(
     name: Name,
-    rules: Seq[Rule],
+    rules: Ruleset,
     config: EGraph.Config,
     predefs: Set[Name],
     fresh: () => Name
@@ -83,24 +88,25 @@ private class FunctionBuilder(
   import Builder.Handle.*
 
   private val counter = Counter()
-  private val graph = EGraph(Ruleset(rules), config)
+  private val graph = EGraph(rules, config)
   private val env = mutable.Map.from((predefs + name).map { name =>
     name -> graph.addNamedVar(name)
   })
   private val regions = RegionStack(fresh)
 
-  def register(name: Name): EClass = {
+  def register(name: Name): EClassCall = {
     env(name) = graph.addNamedVar(name)
     env(name)
   }
 
-  def ensureClass(name: Name): EClass = env.get(name).getOrElse {
-    Log.warning(s"BUG: unregistered name $name was used before it was declared")
-    register(name)
-  }
+  def ensureClass(name: Name): EClassCall = env.get(name).map(graph.canonical)
+    .getOrElse {
+      Log.warning(s"BUG: unregistered name $name was used before it was declared")
+      register(name)
+    }
 
   extension (handle: Builder.Handle)
-    def unwrap: EClass = handle match {
+    def unwrap: EClassCall = handle match {
       case Local(cls)              => cls
       case Global(name)            => ensureClass(name)
       case Region(name, cls, body) => {
@@ -116,14 +122,14 @@ private class FunctionBuilder(
     }
 
   private object Handle {
-    def unapply(handle: Builder.Handle): Option[EClass] = Some(handle.unwrap)
+    def unapply(handle: Builder.Handle): Option[EClassCall] = Some(handle.unwrap)
   }
 
-  def symbol(name: Name): EClass = graph.addNamedVar(name)
+  def symbol(name: Name): EClassCall = graph.addNamedVar(name)
 
   def lambda(
       name: Name,
-      cls: EClass,
+      cls: EClassCall,
       arg: Name,
       inty: Type,
       outty: Type,
@@ -136,10 +142,13 @@ private class FunctionBuilder(
     case ctrl: Op.Control  => reflectControl(ctrl, children)
   }
 
-  private def reflectPure(op: Op.Pure, children: Seq[EClass]): Builder.Handle =
+  private def reflectPure(op: Op.Pure, children: Seq[EClassCall]): Builder.Handle =
     Local(graph.addNode(op, children))
 
-  private def reflectEffect(op: Op.Effectful, children: Seq[EClass]): Builder.Handle = {
+  private def reflectEffect(
+      op: Op.Effectful,
+      children: Seq[EClassCall]
+  ): Builder.Handle = {
     val name = fresh()
     val cls = graph.addNamedVar(name)
     regions.push(name, cls, Effect(op, children))
@@ -187,7 +196,7 @@ private class FunctionBuilder(
   def ret(handle: Builder.Handle): Unit = regions.ret(handle.unwrap)
 
   def openRegion(): Unit = regions.openRegion()
-  def closeRegion(): (Name, EClass, Stmt) = {
+  def closeRegion(): (Name, EClassCall, Stmt) = {
     val stmt = regions.closeRegion()
     val name = fresh()
     val cls = graph.addNamedVar(name)
@@ -199,17 +208,20 @@ private class FunctionBuilder(
       Log.warning("BUG: attempted to `extract` without closing all regions")
     }
 
+    graph.saturate()
     elab(regions.extract(), ScopeMap())
   }
 
+  // Keyed on `EClassRef` rather than `EClassCall`: two calls can denote the same
+  // class, and a call stored before a union denotes nothing afterwards.
   class ScopeMap(
       parent: Option[ScopeMap] = None,
-      vs: mutable.Map[EClass, Name] = mutable.Map()
+      vs: mutable.Map[EClassRef, Name] = mutable.Map()
   ) {
-    def get(cls: EClass): Option[Name] = vs.get(cls)
+    def get(cls: EClassCall): Option[Name] = vs.get(graph.ref(cls))
       .orElse { parent.flatMap { _.get(cls) } }
 
-    def update(cls: EClass, name: Name): Unit = { vs(cls) = name }
+    def update(cls: EClassCall, name: Name): Unit = { vs(graph.ref(cls)) = name }
 
     def enter: ScopeMap = ScopeMap(Some(this))
   }
@@ -221,12 +233,12 @@ private class FunctionBuilder(
 
   private type ElabOut = (Seq[(Name, ast.Term)], ast.Term)
 
-  def elabCls(cls: EClass, cache: ScopeMap): ElabOut = cache.get(cls) match {
+  def elabCls(cls: EClassCall, cache: ScopeMap): ElabOut = cache.get(cls) match {
     case Some(v) => (Seq(), ast.V(v))
     case None    => {
       val name = fresh()
       val result = graph.extract(cls)
-        .getOrElse { throw LMSRuntimeException(s"BUG: invalid EClass $cls") }
+        .getOrElse { throw LMSRuntimeException(s"BUG: invalid EClassCall $cls") }
       cache(cls) = name
       (Seq((name, result)), ast.V(name))
     }

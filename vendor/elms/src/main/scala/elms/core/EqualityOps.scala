@@ -1,11 +1,8 @@
 package elms.core
 
-import annotation.implicitNotFound
-
-import elms.core
 import elms.core.Op._
 
-trait EqualityOps extends BooleanOps {
+trait EqualityOps extends BooleanOps with poly.EqualityOps {
   // At the moment, it's very difficult to use `==` for Rep operations, due to
   // the `.equals` always returning `Bool`. Previously, LMS would rewrite the
   // expression `a == b` into `a.__equals(b)` and let method overloading figure
@@ -27,15 +24,6 @@ trait EqualityOps extends BooleanOps {
   // Worse, because these errors happen at macro expansion time, they're
   // unlikely to be a good developer UX. It's much simpler to ban the use of
   // `==` on `Rep`s entirely and mint a dedicated operator instead.
-  @implicitNotFound("`Rep`s should not be compared using `==`, use `===` instead.")
-  sealed trait NoRepEquals[T]
-
   extension [T](lhs: Rep[T])(using CanEqual[T, T])
     def ===(rhs: Rep[T]): Rep[Boolean] = unsafeReflect(Equals, lhs, rhs)
-    def !==(rhs: Rep[T]): Rep[Boolean] = !(lhs === rhs)
-
-  given [T: NoRepEquals](using CanEqual[T, T]): CanEqual[Rep[T], Rep[T]] =
-    CanEqual.derived
-  given [T: NoRepEquals](using CanEqual[T, T]): CanEqual[T, Rep[T]] = CanEqual.derived
-  given [T: NoRepEquals](using CanEqual[T, T]): CanEqual[Rep[T], T] = CanEqual.derived
 }

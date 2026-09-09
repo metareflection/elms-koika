@@ -3,7 +3,7 @@ package elms.helpers
 import elms.core.{Driver, Typable}
 import elms.core.tree as ast
 import elms.pipeline, pipeline.simple
-import elms.pipeline.eqsat, eqsat.Rule
+import elms.pipeline.eqsat, eqsat.Ruleset
 import elms.pipeline.Propagate
 import elms.codegen.{Backend, ScalaCodegen}
 import elms.util.Plumbing.*
@@ -24,8 +24,9 @@ abstract class SimpleSnippetDriver[A: Typable, B: Typable] extends SnippetDriver
   override val codegen = ScalaCodegen()
 }
 
-abstract class OptimizingSnippetDriver[A: Typable, B: Typable](rules: Seq[Rule] = Seq())
-    extends SnippetDriver[A, B] {
+abstract class OptimizingSnippetDriver[A: Typable, B: Typable](
+    rules: Ruleset = eqsat.Rules.default
+) extends SnippetDriver[A, B] {
   override val builder = eqsat.Builder(eqsat.Builder.Config(rules))
   override val codegen = ScalaCodegen()
 

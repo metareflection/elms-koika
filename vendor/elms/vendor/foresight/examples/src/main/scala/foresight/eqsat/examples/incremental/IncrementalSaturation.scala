@@ -1,0 +1,134 @@
+package foresight.eqsat.examples.incremental
+
+import foresight.eqsat.parallel.ParallelMap
+import foresight.eqsat.rewriting.{EClassSearcher, EClassesToSearch, Rule, Searcher}
+import foresight.eqsat.rewriting.patterns.{CompiledPattern, Instruction, MachineEClassSearcher, PatternMatch}
+import foresight.eqsat.{EClassCall, EClassRef, ENode}
+import foresight.eqsat.readonly.{EGraph, EGraphWithMetadata}
+import foresight.util.collections.UnsafeSeqFromArray
+
+import scala.collection.compat.immutable.ArraySeq
+import scala.collection.mutable.ArrayBuffer
+
+object IncrementalSaturation {
+  def isLatestVersion[NodeT, EGraphT <: EGraph[NodeT]](
+    eclass: EClassRef,
+    egraph: EGraphWithMetadata[NodeT, EGraphT],
+    versionMetadataName: String
+  ): Boolean = {
+    val meta = egraph.getMetadata[VersionMetadata[NodeT]](versionMetadataName)
+    meta.isLatestVersion(eclass)
+  }
+
+  def isTopK[NodeT, EGraphT <: EGraph[NodeT], C](
+    node: ENode[NodeT],
+    eclass: EClassCall,
+    egraph: EGraphWithMetadata[NodeT, EGraphT],
+    costAnalysis: TopKCostAnalysis[NodeT, C]
+  ): Boolean = {
+    val nodes = egraph.nodes(eclass)
+    if (nodes.size <= costAnalysis.k) {
+      // If there are k or fewer nodes in the e-class, all nodes are permissible
+      true
+    } else {
+      // Otherwise, only the top-k cheapest nodes are permissible
+      val costs = costAnalysis.get(egraph)
+
+      def nodeCost(node: ENode[NodeT]): C = {
+        costAnalysis.cost(node.nodeType, node.definitions, node.uses, node.args.map(arg => costs(arg.ref).min))
+      }
+
+      val cutoff = costs(eclass.ref).cutoff
+      costAnalysis.costOrdering.lt(nodeCost(node), cutoff)
+    }
+  }
+
+  def makeIncremental[
+    NodeT,
+    EGraphT <: EGraph[NodeT],
+    C
+  ]
+  (
+    rule: Rule[NodeT, PatternMatch[NodeT], EGraphWithMetadata[NodeT, EGraphT]],
+    versionMetadataName: String,
+    costAnalysis: TopKCostAnalysis[NodeT, C]
+  ): Rule[NodeT, PatternMatch[NodeT], EGraphWithMetadata[NodeT, EGraphT]] = {
+
+    rule match {
+      case Rule(name, MachineEClassSearcher(pattern: CompiledPattern[NodeT, EGraphT], buildContinuation), applier) =>
+        // For machine searchers, convert to an incremental searcher, which only matches on the latest version
+        // and for each node binding only matches the top-k cheapest nodes
+        Rule(name, toIncrementalSearcher(pattern, versionMetadataName, costAnalysis, buildContinuation), applier)
+
+      case Rule(name, searcher, applier) =>
+        // For other searchers, filter to only apply on the latest version
+        Rule(name, searcher.filter({
+          case (m, egraph) => isLatestVersion(m.root.ref, egraph, versionMetadataName)
+        }), applier)
+    }
+  }
+
+  def makeIncremental[
+    NodeT,
+    EGraphT <: EGraph[NodeT],
+    C
+  ]
+  (
+    rules: Seq[Rule[NodeT, PatternMatch[NodeT], EGraphWithMetadata[NodeT, EGraphT]]],
+    versionMetadataName: String,
+    costAnalysis: TopKCostAnalysis[NodeT, C]
+  ): Seq[Rule[NodeT, PatternMatch[NodeT], EGraphWithMetadata[NodeT, EGraphT]]] = {
+
+    rules.map(makeIncremental(_, versionMetadataName, costAnalysis))
+  }
+
+  def toIncrementalSearcher[NodeT, EGraphT <: EGraph[NodeT], C]
+  (
+    pattern: CompiledPattern[NodeT, EGraphWithMetadata[NodeT, EGraphT]],
+    versionMetadataName: String,
+    costAnalysis: TopKCostAnalysis[NodeT, C],
+    buildContinuation: MachineEClassSearcher[NodeT, EGraphWithMetadata[NodeT, EGraphT]]#ContinuationBuilder
+  ): Searcher[NodeT, PatternMatch[NodeT], EGraphWithMetadata[NodeT, EGraphT]] = {
+    val newInstructions = ArrayBuffer[Instruction[NodeT, EGraphWithMetadata[NodeT, EGraphT]]]()
+    var bindings = 0
+    for (instr <- pattern.instructions) {
+      newInstructions.append(instr)
+      instr match {
+        case Instruction.BindNode(register, nodeType, definitions, uses, arity) =>
+          newInstructions.append(LatestVersionOrTopKInstruction(register, bindings, versionMetadataName, costAnalysis))
+          bindings += 1
+        case _ =>
+      }
+    }
+
+    val updatedPattern = CompiledPattern(pattern.pattern, newInstructions.toSeq)
+
+    final case class IncrementalMachineSearcher(buildContinuation: MachineEClassSearcher[NodeT, EGraphWithMetadata[NodeT, EGraphT]]#ContinuationBuilder)
+      extends EClassSearcher[NodeT, PatternMatch[NodeT], EGraphWithMetadata[NodeT, EGraphT]] {
+
+      override val classesToSearch: EClassesToSearch[EGraphWithMetadata[NodeT, EGraphT]] =
+        VersionMetadata.SearchOnlyLatestVersionClasses(versionMetadataName)
+
+      protected override def search(call: EClassCall, egraph: EGraphWithMetadata[NodeT, EGraphT], continuation: Continuation): Unit = {
+        if (!isLatestVersion(call.ref, egraph, versionMetadataName)) {
+          // Skip searching this e-class if it's not the latest version
+          return
+        }
+
+        updatedPattern.search(call, egraph, continuation)
+      }
+
+      /**
+       * Returns a new instance of this searcher-like object with the specified continuation *builder*.
+       *
+       * @param continuation The new continuation builder to use.
+       * @return A new instance of this searcher-like object with the updated continuation builder.
+       */
+      override def withContinuationBuilder(continuation: ContinuationBuilder): EClassSearcher[NodeT, PatternMatch[NodeT], EGraphWithMetadata[NodeT, EGraphT]] = {
+        IncrementalMachineSearcher(continuation)
+      }
+    }
+
+    IncrementalMachineSearcher(buildContinuation)
+  }
+}

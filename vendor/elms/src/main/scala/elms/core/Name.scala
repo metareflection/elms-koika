@@ -14,4 +14,11 @@ private case class Fresh(id: Int) extends Name {
 object Name {
   def from(s: String): Name = Named(s)
   def from(i: Int): Name = Fresh(i)
+
+  // Extraction breaks cost ties on the node ordering, and a node's payload is a
+  // `Name`, so this is what decides between two equally small terms.
+  given Ordering[Name] = Ordering.by[Name, (Int, String, Int)] {
+    case Named(s) => (0, s, 0)
+    case Fresh(i) => (1, "", i)
+  }
 }

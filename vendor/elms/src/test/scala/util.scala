@@ -11,7 +11,7 @@ import elms.codegen.ScalaCodegen
 import elms.codegen.Config
 
 abstract class DslDriver[A: Typable, B: Typable]
-    extends OptimizingSnippetDriver[A, B](Seq()) with DslOps
+    extends OptimizingSnippetDriver[A, B] with DslOps
 
 trait EvalScalaSnippet[A: Typable, B: Typable] extends SnippetDriver[A, B] {
   val prefix: String

@@ -3,7 +3,8 @@ package elms.helpers
 import elms.core._
 
 trait DslOps
-    extends Base
+    extends elms.helpers.poly.DslOps
+    with Base
     with Builtins
     with PrimitiveOps
     with VarOps
