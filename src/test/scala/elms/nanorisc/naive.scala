@@ -1,13 +1,16 @@
-package elms.koika.test
+package elms.koika.test.nanorisc
 
 import elms.prelude.*
 import elms.prelude.given
 
+import elms.koika.test.KoikaSuite
+import elms.koika.test.common.{GenericKoikaDriver, StateT}
+
 @virtualize
 class NaiveTests extends KoikaSuite {
-  val under = "naive/"
+  val under = "nanorisc/naive/"
 
-  trait NaiveDriver extends GenericKoikaDriver[StateT, StateT] with Naive {
+  trait NaiveDriver extends GenericKoikaDriver[StateT, StateT] with Exec {
     // In the naive driver, we don't use caching or speculation, so we don't
     // need to initialize everything except [regs], [timer] and [mem].
     override val init = s"""void init(struct $stateT *s) {

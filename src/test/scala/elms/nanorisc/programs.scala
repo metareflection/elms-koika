@@ -1,4 +1,4 @@
-package elms.koika.test
+package elms.koika.test.nanorisc
 
 object NanoRiscDemos {
   import NanoRisc.*

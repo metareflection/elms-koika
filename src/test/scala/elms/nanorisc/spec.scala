@@ -1,13 +1,16 @@
-package elms.koika.test
+package elms.koika.test.nanorisc
 
 import elms.prelude.*
 import elms.prelude.given
 
+import elms.koika.test.KoikaSuite
+import elms.koika.test.common.{GenericKoikaDriver, StateT, Speculative}
+
 @virtualize
 class SpecTests extends KoikaSuite {
-  val under = "speculative/"
+  val under = "nanorisc/speculative/"
 
-  trait SpecDriver extends GenericKoikaDriver[StateT, StateT] with Speculative {
+  trait SpecDriver extends GenericKoikaDriver[StateT, StateT] with Exec with Speculative {
     override val init = s"""void init(struct $stateT *s) {
          |  for (int i=0; i<NUM_REGS; i++) {
          |    s->regs[i] = 0;
