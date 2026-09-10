@@ -175,12 +175,17 @@ trait Speculative extends Cached {
             step(pc, s)
           }
           case _ => {
-            var result: Rep[StateT] = s
             inBranch = None
-            if (evalCond(s, cnd)) {
-              rollback(s)
-              result = call(tgt, s)
-            } else { result = step(pc, s) }
+            // The two arms have to be the value of the virtualized `if` rather
+            // than assignments to a `var`. A `var` here is an ordinary Scala
+            // variable holding a `Rep`, so it ends up naming whichever arm was
+            // staged last, and the emitted C returns a symbol declared inside
+            // the other branch's block.
+            val result =
+              if (evalCond(s, cnd)) {
+                rollback(s)
+                call(tgt, s)
+              } else { step(pc, s) }
             resetSaved()
             result
           }

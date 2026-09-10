@@ -234,7 +234,7 @@ struct StateT * v25(struct StateT * v26) {
   int * v173 = v26->regs;
   int v174 = v173[15];
   bool v382 = v172 >= v174;
-  if (v382) {
+  struct StateT * v265 = (v382 ? ({
     int v175 = v26->timer;
     int v383 = v175 + 15;
     v26->timer = v383;int * v177 = v26->saved_regs;
@@ -254,8 +254,8 @@ struct StateT * v25(struct StateT * v26) {
     int * v191 = v26->regs;
     v191[11] = v190;
     struct StateT * v204 = v193(v26);
-    ;
-  } else {
+    v204;
+  }) : ({
     int v206 = v26->timer;
     int v398 = v206 + 1;
     v26->timer = v398;int * v208 = v26->regs;
@@ -270,9 +270,9 @@ struct StateT * v25(struct StateT * v26) {
       struct StateT * v261 = v234(v26);
       v261;
     }));
-    ;
-  }
-  return v263;
+    v263;
+  }));
+  return v265;
 }
 
 struct StateT * v218(struct StateT * v219) {

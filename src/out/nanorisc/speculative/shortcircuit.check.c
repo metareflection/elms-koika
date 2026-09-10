@@ -205,7 +205,7 @@ struct StateT * x19(struct StateT * x20) {
   int * x145 = x20->regs;
   int x146 = x145[4];
   bool x325 = x146 >= 4;
-  if (x325) {
+  struct StateT * x228 = (x325 ? ({
     int x147 = x20->timer;
     int x326 = x147 + 15;
     x20->timer = x326;int * x149 = x20->saved_regs;
@@ -217,8 +217,8 @@ struct StateT * x19(struct StateT * x20) {
     int * x155 = x20->regs;
     x155[1] = x154;
     struct StateT * x168 = x157(x20);
-    ;
-  } else {
+    x168;
+  }) : ({
     int x170 = x20->timer;
     int x335 = x170 + 1;
     x20->timer = x335;int * x172 = x20->regs;
@@ -233,9 +233,9 @@ struct StateT * x19(struct StateT * x20) {
       struct StateT * x224 = x197(x20);
       x224;
     }));
-    ;
-  }
-  return x226;
+    x226;
+  }));
+  return x228;
 }
 
 struct StateT * x1(struct StateT * x2) {

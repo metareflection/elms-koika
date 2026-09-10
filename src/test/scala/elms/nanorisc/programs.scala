@@ -63,8 +63,11 @@ object NanoRiscDemos {
    * More minimal version of the SPECTRE demo below. Initially used for
    * debugging, kept as regression test.
    *
-   * Naive/Cache: CBMC passes (fail to detect)
-   * Speculative: CBMC fails (leak detected)
+   * Naive: CBMC passes (fail to detect)
+   * Cache/Speculative: CBMC fails (leak detected). The cache driver detects it
+   * without any speculation at all: when the guess is `secret_offset` the second
+   * load's address is `mem[secret_offset] + 4`, which hits the entry the first
+   * load just installed exactly when the secret is 16.
    */
   def spec_small: Vector[Instr] =
     Vector(B(Some((Eq,Reg(0),Imm(0))),Addr(3)),
