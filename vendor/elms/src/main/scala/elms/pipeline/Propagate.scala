@@ -14,6 +14,8 @@ object Propagate {
 
   def run(t: Term): Term = propagateImpl(t, Map.empty)
 
+  private def inWidth(count: Int): Boolean = 0 <= count && count < 32
+
   def propagateImpl(t: Term, facts: Map[Name, Fact]): Term = t match {
     case Let(x, e1, e2) => {
       val t1 = propagateImpl(e1, facts)
@@ -70,6 +72,52 @@ object Propagate {
         case Ext.Or(Ext.Const[Boolean](false), t)                => t
         case Ext.Or(t, Ext.Const[Boolean](false))                => t
         case Ext.Not(Ext.Const[Boolean](b))                      => Ext.mkConst(!b)
+        case Ext.StrictAnd(Ext.Const[Boolean](x), Ext.Const[Boolean](y)) => Ext
+            .mkConst(x & y)
+        case Ext.StrictAnd(t, Ext.Const[Boolean](true))  => t
+        case Ext.StrictAnd(Ext.Const[Boolean](true), t)  => t
+        case Ext.StrictAnd(t, Ext.Const[Boolean](false)) => Ext.mkConst(false)
+        case Ext.StrictAnd(Ext.Const[Boolean](false), t) => Ext.mkConst(false)
+        case Ext.StrictOr(Ext.Const[Boolean](x), Ext.Const[Boolean](y)) => Ext
+            .mkConst(x | y)
+        case Ext.StrictOr(t, Ext.Const[Boolean](false)) => t
+        case Ext.StrictOr(Ext.Const[Boolean](false), t) => t
+        case Ext.StrictOr(t, Ext.Const[Boolean](true))  => Ext.mkConst(true)
+        case Ext.StrictOr(Ext.Const[Boolean](true), t)  => Ext.mkConst(true)
+        case Ext.Xor(Ext.Const[Boolean](x), Ext.Const[Boolean](y)) => Ext
+            .mkConst(x ^ y)
+        case Ext.Xor(t, Ext.Const[Boolean](false)) => t
+        case Ext.Xor(Ext.Const[Boolean](false), t) => t
+        case Ext.Xor(t, Ext.Const[Boolean](true))  => Ext.Not(t)
+        case Ext.Xor(Ext.Const[Boolean](true), t)  => Ext.Not(t)
+
+        case Ext.BitAnd(Ext.Const[Int](x), Ext.Const[Int](y)) => Ext.mkConst(x & y)
+        case Ext.BitAnd(t, Ext.Const[Int](0))                 => Ext.mkConst(0)
+        case Ext.BitAnd(Ext.Const[Int](0), t)                 => Ext.mkConst(0)
+        case Ext.BitAnd(t, Ext.Const[Int](-1))                => t
+        case Ext.BitAnd(Ext.Const[Int](-1), t)                => t
+        case Ext.BitOr(Ext.Const[Int](x), Ext.Const[Int](y))  => Ext.mkConst(x | y)
+        case Ext.BitOr(t, Ext.Const[Int](0))                  => t
+        case Ext.BitOr(Ext.Const[Int](0), t)                  => t
+        case Ext.BitOr(t, Ext.Const[Int](-1))                 => Ext.mkConst(-1)
+        case Ext.BitOr(Ext.Const[Int](-1), t)                 => Ext.mkConst(-1)
+        case Ext.BitXor(Ext.Const[Int](x), Ext.Const[Int](y)) => Ext.mkConst(x ^ y)
+        case Ext.BitXor(t, Ext.Const[Int](0))                 => t
+        case Ext.BitXor(Ext.Const[Int](0), t)                 => t
+        case Ext.BitNot(Ext.Const[Int](x))                    => Ext.mkConst(~x)
+
+        // A shift only folds for counts both backends agree on. Scala masks the
+        // count to five bits where C leaves anything at or past the width
+        // undefined, so a wider count stays a shift.
+        case Ext.Shl(Ext.Const[Int](x), Ext.Const[Int](y)) if inWidth(y) => Ext
+            .mkConst(x << y)
+        case Ext.Shr(Ext.Const[Int](x), Ext.Const[Int](y)) if inWidth(y) => Ext
+            .mkConst(x >> y)
+        case Ext.UShr(Ext.Const[Int](x), Ext.Const[Int](y)) if inWidth(y) => Ext
+            .mkConst(x >>> y)
+        case Ext.Shl(t, Ext.Const[Int](0))  => t
+        case Ext.Shr(t, Ext.Const[Int](0))  => t
+        case Ext.UShr(t, Ext.Const[Int](0)) => t
         case Ext.IfThenElse(Ext.Const[Boolean](b), thent, elset) =>
           if b then thent else elset
         case Ext.StringLength(Ext.Const[String](s)) => Ext.mkConst(s.length)

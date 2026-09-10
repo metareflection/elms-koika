@@ -40,6 +40,8 @@ object ConstantAnalysis extends Analysis[ElmsNode, Option[Op.Const[?]]] {
       case (None, r)       => r
     }
 
+  private def inWidth(count: Int): Boolean = 0 <= count && count < 32
+
   // The values arrive as `Any` because `Op.Const` is typed and the graph is not.
   // Same runtime type tests `Propagate` already does with its `Ext.Const[T]`
   // extractors; anything unrecognised just stays unfolded.
@@ -54,6 +56,23 @@ object ConstantAnalysis extends Analysis[ElmsNode, Option[Op.Const[?]]] {
       case (Op.Le, Seq(x: Int, y: Int))      => Some(Op.Const(x <= y))
       case (Op.Ge, Seq(x: Int, y: Int))      => Some(Op.Const(x >= y))
       case (Op.Not, Seq(b: Boolean))         => Some(Op.Const(!b))
+
+      case (Op.StrictAnd, Seq(x: Boolean, y: Boolean)) => Some(Op.Const(x & y))
+      case (Op.StrictOr, Seq(x: Boolean, y: Boolean))  => Some(Op.Const(x | y))
+      case (Op.Xor, Seq(x: Boolean, y: Boolean))       => Some(Op.Const(x ^ y))
+
+      case (Op.BitAnd, Seq(x: Int, y: Int)) => Some(Op.Const(x & y))
+      case (Op.BitOr, Seq(x: Int, y: Int))  => Some(Op.Const(x | y))
+      case (Op.BitXor, Seq(x: Int, y: Int)) => Some(Op.Const(x ^ y))
+      case (Op.BitNot, Seq(x: Int))         => Some(Op.Const(~x))
+
+      // Shifts fold only for counts both backends agree on. Scala masks the
+      // count to five bits where C leaves anything at or past the width
+      // undefined, so folding a wider count would bake one backend's answer
+      // into a program the other renders differently.
+      case (Op.Shl, Seq(x: Int, y: Int)) if inWidth(y)  => Some(Op.Const(x << y))
+      case (Op.Shr, Seq(x: Int, y: Int)) if inWidth(y)  => Some(Op.Const(x >> y))
+      case (Op.UShr, Seq(x: Int, y: Int)) if inWidth(y) => Some(Op.Const(x >>> y))
 
       case (Op.Equals, Seq(x: Int, y: Int))         => Some(Op.Const(x == y))
       case (Op.Equals, Seq(x: Boolean, y: Boolean)) => Some(Op.Const(x == y))

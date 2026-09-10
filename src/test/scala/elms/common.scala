@@ -6,9 +6,10 @@ import elms.prelude.*
 import elms.prelude.given
 import elms.core.StructManifest
 import elms.codegen.CCodegen
+import elms.pipeline.eqsat.Ruleset
 
 abstract class DslDriver[A: Typable, B: Typable]
-    extends OptimizingSnippetDriver[A, B](Seq()) with DslOps
+    extends OptimizingSnippetDriver[A, B](Ruleset(Seq())) with DslOps
 
 object NanoRisc {
   abstract sealed trait Operand derives CanEqual

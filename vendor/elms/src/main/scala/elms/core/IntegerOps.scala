@@ -14,4 +14,11 @@ trait IntegerOps extends Base with poly.IntegerOps {
     def >(rhs: Rep[Int]): Rep[Boolean] = unsafeReflect(Gt, lhs, rhs)
     def <=(rhs: Rep[Int]): Rep[Boolean] = unsafeReflect(Le, lhs, rhs)
     def >=(rhs: Rep[Int]): Rep[Boolean] = unsafeReflect(Ge, lhs, rhs)
+    def &(rhs: Rep[Int]): Rep[Int] = unsafeReflect(BitAnd, lhs, rhs)
+    def |(rhs: Rep[Int]): Rep[Int] = unsafeReflect(BitOr, lhs, rhs)
+    def ^(rhs: Rep[Int]): Rep[Int] = unsafeReflect(BitXor, lhs, rhs)
+    def <<(rhs: Rep[Int]): Rep[Int] = unsafeReflect(Shl, lhs, rhs)
+    def >>(rhs: Rep[Int]): Rep[Int] = unsafeReflect(Shr, lhs, rhs)
+    def >>>(rhs: Rep[Int]): Rep[Int] = unsafeReflect(UShr, lhs, rhs)
+    def unary_~ : Rep[Int] = unsafeReflect(BitNot, lhs)
 }

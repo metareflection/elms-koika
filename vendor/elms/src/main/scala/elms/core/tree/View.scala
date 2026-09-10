@@ -131,6 +131,46 @@ object View {
     def into: Term = E(Op.Not, Seq(t))
   }
 
+  final case class StrictAnd(t1: Term, t2: Term) extends View {
+    def into: Term = E(Op.StrictAnd, Seq(t1, t2))
+  }
+
+  final case class StrictOr(t1: Term, t2: Term) extends View {
+    def into: Term = E(Op.StrictOr, Seq(t1, t2))
+  }
+
+  final case class Xor(t1: Term, t2: Term) extends View {
+    def into: Term = E(Op.Xor, Seq(t1, t2))
+  }
+
+  final case class BitAnd(t1: Term, t2: Term) extends View {
+    def into: Term = E(Op.BitAnd, Seq(t1, t2))
+  }
+
+  final case class BitOr(t1: Term, t2: Term) extends View {
+    def into: Term = E(Op.BitOr, Seq(t1, t2))
+  }
+
+  final case class BitXor(t1: Term, t2: Term) extends View {
+    def into: Term = E(Op.BitXor, Seq(t1, t2))
+  }
+
+  final case class BitNot(t: Term) extends View {
+    def into: Term = E(Op.BitNot, Seq(t))
+  }
+
+  final case class Shl(t1: Term, t2: Term) extends View {
+    def into: Term = E(Op.Shl, Seq(t1, t2))
+  }
+
+  final case class Shr(t1: Term, t2: Term) extends View {
+    def into: Term = E(Op.Shr, Seq(t1, t2))
+  }
+
+  final case class UShr(t1: Term, t2: Term) extends View {
+    def into: Term = E(Op.UShr, Seq(t1, t2))
+  }
+
   final case class Range(t1: Term, t2: Term) extends View {
     def into: Term = E(Op.Range, Seq(t1, t2))
   }
@@ -268,6 +308,18 @@ object View {
     case E(Op.And, s) => arity2("And", s).map(And(_, _))
     case E(Op.Or, s)  => arity2("Or", s).map(Or(_, _))
     case E(Op.Not, s) => arity1("Not", s).map(Not(_))
+
+    case E(Op.StrictAnd, s) => arity2("StrictAnd", s).map(StrictAnd(_, _))
+    case E(Op.StrictOr, s)  => arity2("StrictOr", s).map(StrictOr(_, _))
+    case E(Op.Xor, s)       => arity2("Xor", s).map(Xor(_, _))
+
+    case E(Op.BitAnd, s) => arity2("BitAnd", s).map(BitAnd(_, _))
+    case E(Op.BitOr, s)  => arity2("BitOr", s).map(BitOr(_, _))
+    case E(Op.BitXor, s) => arity2("BitXor", s).map(BitXor(_, _))
+    case E(Op.BitNot, s) => arity1("BitNot", s).map(BitNot(_))
+    case E(Op.Shl, s)    => arity2("Shl", s).map(Shl(_, _))
+    case E(Op.Shr, s)    => arity2("Shr", s).map(Shr(_, _))
+    case E(Op.UShr, s)   => arity2("UShr", s).map(UShr(_, _))
 
     case E(Op.Range, s)              => arity2("Range", s).map(Range(_, _))
     case E(Op.RangeForEach(name), s) => arity3("RangeForEach", s)
@@ -422,6 +474,67 @@ object View {
       def unapply(t: Term): Option[Term] = View.view(t).collect { case View.Not(e) =>
         e
       }
+    }
+
+    object StrictAnd {
+      def apply(t1: Term, t2: Term): Term = View.StrictAnd(t1, t2).into
+      def unapply(t: Term): Option[(Term, Term)] = View.view(t)
+        .collect { case View.StrictAnd(t1, t2) => (t1, t2) }
+    }
+
+    object StrictOr {
+      def apply(t1: Term, t2: Term): Term = View.StrictOr(t1, t2).into
+      def unapply(t: Term): Option[(Term, Term)] = View.view(t)
+        .collect { case View.StrictOr(t1, t2) => (t1, t2) }
+    }
+
+    object Xor {
+      def apply(t1: Term, t2: Term): Term = View.Xor(t1, t2).into
+      def unapply(t: Term): Option[(Term, Term)] = View.view(t)
+        .collect { case View.Xor(t1, t2) => (t1, t2) }
+    }
+
+    object BitAnd {
+      def apply(t1: Term, t2: Term): Term = View.BitAnd(t1, t2).into
+      def unapply(t: Term): Option[(Term, Term)] = View.view(t)
+        .collect { case View.BitAnd(t1, t2) => (t1, t2) }
+    }
+
+    object BitOr {
+      def apply(t1: Term, t2: Term): Term = View.BitOr(t1, t2).into
+      def unapply(t: Term): Option[(Term, Term)] = View.view(t)
+        .collect { case View.BitOr(t1, t2) => (t1, t2) }
+    }
+
+    object BitXor {
+      def apply(t1: Term, t2: Term): Term = View.BitXor(t1, t2).into
+      def unapply(t: Term): Option[(Term, Term)] = View.view(t)
+        .collect { case View.BitXor(t1, t2) => (t1, t2) }
+    }
+
+    object BitNot {
+      def apply(t: Term): Term = View.BitNot(t).into
+      def unapply(t: Term): Option[Term] = View.view(t).collect { case View.BitNot(e) =>
+        e
+      }
+    }
+
+    object Shl {
+      def apply(t1: Term, t2: Term): Term = View.Shl(t1, t2).into
+      def unapply(t: Term): Option[(Term, Term)] = View.view(t)
+        .collect { case View.Shl(t1, t2) => (t1, t2) }
+    }
+
+    object Shr {
+      def apply(t1: Term, t2: Term): Term = View.Shr(t1, t2).into
+      def unapply(t: Term): Option[(Term, Term)] = View.view(t)
+        .collect { case View.Shr(t1, t2) => (t1, t2) }
+    }
+
+    object UShr {
+      def apply(t1: Term, t2: Term): Term = View.UShr(t1, t2).into
+      def unapply(t: Term): Option[(Term, Term)] = View.view(t)
+        .collect { case View.UShr(t1, t2) => (t1, t2) }
     }
 
     object Range {

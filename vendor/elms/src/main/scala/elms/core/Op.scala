@@ -32,6 +32,24 @@ object Op {
   case object And extends Control
   case object Or extends Control
 
+  // `And` and `Or` above take regions and compile to an `if`, which is what
+  // makes them `Control`. These take values, so they are `Pure` and the rewrite
+  // rules can see them. `Xor` needs no qualifier: there is no lazy form of it.
+  case object StrictAnd extends Pure
+  case object StrictOr extends Pure
+  case object Xor extends Pure
+
+  case object BitAnd extends Pure
+  case object BitOr extends Pure
+  case object BitXor extends Pure
+  case object BitNot extends Pure
+  case object Shl extends Pure
+  // `Shr` keeps the sign bit and `UShr` shifts in zeroes, exactly Scala's `>>`
+  // and `>>>`. C has no operator for the latter, so `CCodegen` routes it
+  // through `unsigned int`.
+  case object Shr extends Pure
+  case object UShr extends Pure
+
   case object Print extends Effectful
   case object Println extends Effectful
 

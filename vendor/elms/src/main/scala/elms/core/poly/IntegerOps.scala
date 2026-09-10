@@ -9,4 +9,11 @@ trait IntegerOps extends HasRep {
     def >(rhs: Rep[Int]): Rep[Boolean]
     def <=(rhs: Rep[Int]): Rep[Boolean]
     def >=(rhs: Rep[Int]): Rep[Boolean]
+    def &(rhs: Rep[Int]): Rep[Int]
+    def |(rhs: Rep[Int]): Rep[Int]
+    def ^(rhs: Rep[Int]): Rep[Int]
+    def <<(rhs: Rep[Int]): Rep[Int]
+    def >>(rhs: Rep[Int]): Rep[Int]
+    def >>>(rhs: Rep[Int]): Rep[Int]
+    def unary_~ : Rep[Int]
 }
