@@ -151,6 +151,10 @@ class RiscVElfTests extends AnyFunSuite {
 
   private val cmp = read("cmp.o", bytes("cmp.o"))
 
+  // `demo` and the two byte counts live on the driver, and nothing here stages,
+  // so one bare instance is enough to read them off.
+  private val driver = new RiscVDriver { override val init = ""; override val prog = Vector() }
+
   private def rejects(name: String): List[String] =
     Elf.read(name, bytes(name)).fold(_.map(_.toString), i => fail(s"read ${i.prog}"))
 
@@ -249,7 +253,6 @@ class RiscVElfTests extends AnyFunSuite {
   // symbols, which is what lets the drift be caught here instead of in a
   // snapshot.
   test("the assembler constants survive as ABS symbols") {
-    val driver = new RiscVDriver { override val init = ""; override val prog = Vector() }
     assert(cmp.consts("SECRET") == driver.secret_offset_bytes)
     assert(cmp.consts("SIZE") == driver.password_size_bytes)
     // The `.file` symbol is ABS too, and it is not a constant.
@@ -317,6 +320,24 @@ class RiscVElfTests extends AnyFunSuite {
       .mkString.contains("-march=rv32i"))
     assert(patched(text -> 0x67, text + 1 -> 0x85, text + 2 -> 0x05, text + 3 -> 0x00)
       .mkString.contains("cmp.o .text+0x0"))
+  }
+
+  // The hand-assembled vectors are the oracle for the migration, and they are
+  // deleted along with them once this has run. Without it the snapshot check is
+  // circular: the reader and the snapshots could be wrong together.
+  test("the demos decode to the vectors they replace") {
+    val secret = driver.secret_offset_bytes
+    val size = driver.password_size_bytes
+    assert(driver.demo("2ctr") == RiscVDemos.spec_small)
+    assert(driver.demo("spectre") == RiscVDemos.build_spectre_demo(secret))
+    assert(driver.demo("shortcircuit") == RiscVDemos.build_shortcircuit_demo(secret, size))
+    assert(driver.demo("constant_time") == RiscVDemos.build_constant_time_demo(secret, size))
+  }
+
+  // Four equalities against four oracles prove nothing if the oracles coincide.
+  test("the demo vectors are pairwise distinct") {
+    val names = Vector("2ctr", "spectre", "shortcircuit", "constant_time")
+    assert(names.map(driver.demo).distinct.length == names.length)
   }
 
   test("a missing object says to run the script") {

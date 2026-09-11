@@ -30,4 +30,10 @@ trait RiscVDriver extends GenericKoikaDriver[StateT, StateT] with Exec {
   // `mem` directly. The demos take bytes.
   val secret_offset_bytes: Int = 4 * secret_offset
   val password_size_bytes: Int = 16
+
+  // The demos live as object files under `src/test/asm/riscv`, assembled by the
+  // `build` script beside them. The two byte counts above reach them through
+  // that script's `--defsym` flags and not from here, since a real assembler
+  // cannot hear Scala; [RiscVElfTests] is what compares the two back.
+  def demo(name: String): Vector[RiscV.Instr] = elf.Elf.load(s"src/test/asm/riscv/$name.o").prog
 }
