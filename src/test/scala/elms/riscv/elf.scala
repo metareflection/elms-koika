@@ -2,8 +2,12 @@ package elms.koika.test.riscv
 
 import org.scalatest.funsuite.AnyFunSuite
 
+// Only for the `Typable` instance that lets a [RiscVDriver] be named, which is
+// where the assembler constants are compared against. Nothing here stages.
+import elms.prelude.given
+
 import RiscV.*
-import elf.{Decode, Decoded}
+import elf.{Datum, Decode, Decoded, Elf, Image, Taint}
 
 // The decoder is plain Scala over hand-written hex, so this needs neither
 // staging, nor snapshots, nor a RISC-V toolchain on the box. Every literal here
@@ -130,5 +134,193 @@ class RiscVDecodeTests extends AnyFunSuite {
     // a fix to suggest.
     assert(why(0x00033283).contains("not an RV32I load"))
     assert(why(0x00004501).contains("no RV32I instruction"))
+  }
+}
+
+// The reader, against objects `src/test/asm/riscv/build` makes. Separate from
+// [RiscVDecodeTests] so that the decoder still runs on a clone where nobody has
+// run the script yet, and this one aborts with a message saying to.
+class RiscVElfTests extends AnyFunSuite {
+  private val dir = "src/test/asm/riscv/"
+
+  private def bytes(name: String): Array[Byte] =
+    java.nio.file.Files.readAllBytes(java.nio.file.Path.of(dir + name))
+
+  private def read(name: String, bs: Array[Byte]): Image =
+    Elf.read(name, bs).fold(es => fail(es.mkString("\n")), identity)
+
+  private val cmp = read("cmp.o", bytes("cmp.o"))
+
+  private def rejects(name: String): List[String] =
+    Elf.read(name, bytes(name)).fold(_.map(_.toString), i => fail(s"read ${i.prog}"))
+
+  // A byte-patched copy, with the offsets found rather than hardcoded. Most of
+  // what the reader refuses is one field wide, and setting that field is a
+  // fairer test than an assembler invocation that happens to produce it.
+  private def patched(edits: (Int, Int)*): List[String] = {
+    val bs = bytes("cmp.o")
+    for ((at, v) <- edits) { bs(at) = v.toByte }
+    Elf.read("cmp.o", bs).fold(_.map(_.toString), i => fail(s"read ${i.prog}"))
+  }
+
+  // The reader walks the section headers too, and walking them again here is
+  // only to aim a patch: a hardcoded file offset would break on the next clang
+  // that reorders a section.
+  private def sectionAt(name: String): Int = {
+    val bs = bytes("cmp.o")
+    val b = java.nio.ByteBuffer.wrap(bs).order(java.nio.ByteOrder.LITTLE_ENDIAN)
+    val shoff = b.getInt(32)
+    val names = b.getInt(shoff + 40 * b.getShort(50) + 16)
+    val i = (0 until b.getShort(48)).find { i =>
+      val at = names + b.getInt(shoff + 40 * i)
+      bs(at + name.length) == 0 && new String(bs, at, name.length, "UTF-8") == name
+    }
+    b.getInt(shoff + 40 * i.getOrElse(fail(s"no `$name` in cmp.o")) + 16)
+  }
+
+  private def regs(i: Instr): Set[Reg] = i match {
+    case Instr.Op(_, rd, rs1, rs2)    => Set(rd, rs1, rs2)
+    case Instr.OpImm(_, rd, rs1, _)   => Set(rd, rs1)
+    case Instr.Lui(rd, _)             => Set(rd)
+    case Instr.Auipc(rd, _)           => Set(rd)
+    case Instr.Jal(rd, _)             => Set(rd)
+    case Instr.Branch(_, rs1, rs2, _) => Set(rs1, rs2)
+    case Instr.Load(_, rd, rs1, _)    => Set(rd, rs1)
+    case Instr.Store(_, rs2, rs1, _)  => Set(rs2, rs1)
+  }
+
+  test("the program is what clang emitted, with both `ret`s pointed past the end") {
+    assert(cmp.prog == Vector(
+      Instr.OpImm(AluOp.Add, Reg(11), Reg(10), Imm(0)),
+      Instr.OpImm(AluOp.Add, Reg(10), Reg(0), Imm(1)),
+      Instr.Branch(Cmp.Ge, Reg(0), Reg(11), Imm(48)),
+      Instr.Lui(Reg(12), Imm(0)),
+      Instr.OpImm(AluOp.Add, Reg(12), Reg(12), Imm(16)),
+      Instr.Lui(Reg(13), Imm(0)),
+      Instr.OpImm(AluOp.Add, Reg(13), Reg(13), Imm(0)),
+      Instr.Load(Width.W, Reg(14), Reg(12), Imm(0)),
+      Instr.Load(Width.W, Reg(15), Reg(13), Imm(0)),
+      Instr.Branch(Cmp.Ne, Reg(14), Reg(15), Imm(24)),
+      Instr.OpImm(AluOp.Add, Reg(11), Reg(11), Imm(-1)),
+      Instr.OpImm(AluOp.Add, Reg(12), Reg(12), Imm(4)),
+      Instr.OpImm(AluOp.Add, Reg(13), Reg(13), Imm(4)),
+      Instr.Branch(Cmp.Ne, Reg(11), Reg(0), Imm(-24)),
+      Instr.Jal(Reg(0), Imm(12)),
+      Instr.OpImm(AluOp.Add, Reg(10), Reg(0), Imm(0)),
+      Instr.Jal(Reg(0), Imm(4))
+    ))
+  }
+
+  // The two `%hi`/`%lo` pairs are the whole reason relocations are handled at
+  // all, and what they compute is a `mem` byte address. `lui` of zero looks
+  // like nothing happened, so the `addi` beside it is the evidence.
+  test("a %hi and %lo pair computes where the reader put the global") {
+    val addrs = cmp.globals.view.mapValues(_.addr).toMap
+    assert(addrs == Map("secret" -> 0, "guess" -> 16))
+    assert(cmp.prog(4) == Instr.OpImm(AluOp.Add, Reg(12), Reg(12), Imm(addrs("guess"))))
+    assert(cmp.prog(6) == Instr.OpImm(AluOp.Add, Reg(13), Reg(13), Imm(addrs("secret"))))
+    // Two globals at the same address would make either `addi` pass for the
+    // other's.
+    assert(addrs.values.toSet.size == 2)
+  }
+
+  // `st_shndx` names the section, so the `__attribute__` in `cmp.c` is the
+  // threat model and no symbol name is hardcoded. `st_size` says 16 rather than
+  // somebody keeping a `val words = 4` in sync by hand.
+  test("taint and size come out of the symbol, not out of the name") {
+    assert(cmp.globals == Map(
+      "secret" -> Datum(0, 16, Taint.Secret),
+      "guess" -> Datum(16, 16, Taint.Attacker)
+    ))
+  }
+
+  test("the data image is the initialized bytes then the zeroed ones") {
+    assert(cmp.data == Vector(11, 22, 33, 44, 0, 0, 0, 0))
+  }
+
+  test("st_info tells a function from an object") {
+    assert(cmp.entries == Map("cmp" -> 0))
+    assert(cmp.entry == 0)
+    assert(cmp.globals.keySet == Set("secret", "guess"))
+  }
+
+  // The build script duplicates these out of `GenericKoikaDriver`, because a
+  // real assembler cannot hear Scala. `--defsym` leaves them behind as ABS
+  // symbols, which is what lets the drift be caught here instead of in a
+  // snapshot.
+  test("the assembler constants survive as ABS symbols") {
+    val driver = new RiscVDriver { override val init = ""; override val prog = Vector() }
+    assert(cmp.consts("SECRET") == driver.secret_offset_bytes)
+    assert(cmp.consts("SIZE") == driver.password_size_bytes)
+    // The `.file` symbol is ABS too, and it is not a constant.
+    assert(cmp.consts.keySet == Set("SECRET", "SIZE"))
+  }
+
+  // `sp` starts at 0 and `mem` is 30 words, so a frame would index `mem` at
+  // `(-4) >>> 2`. That is why `cmp.c` is built at -O1, and this is the test
+  // that notices if the flag ever comes off.
+  test("the fixture never touches sp") {
+    assert(cmp.prog.flatMap(regs).filter(_ == Reg(2)) == Vector())
+  }
+
+  // The one relocation form nothing else in the tree produces, and the third
+  // row of the taint table: `.data` is neither secret nor the attacker's.
+  test("a store relocation lands on the store's own displacement") {
+    val store = read("store.o", bytes("store.o"))
+    assert(store.globals == Map("v" -> Datum(12, 4, Taint.Public)))
+    assert(store.prog == Vector(
+      Instr.Lui(Reg(11), Imm(0)),
+      Instr.Store(Width.W, Reg(10), Reg(11), Imm(12))
+    ))
+    assert(store.data == Vector(0, 0, 0, 7))
+  }
+
+  test("two functions in .text say why one is the limit") {
+    val es = rejects("two_functions.o")
+    assert(es.length == 1)
+    assert(es.head.contains("`f`") && es.head.contains("`g`") && es.head.contains("`call`"))
+  }
+
+  test("an rv64 object is one byte away and says which flags to use") {
+    assert(patched(4 -> 2).mkString.contains("--target=riscv32"))
+  }
+
+  // Relaxation lets the linker insert or drop NOPs, so an object built without
+  // -mno-relax has every offset computed against a sequence nobody meant to
+  // keep. Its absence is otherwise silent.
+  test("a relaxation relocation says which flag is missing") {
+    val info = sectionAt(".rela.text") + 4
+    assert(patched(info -> 51).mkString.contains("-mno-relax"))
+    assert(patched(info -> 43).mkString.contains("-mno-relax"))
+  }
+
+  test("a relocation out of scope names its type") {
+    val info = sectionAt(".rela.text") + 4
+    assert(patched(info -> 19).mkString.contains("R_RISCV_CALL_PLT"))
+    // `-fpic` output reaches a global through the `auipc` that defined a label,
+    // which needs a second lookup the reader does not do.
+    assert(patched(info -> 23).mkString.contains("-fno-pic"))
+  }
+
+  // A `%hi` on anything but a `lui` or an `auipc` has no twenty-bit field to
+  // land in, and dropping the immediate would leave a program that runs.
+  test("a relocation on the wrong instruction form is an error, not a dropped immediate") {
+    val es = patched(sectionAt(".rela.text") -> 0x1c)
+    assert(es.length == 1)
+    assert(es.head.contains("%hi wants a `lui`") && es.head.contains("cmp.o .text+0x1c"))
+  }
+
+  test("what the tower cannot execute is rejected where it sits") {
+    val text = sectionAt(".text")
+    // `mul a0, a1, a2` and `jalr a0, 0(a1)`, over the `mv a1, a0` at .text+0.
+    assert(patched(text -> 0x33, text + 1 -> 0x85, text + 2 -> 0xc5, text + 3 -> 0x02)
+      .mkString.contains("-march=rv32i"))
+    assert(patched(text -> 0x67, text + 1 -> 0x85, text + 2 -> 0x05, text + 3 -> 0x00)
+      .mkString.contains("cmp.o .text+0x0"))
+  }
+
+  test("a missing object says to run the script") {
+    val e = intercept[elf.ElfException](Elf.load(dir + "nope.o"))
+    assert(e.getMessage.contains("src/test/asm/riscv/build"))
   }
 }
