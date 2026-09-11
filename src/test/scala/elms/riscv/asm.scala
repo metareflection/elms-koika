@@ -306,30 +306,4 @@ class RiscVAsmTests extends AnyFunSuite {
     assert(es.map(_.takeWhile(_ != ':')).distinct == List("test.s"))
     assert(es.map(_.split(':')(1)) == List("1", "3", "4"))
   }
-
-  // The migration's oracle. `sbt test` reproducing the twelve existing RISC-V
-  // snapshots is only trustworthy if the assembler agrees with the vectors
-  // those snapshots were generated from, and this is what says so exactly.
-  // Both of these go away with `RiscVDemos`.
-  //
-  // The two byte counts are `RiscVDriver`'s, copied rather than read, because
-  // they live on a trait that cannot be instantiated without staging.
-  private val secretBytes = 80
-  private val sizeBytes = 16
-
-  private def demo(name: String): Vector[Instr] =
-    Asm.load(s"src/test/asm/riscv/$name.s", Map("SECRET" -> secretBytes, "SIZE" -> sizeBytes)).prog
-
-  test("each assembled demo is the vector it replaces") {
-    assert(demo("2ctr") == RiscVDemos.spec_small)
-    assert(demo("spectre") == RiscVDemos.build_spectre_demo(secretBytes))
-    assert(demo("shortcircuit") == RiscVDemos.build_shortcircuit_demo(secretBytes, sizeBytes))
-    assert(demo("constant_time") == RiscVDemos.build_constant_time_demo(secretBytes, sizeBytes))
-  }
-
-  // Four equalities against four oracles prove nothing if the oracles coincide.
-  test("the demo vectors are pairwise distinct") {
-    val all = Vector("2ctr", "spectre", "shortcircuit", "constant_time").map(demo)
-    assert(all.distinct.length == 4)
-  }
 }
