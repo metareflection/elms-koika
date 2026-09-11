@@ -97,8 +97,12 @@ object Asm {
       case ".data" | ".bss" | ".rodata" | ".sdata" | ".sbss" | ".srodata" | ".tdata" | ".tbss" =>
         l.copy(section = Section.Data)
       case ".section" => l.copy(section = sectionOf(args))
-      case ".p2align" | ".align" => align(l, args, n => 1 << n)
-      case ".balign"             => align(l, args, identity)
+      // Free evidence the file was built for the wrong target, and naming it
+      // here beats letting the first `sd` do it.
+      case ".attribute" if args.exists(_.contains("rv64")) =>
+        l.fail(loc, "built for RV64; compile with --target=riscv32 -march=rv32i -mabi=ilp32")
+      case ".p2align" | ".align" => align(l, loc, args, n => 1 << n)
+      case ".balign"             => align(l, loc, args, identity)
       case ".comm" | ".lcomm"    => common(l, loc, args)
       case ".word" | ".long" | ".4byte"   => datum(l, loc, name, args, 4)
       case ".half" | ".short" | ".2byte"  => datum(l, loc, name, args, 2)
@@ -124,12 +128,14 @@ object Asm {
   // instruction is four bytes and the base is 0, so anything up to four is a
   // no-op; a larger one would need padding, and dropping it silently shifts
   // nothing here while shifting everything on a real machine.
-  private def align(l: Layout, args: List[String], to: Int => Int): Layout =
+  private def align(l: Layout, loc: Loc, args: List[String], to: Int => Int): Layout =
     args.headOption.flatMap(Parse.num) match {
       case None    => l
       case Some(n) => l.section match {
           case Section.Data => pad(l, math.max(1, to(n)))
-          case Section.Text  => l
+          case Section.Text =>
+            if (to(n) <= 4 || l.slots.isEmpty) { l }
+            else { l.fail(loc, s"cannot pad .text to ${to(n)} bytes: instructions are 4 wide") }
           case Section.Other => l
         }
     }

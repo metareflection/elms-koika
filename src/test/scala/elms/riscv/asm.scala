@@ -260,4 +260,50 @@ class RiscVAsmTests extends AnyFunSuite {
                        |  .word 1""")
     assert(es.exists(_.contains("use `la` for a label's address")))
   }
+
+  test("unrepresentable mnemonics say why, and where") {
+    def why(line: String): String = errors(s"  nop\n  $line").mkString("\n")
+    assert(why("jalr ra").contains("test.s:2"))
+    assert(why("jalr ra").contains("static Int"))
+    assert(why("call memcpy").contains("needs `jalr` to return through"))
+    assert(why("mul a0, a0, a1").contains("M extension"))
+    assert(why("sd a0, 0(sp)").contains("RV64"))
+    assert(why("ecall").contains("traps or fences"))
+    assert(why("csrr a0, 0").contains("CSRs"))
+    assert(why("frobnicate a0").contains("unknown mnemonic `frobnicate`"))
+  }
+
+  test("out-of-range and misaligned immediates are caught here, not at staging") {
+    assert(errors("addi a0, a0, 4096").exists(_.contains("outside [-2048, 2047]")))
+    assert(errors("slli a0, a0, 32").exists(_.contains("outside [0, 31]")))
+    assert(errors("bne a0, a1, 6").exists(_.contains("not a multiple of 4")))
+    assert(errors("beq a0, a1, nowhere").exists(_.contains("undefined label `nowhere`")))
+    assert(errors("addi a0, x0, SECRET").exists(_.contains("undefined symbol `SECRET`")))
+    assert(errors("lw a0, 0(a1)\nx32 a0").exists(_.contains("unknown mnemonic")))
+  }
+
+  // Loop alignment is precisely where a reader stops trusting the offsets, so
+  // padding nobody can emit is an error rather than a silent no-op.
+  test("alignment past a word inside .text is refused") {
+    assert(errors("  nop\n  .p2align 4\n  nop").exists(_.contains("cannot pad .text")))
+    // Every instruction is four bytes and the base is 0, so these hold already.
+    assert(errors("  nop\n  .p2align 2\n  nop") == Nil)
+    assert(errors("  .p2align 4\n  nop") == Nil)
+  }
+
+  test("the wrong target is caught on the attribute, not on the first sd") {
+    val es = errors("""|  .attribute 5, "rv64i2p1"
+                       |  nop""")
+    assert(es.exists(_.contains("--target=riscv32")))
+  }
+
+  test("every bad line is reported, in source order") {
+    val es = errors("""|  mul a0, a0, a1
+                       |  nop
+                       |  ecall
+                       |  sd a0, 0(sp)""")
+    assert(es.length == 3)
+    assert(es.map(_.takeWhile(_ != ':')).distinct == List("test.s"))
+    assert(es.map(_.split(':')(1)) == List("1", "3", "4"))
+  }
 }

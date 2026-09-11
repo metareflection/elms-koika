@@ -3,7 +3,8 @@ package elms.koika.test.riscv.asm
 import elms.koika.test.riscv.RiscV
 import RiscV.{AluOp, Cmp, Imm, Instr, Reg, Width, x0}
 
-// What each mnemonic means, real and pseudo.
+// What each mnemonic means, real and pseudo, and what to tell someone who wrote
+// one this tower has no home for.
 object Mnemonics {
   def insn(
       m: String,
@@ -66,7 +67,7 @@ object Mnemonics {
           case _ => bad
         }
 
-      case _ => Left(s"unknown mnemonic `$m`")
+      case _ => Left(unsupported.getOrElse(m, s"unknown mnemonic `$m`"))
     }
   }
 
@@ -205,4 +206,44 @@ object Mnemonics {
 
   private val swapped: Map[String, Cmp] =
     Map("bgt" -> Cmp.Lt, "ble" -> Cmp.Ge, "bgtu" -> Cmp.Ltu, "bleu" -> Cmp.Geu)
+
+  // Mnemonics with no home in [RiscV.Instr], and what to do instead. A table
+  // rather than a case each, so the message is one lookup and the list reads.
+  private val unsupported: Map[String, String] = {
+    def all(ms: String, why: String) = ms.split(" ").map(_ -> why).toMap
+
+    all(
+      "jalr jr",
+      "a computed jump cannot be staged: the tower's pc is a static Int, so `RiscV.Instr` " +
+        "has no JALR. A direct `jal ra, sym` does assemble; returning through `ra` does not."
+    ) ++
+      all(
+        "call tail",
+        "a call needs `jalr` to return through. Assemble the callee on its own, or compile " +
+          "with it inlined."
+      ) ++
+      all(
+        "ecall ebreak fence fence.i fence.tso sfence.vma wfi mret sret uret",
+        "not modelled: this tower has no traps or fences"
+      ) ++
+      all(
+        "csrr csrw csrs csrc csrwi csrsi csrci csrrw csrrs csrrc csrrwi csrrsi csrrci " +
+          "rdcycle rdcycleh rdtime rdtimeh rdinstret rdinstreth",
+        "not modelled: this tower has no CSRs"
+      ) ++
+      all(
+        "mul mulh mulhu mulhsu div divu rem remu",
+        "the M extension is not modelled; compile with -march=rv32i"
+      ) ++
+      all(
+        "ld sd lwu addiw addw subw sllw srlw sraw slliw srliw sraiw mulw divw divuw remw " +
+          "remuw sext.w negw",
+        "an RV64 instruction; compile with --target=riscv32 -march=rv32i -mabi=ilp32"
+      ) ++
+      all(
+        "flw fsw fld fsd fadd.s fsub.s fmul.s fdiv.s fsqrt.s fmv.w.x fmv.x.w fcvt.w.s " +
+          "fcvt.s.w fmv.s flt.s fle.s feq.s",
+        "the F and D extensions are not modelled; compile with -march=rv32i"
+      )
+  }
 }
