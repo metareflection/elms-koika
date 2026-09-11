@@ -306,4 +306,55 @@ class RiscVAsmTests extends AnyFunSuite {
     assert(es.map(_.takeWhile(_ != ':')).distinct == List("test.s"))
     assert(es.map(_.split(':')(1)) == List("1", "3", "4"))
   }
+
+  test("real clang output assembles") {
+    val img = Asm.load("src/test/asm/riscv/cmp.s")
+    val a0 = Reg(10)
+    val a1 = Reg(11)
+    val a2 = Reg(12)
+    val a3 = Reg(13)
+    val a4 = Reg(14)
+    val a5 = Reg(15)
+    assert(img.prog == Vector(
+      Instr.OpImm(AluOp.Add, a1, a0, Imm(0)),          // mv a1, a0
+      Instr.OpImm(AluOp.Add, a0, x0, Imm(1)),          // li a0, 1
+      Instr.Branch(Cmp.Ge, x0, a1, Imm(48)),           // blez a1, .LBB0_4
+      Instr.Lui(a2, Imm(0)),                           // lui a2, %hi(guess)
+      Instr.OpImm(AluOp.Add, a2, a2, Imm(16)),         // addi a2, a2, %lo(guess)
+      Instr.Lui(a3, Imm(0)),                           // lui a3, %hi(secret)
+      Instr.OpImm(AluOp.Add, a3, a3, Imm(0)),          // addi a3, a3, %lo(secret)
+      Instr.Load(Width.W, a4, a2, Imm(0)),
+      Instr.Load(Width.W, a5, a3, Imm(0)),
+      Instr.Branch(Cmp.Ne, a4, a5, Imm(24)),           // bne a4, a5, .LBB0_5
+      Instr.OpImm(AluOp.Add, a1, a1, Imm(-1)),
+      Instr.OpImm(AluOp.Add, a2, a2, Imm(4)),
+      Instr.OpImm(AluOp.Add, a3, a3, Imm(4)),
+      Instr.Branch(Cmp.Ne, a1, x0, Imm(-24)),          // bnez a1, .LBB0_2
+      Instr.Jal(x0, Imm(12)),                          // ret
+      Instr.OpImm(AluOp.Add, a0, x0, Imm(0)),          // li a0, 0
+      Instr.Jal(x0, Imm(4))                            // ret
+    ))
+    assert(img.data == Vector(11, 22, 33, 44, 0, 0, 0, 0))
+    assert(img.symbols("secret") == 0)
+    assert(img.symbols("guess") == 16)
+    assert(img.entry == img.entries("cmp"))
+  }
+
+  // `sp` starts at 0 and `mem` is 30 words, so a frame would index `mem` at
+  // `(-4) >>> 2`. The fixture has to stay a leaf function that never touches
+  // the stack, and this is what notices when it stops being one.
+  test("the clang fixture keeps its hands off sp") {
+    val sp = Reg(2)
+    val touches = Asm.load("src/test/asm/riscv/cmp.s").prog.filter {
+      case Instr.Op(_, rd, a, b)     => rd == sp || a == sp || b == sp
+      case Instr.OpImm(_, rd, a, _)  => rd == sp || a == sp
+      case Instr.Lui(rd, _)          => rd == sp
+      case Instr.Auipc(rd, _)        => rd == sp
+      case Instr.Jal(rd, _)          => rd == sp
+      case Instr.Branch(_, a, b, _)  => a == sp || b == sp
+      case Instr.Load(_, rd, a, _)   => rd == sp || a == sp
+      case Instr.Store(_, v, a, _)   => v == sp || a == sp
+    }
+    assert(touches == Vector())
+  }
 }
