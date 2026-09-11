@@ -29,30 +29,28 @@ class RiscVSpecTests extends KoikaSuite {
 
   test("riscv spec shortcircuit") {
     val snippet = new SpecDriver {
-      override val prog =
-        RiscVDemos.build_shortcircuit_demo(secret_offset_bytes, password_size_bytes)
+      override val prog = demo("shortcircuit")
     }
     check("shortcircuit", snippet.code)
   }
 
   test("riscv spec 2ctr") {
     val snippet = new SpecDriver {
-      override val prog = RiscVDemos.spec_small
+      override val prog = demo("2ctr")
     }
     check("2ctr", snippet.code)
   }
 
   test("riscv spec spectre") {
     val snippet = new SpecDriver {
-      override val prog = RiscVDemos.build_spectre_demo(secret_offset_bytes)
+      override val prog = demo("spectre")
     }
     check("spectre", snippet.code)
   }
 
   test("riscv spec constant_time") {
     val snippet = new SpecDriver {
-      override val prog =
-        RiscVDemos.build_constant_time_demo(secret_offset_bytes, password_size_bytes)
+      override val prog = demo("constant_time")
     }
     check("constant_time", snippet.code)
   }

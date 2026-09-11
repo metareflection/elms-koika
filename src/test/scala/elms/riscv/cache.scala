@@ -28,30 +28,28 @@ class RiscVCacheTests extends KoikaSuite {
 
   test("riscv cache shortcircuit") {
     val snippet = new CacheDriver {
-      override val prog =
-        RiscVDemos.build_shortcircuit_demo(secret_offset_bytes, password_size_bytes)
+      override val prog = demo("shortcircuit")
     }
     check("shortcircuit", snippet.code)
   }
 
   test("riscv cache 2ctr") {
     val snippet = new CacheDriver {
-      override val prog = RiscVDemos.spec_small
+      override val prog = demo("2ctr")
     }
     check("2ctr", snippet.code)
   }
 
   test("riscv cache spectre") {
     val snippet = new CacheDriver {
-      override val prog = RiscVDemos.build_spectre_demo(secret_offset_bytes)
+      override val prog = demo("spectre")
     }
     check("spectre", snippet.code)
   }
 
   test("riscv cache constant_time") {
     val snippet = new CacheDriver {
-      override val prog =
-        RiscVDemos.build_constant_time_demo(secret_offset_bytes, password_size_bytes)
+      override val prog = demo("constant_time")
     }
     check("constant_time", snippet.code)
   }

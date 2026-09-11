@@ -30,4 +30,12 @@ trait RiscVDriver extends GenericKoikaDriver[StateT, StateT] with Exec {
   // `mem` directly. The demos take bytes.
   val secret_offset_bytes: Int = 4 * secret_offset
   val password_size_bytes: Int = 16
+
+  // The demos live as assembly under `src/test/asm/riscv`. They are
+  // parameterized by the two byte counts above through the assembler's symbol
+  // table, since the frontend has no macros and does not need any.
+  def demo(name: String): Vector[RiscV.Instr] = {
+    val defines = Map("SECRET" -> secret_offset_bytes, "SIZE" -> password_size_bytes)
+    asm.Asm.load(s"src/test/asm/riscv/$name.s", defines).prog
+  }
 }
