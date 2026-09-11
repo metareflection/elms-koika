@@ -13,6 +13,9 @@ class RiscVAsmTests extends AnyFunSuite {
 
   private def prog(src: String): Vector[Instr] = image(src).prog
 
+  private def errors(src: String): List[String] =
+    Asm.assemble("test.s", src.stripMargin).fold(_.map(_.toString), _ => Nil)
+
   private def op(s: String): Operand = Parse.operand(s).fold(e => fail(e), identity)
   private def why(s: String): String = Parse.operand(s).fold(identity, _ => "")
 
@@ -169,5 +172,92 @@ class RiscVAsmTests extends AnyFunSuite {
                        |  addi a0, x0, 1""")
     assert(img.entry == 1)
     assert(img.entries("pre") == 0)
+  }
+
+  test("pseudo-instructions expand as the table says") {
+    val a0 = Reg(10)
+    val a1 = Reg(11)
+    assert(prog("nop") == Vector(Instr.OpImm(AluOp.Add, x0, x0, Imm(0))))
+    assert(prog("mv a0, a1") == Vector(Instr.OpImm(AluOp.Add, a0, a1, Imm(0))))
+    assert(prog("not a0, a1") == Vector(Instr.OpImm(AluOp.Xor, a0, a1, Imm(-1))))
+    assert(prog("neg a0, a1") == Vector(Instr.Op(AluOp.Sub, a0, x0, a1)))
+    assert(prog("seqz a0, a1") == Vector(Instr.OpImm(AluOp.Sltu, a0, a1, Imm(1))))
+    assert(prog("snez a0, a1") == Vector(Instr.Op(AluOp.Sltu, a0, x0, a1)))
+    assert(prog("sltz a0, a1") == Vector(Instr.Op(AluOp.Slt, a0, a1, x0)))
+    assert(prog("sgtz a0, a1") == Vector(Instr.Op(AluOp.Slt, a0, x0, a1)))
+    // `j` and a bare `jal` differ only in where the return address lands.
+    assert(prog("j out\nout:") == Vector(Instr.Jal(x0, Imm(4))))
+    assert(prog("jal out\nout:") == Vector(Instr.Jal(Reg(1), Imm(4))))
+  }
+
+  test("the zero-comparison branches put the zero where they mean it") {
+    val a0 = Reg(10)
+    def only(m: String): Instr = prog(s"""|  $m a0, out
+                                          |out:""").head
+    assert(only("beqz") == Instr.Branch(Cmp.Eq, a0, x0, Imm(4)))
+    assert(only("bnez") == Instr.Branch(Cmp.Ne, a0, x0, Imm(4)))
+    assert(only("bltz") == Instr.Branch(Cmp.Lt, a0, x0, Imm(4)))
+    assert(only("bgez") == Instr.Branch(Cmp.Ge, a0, x0, Imm(4)))
+    // These two cannot substitute x0 in place: `0 >= rs` and `0 < rs` are what
+    // they mean, so the operands swap instead.
+    assert(only("blez") == Instr.Branch(Cmp.Ge, x0, a0, Imm(4)))
+    assert(only("bgtz") == Instr.Branch(Cmp.Lt, x0, a0, Imm(4)))
+  }
+
+  test("bgt, ble, bgtu and bleu swap their operands") {
+    val a0 = Reg(10)
+    val a1 = Reg(11)
+    def only(m: String): Instr = prog(s"""|  $m a0, a1, out
+                                          |out:""").head
+    assert(only("bgt") == Instr.Branch(Cmp.Lt, a1, a0, Imm(4)))
+    assert(only("ble") == Instr.Branch(Cmp.Ge, a1, a0, Imm(4)))
+    assert(only("bgtu") == Instr.Branch(Cmp.Ltu, a1, a0, Imm(4)))
+    assert(only("bleu") == Instr.Branch(Cmp.Geu, a1, a0, Imm(4)))
+  }
+
+  test("every ret jumps past the last instruction") {
+    val p = prog("""|  beq a0, x0, skip
+                    |  ret
+                    |skip:
+                    |  addi a0, a0, 1
+                    |  ret""")
+    assert(p.length == 4)
+    assert(p(1) == Instr.Jal(x0, Imm(12)))
+    assert(p(3) == Instr.Jal(x0, Imm(4)))
+  }
+
+  test("li picks its width from the value") {
+    val a0 = Reg(10)
+    assert(prog("li a0, 5") == Vector(Instr.OpImm(AluOp.Add, a0, x0, Imm(5))))
+    assert(
+      prog("li a0, 0x12345") ==
+        Vector(Instr.Lui(a0, Imm(18)), Instr.OpImm(AluOp.Add, a0, a0, Imm(837)))
+    )
+    // [Lui] holds the unshifted twenty bits, which is the only reason those two
+    // numbers add back up.
+    assert((18 << 12) + 837 == 0x12345)
+    assert(prog("li a0, -4096") == Vector(Instr.Lui(a0, Imm(0xfffff))))
+    assert(0xfffff << 12 == -4096)
+  }
+
+  test("la is the same pair, spelled once") {
+    val a0 = Reg(10)
+    assert(prog("""|  la a0, g
+                   |  .data
+                   |g:
+                   |  .word 7""") == prog("""|  lui a0, %hi(g)
+                                             |  addi a0, a0, %lo(g)
+                                             |  .data
+                                             |g:
+                                             |  .word 7"""))
+    assert(prog("la a0, g\n.data\ng:\n.word 7").length == 2)
+  }
+
+  test("a li of a label says to use la instead") {
+    val es = errors("""|  li a0, g
+                       |  .data
+                       |g:
+                       |  .word 1""")
+    assert(es.exists(_.contains("use `la` for a label's address")))
   }
 }

@@ -3,9 +3,14 @@ package elms.koika.test.riscv.asm
 import elms.koika.test.riscv.RiscV
 import RiscV.{AluOp, Cmp, Imm, Instr, Reg, Width, x0}
 
-// What each mnemonic means.
+// What each mnemonic means, real and pseudo.
 object Mnemonics {
-  def insn(m: String, ops: List[Operand]): Either[String, List[Slot]] = {
+  def insn(
+      m: String,
+      ops: List[Operand],
+      consts: Map[String, Int]
+  ): Either[String, List[Slot]] = {
+    def bad: Either[String, List[Slot]] = Left(s"`$m` does not take these operands")
     def shaped[A](s: Option[A])(f: A => List[Slot]): Either[String, List[Slot]] =
       s.map(f).toRight(s"`$m` does not take these operands")
 
@@ -28,12 +33,72 @@ object Mnemonics {
         if (ops.length == 1) { shaped(lbl(ops))(f => hole(f)(Instr.Jal(Reg(1), _))) }
         else { shaped(rl(ops))((rd, f) => hole(f)(Instr.Jal(rd, _))) }
 
+      case "nop" => if (ops.isEmpty) { Right(one(Instr.OpImm(AluOp.Add, x0, x0, Imm(0)))) }
+        else { bad }
+      // `ret` targets one past the last instruction, where [Common.call] hands
+      // the state back unchanged. For a leaf function with its result already
+      // in `a0`, that is exactly returning.
+      case "ret" => if (ops.isEmpty) { Right(hole(Fixup.End)(Instr.Jal(x0, _))) } else { bad }
+      case "j"   => shaped(lbl(ops))(f => hole(f)(Instr.Jal(x0, _)))
+      case "mv"  => shaped(rr(ops))((rd, rs) => one(Instr.OpImm(AluOp.Add, rd, rs, Imm(0))))
+      case "not" => shaped(rr(ops))((rd, rs) => one(Instr.OpImm(AluOp.Xor, rd, rs, Imm(-1))))
+      case "neg" => shaped(rr(ops))((rd, rs) => one(Instr.Op(AluOp.Sub, rd, x0, rs)))
+      case "seqz" => shaped(rr(ops))((rd, rs) => one(Instr.OpImm(AluOp.Sltu, rd, rs, Imm(1))))
+      case "snez" => shaped(rr(ops))((rd, rs) => one(Instr.Op(AluOp.Sltu, rd, x0, rs)))
+      case "sltz" => shaped(rr(ops))((rd, rs) => one(Instr.Op(AluOp.Slt, rd, rs, x0)))
+      case "sgtz" => shaped(rr(ops))((rd, rs) => one(Instr.Op(AluOp.Slt, rd, x0, rs)))
+      case _ if zeroBranches.contains(m) =>
+        shaped(rl(ops))((rs, f) => hole(f)(Instr.Branch(zeroBranches(m), rs, x0, _)))
+      case "blez" => shaped(rl(ops))((rs, f) => hole(f)(Instr.Branch(Cmp.Ge, x0, rs, _)))
+      case "bgtz" => shaped(rl(ops))((rs, f) => hole(f)(Instr.Branch(Cmp.Lt, x0, rs, _)))
+      case _ if swapped.contains(m) =>
+        shaped(rrl(ops))((a, b, f) => hole(f)(Instr.Branch(swapped(m), b, a, _)))
+      case "li" => ops match {
+          case List(Operand.R(rd), o) => value(o, consts).map(v => li(rd, v))
+          case _                      => bad
+        }
+      case "la" | "lla" => ops match {
+          case List(Operand.R(rd), Operand.Sym(n, k)) =>
+            Right(
+              hole(Fixup.Hi(n, k))(Instr.Lui(rd, _)) ++
+                hole(Fixup.Lo(n, k))(Instr.OpImm(AluOp.Add, rd, rd, _))
+            )
+          case _ => bad
+        }
+
       case _ => Left(s"unknown mnemonic `$m`")
     }
   }
 
   private def one(i: Instr): List[Slot] = List(Slot.Fixed(i))
   private def hole(f: Fixup)(fill: Imm => Instr): List[Slot] = List(Slot.Open(f, fill))
+
+  // `li` is one instruction when the value fits the twelve-bit immediate and two
+  // when it does not, and that is the whole reason resolution needs two passes.
+  private def li(rd: Reg, v: Int): List[Slot] =
+    if (v >= -2048 && v <= 2047) { one(Instr.OpImm(AluOp.Add, rd, x0, Imm(v))) }
+    else {
+      // [Exec] does the shifting, so [Lui] takes the unshifted twenty bits and
+      // the `addi` has to be the sign-extended low twelve for the rounding in
+      // `hi` to cancel.
+      val hi = ((v + 0x800) >>> 12) & 0xfffff
+      val lo = (v << 20) >> 20
+      if (lo == 0) { one(Instr.Lui(rd, Imm(hi))) }
+      else { one(Instr.Lui(rd, Imm(hi))) ++ one(Instr.OpImm(AluOp.Add, rd, rd, Imm(lo))) }
+    }
+
+  // `li`'s width depends on its value, and pass 1 needs the width, so the value
+  // has to be in hand before any label has an address. A literal or a
+  // caller-supplied constant is; a label is not, and that is what `la` is for.
+  private def value(o: Operand, consts: Map[String, Int]): Either[String, Int] = o match {
+    case Operand.Num(v) => Right(v)
+    case Operand.Sym(n, k) =>
+      consts
+        .get(n)
+        .map(_ + k)
+        .toRight(s"`$n` is not a compile-time constant; use `la` for a label's address")
+    case _ => Left("expected an immediate")
+  }
 
   // An immediate position: a number, an absolute symbol value, or one half of a
   // `%hi`/`%lo` pair.
@@ -57,6 +122,10 @@ object Mnemonics {
   private def rrr(ops: List[Operand]): Option[(Reg, Reg, Reg)] = ops match {
     case List(Operand.R(a), Operand.R(b), Operand.R(c)) => Some((a, b, c))
     case _                                              => None
+  }
+  private def rr(ops: List[Operand]): Option[(Reg, Reg)] = ops match {
+    case List(Operand.R(a), Operand.R(b)) => Some((a, b))
+    case _                                => None
   }
   private def rri(ops: List[Operand]): Option[(Reg, Reg, Fixup)] = ops match {
     case List(Operand.R(a), Operand.R(b), o) => imm(o).map(f => (a, b, f))
@@ -127,4 +196,13 @@ object Mnemonics {
 
   private val stores: Map[String, Width] =
     Map("sb" -> Width.B, "sh" -> Width.H, "sw" -> Width.W)
+
+  // These put the zero on the right. `blez` and `bgtz` cannot, because `0 >= rs`
+  // and `0 < rs` are what they mean, so they swap instead and get their own
+  // cases above.
+  private val zeroBranches: Map[String, Cmp] =
+    Map("beqz" -> Cmp.Eq, "bnez" -> Cmp.Ne, "bltz" -> Cmp.Lt, "bgez" -> Cmp.Ge)
+
+  private val swapped: Map[String, Cmp] =
+    Map("bgt" -> Cmp.Lt, "ble" -> Cmp.Ge, "bgtu" -> Cmp.Ltu, "bleu" -> Cmp.Geu)
 }

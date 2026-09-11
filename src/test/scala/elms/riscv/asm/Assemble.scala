@@ -9,6 +9,7 @@ enum Fixup derives CanEqual {
   case Lit(v: Int)
   case Abs(sym: String, addend: Int)
   case Rel(label: String, addend: Int)
+  case End
   case Hi(sym: String, addend: Int)
   case Lo(sym: String, addend: Int)
 }
@@ -41,7 +42,7 @@ object Asm {
   ): Either[List[AsmError], Image] = {
     val (stmts, lexErrors) = Parse.stmts(file, src)
     val consts = defines ++ equs(stmts)
-    val laid = stmts.foldLeft(Layout())((acc, s) => stmt(acc, s))
+    val laid = stmts.foldLeft(Layout())((acc, s) => stmt(acc, s, consts))
     val addrs = consts ++ laid.dataSyms ++ laid.labels.map((n, i) => n -> 4 * i)
     val (prog, linkErrors) = link(laid.slots, laid.labels, addrs)
     val errors = lexErrors ++ laid.errors ++ linkErrors
@@ -69,9 +70,12 @@ object Asm {
     def emit(bs: Seq[Int]): Layout = copy(data = data ++ bs)
   }
 
-  // Pass 1. A label binds inside the fold rather than after it, since one at
-  // the bottom of the file legitimately binds to the final length.
-  private def stmt(l: Layout, s: Stmt): Layout = s.form match {
+  // Pass 1. Expansion is what fixes every later address, because `li` of a
+  // large value is two instructions and `la` is always two, so nothing has an
+  // address until every size is known. A label binds inside the fold rather
+  // than after it, since one at the bottom of the file legitimately binds to
+  // the final length.
+  private def stmt(l: Layout, s: Stmt, consts: Map[String, Int]): Layout = s.form match {
     case Form.Label(n) => l.section match {
         case Section.Text  => l.copy(labels = l.labels + (n -> l.slots.length))
         case Section.Data  => l.copy(dataSyms = l.dataSyms + (n -> l.data.length))
@@ -79,7 +83,7 @@ object Asm {
       }
     case Form.Dir(n, args) => directive(l, s.loc, n, args)
     case Form.Insn(m, ops) => l.section match {
-        case Section.Text => Mnemonics.insn(m, ops) match {
+        case Section.Text => Mnemonics.insn(m, ops, consts) match {
             case Right(ss) => l.copy(slots = l.slots ++ ss.map((s.loc, _)))
             case Left(e)   => l.fail(s.loc, e)
           }
@@ -239,7 +243,7 @@ object Asm {
     val filled = slots.zipWithIndex.map { case ((loc, slot), at) =>
       val i = slot match {
         case Slot.Fixed(i)      => Right(i)
-        case Slot.Open(f, fill) => resolve(at, labels, addrs, f).map(fill)
+        case Slot.Open(f, fill) => resolve(at, slots.length, labels, addrs, f).map(fill)
       }
       i.flatMap(check).left.map(AsmError(loc, _))
     }
@@ -248,6 +252,7 @@ object Asm {
 
   private def resolve(
       at: Int,
+      n: Int,
       labels: Map[String, Int],
       addrs: Map[String, Int],
       f: Fixup
@@ -264,6 +269,9 @@ object Asm {
             Left(s"`$l` is not a label in .text, so it has no pc-relative offset")
           case None => Left(s"undefined label `$l`")
         }
+      // `prog.length` is a real target: [Common.call] hands back the state
+      // unchanged for an index past the end, which is how the tower halts.
+      case Fixup.End       => Right(Imm(4 * (n - at)))
       case Fixup.Abs(s, k) => addr(s).map(a => Imm(a + k))
       // [Exec] does the shifting, `write(s, rd, unit(imm.i << 12))`, so [Lui]
       // takes the unshifted twenty bits. The rounding here is what the
