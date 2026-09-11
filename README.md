@@ -24,6 +24,15 @@ This generator project requires [sbt](https://www.scala-sbt.org/) and Java versi
 We depend on [ELMS](https://github.com/metareflection/elms)
 ([vendored](vendor/elms)).
 
+The RISC-V tests read their programs out of object files rather than out of
+Scala, so those have to be assembled first:
+
+`./src/test/asm/riscv/build`
+
+That wants either `clang`, whose integrated assembler covers RISC-V and so needs
+no cross toolchain, or a `riscv{64,32}-*-gcc`. The `.o` files are not checked in,
+and a suite that cannot find one aborts with a message naming the script.
+
 Running `sbt test` from the root will run all the tests,
 generating `.actual` files and checking them against the `.check` files in [`src/out`](src/out).
 Failing tests will leave the generated `.actual` files for inspection.

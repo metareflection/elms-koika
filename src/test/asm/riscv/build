@@ -1,0 +1,38 @@
+#!/usr/bin/env zsh
+
+# usage: ./build
+
+here=${0:a:h}
+
+# Duplicated from `GenericKoikaDriver`: SECRET is `4 * secret_offset` and SIZE
+# is `RiscVDriver.password_size_bytes`. A real assembler cannot hear Scala, so
+# the suite reads these back out of the object as ABS symbols and compares. Move
+# one without the other and a test says so.
+SECRET=80
+SIZE=16
+
+# clang's integrated assembler covers RISC-V, so the common case wants no cross
+# toolchain at all. The gcc names are written from the documented flags and have
+# never run: this box has x86_64 gcc only.
+as=()
+if echo 'addi x1, x0, 1' | clang --target=riscv32 -march=rv32i -mabi=ilp32 \
+        -c -x assembler -o /dev/null - 2>/dev/null; then
+    as=(clang --target=riscv32)
+else
+    for gcc in riscv64-linux-gnu-gcc riscv64-unknown-elf-gcc riscv64-elf-gcc \
+               riscv32-unknown-elf-gcc riscv32-elf-gcc; do
+        (( $+commands[$gcc] )) && as=($gcc) && break
+    done
+fi
+
+if (( ! $#as )); then
+    echo "no RISC-V assembler found; install clang or a riscv{64,32}-*-gcc" >&2
+    exit 1
+fi
+
+for src in $here/*.s; do
+    echo "Assembling ${src:t}"
+    $as -march=rv32i -mabi=ilp32 -mno-relax \
+        -Wa,--defsym,SECRET=$SECRET -Wa,--defsym,SIZE=$SIZE \
+        -c $src -o ${src:r}.o || exit 1
+done

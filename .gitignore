@@ -35,3 +35,6 @@ project/*
 !project/plugins.sbt
 
 src/out/**/*.actual.*
+
+# RISC-V test fixtures, assembled by src/test/asm/riscv/build
+src/test/asm/riscv/*.o
