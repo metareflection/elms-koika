@@ -10,8 +10,20 @@ trait Common extends Isa {
   val prog: Vector[Instr]
   def useCache: Boolean
 
-  lazy val cache: Array[Option[Rep[StateT => StateT]]] =
-    (for (p <- prog) yield None).toArray
+  // One emitted C function per slot. A slot is a pc in every model but
+  // [Predictive], which needs one per lookahead state and so hands out its own
+  // numbering.
+  //
+  // The number is also what the closure [call] stages captures, and that is
+  // load-bearing. ELMS keys its own function table by Java-serializing that
+  // closure, and the driver it captures serializes to nothing, so two slots
+  // that number the same share a function whether or not they mean the same
+  // thing.
+  def slot(pc: Int): Int = pc
+  def resume(at: Int, s: Rep[StateT]): Rep[StateT] = execute(at, s)
+  def live(at: Int): Boolean = at < prog.length
+
+  private val emitted = mutable.Map[Int, Rep[StateT => StateT]]()
 
   def tick(s: Rep[StateT]): Rep[Unit] = s.timer = s.timer + 1
 
@@ -22,20 +34,26 @@ trait Common extends Isa {
   // the linearization, which is exactly the coupling this split removes.
   def execute(pc: Int, s: Rep[StateT]): Rep[StateT] = step(pc, s)
 
-  def call(i: Int, s: Rep[StateT]): Rep[StateT] =
+  def call(i: Int, s: Rep[StateT]): Rep[StateT] = {
+    require(i >= 0, s"jump to negative pc $i")
     if (useCache) {
-      if (i < cache.length) {
-        val f = cache(i) match {
+      val at = slot(i)
+      if (live(at)) {
+        // Not `getOrElseUpdate`: staging the body re-enters [call], so a
+        // self-recursive slot writes this map while the default is still being
+        // evaluated.
+        val f = emitted.get(at) match {
           case None => {
-            val f = fun { (s: Rep[StateT]) => execute(i, s) }
-            cache(i) = Some(f)
+            val f = fun { (s: Rep[StateT]) => resume(at, s) }
+            emitted(at) = f
             f
           }
           case Some(f) => f
         }
         f(s)
       } else { s }
-    } else { execute(i, s) }
+    } else { resume(slot(i), s) }
+  }
 
   def snippet(s: Rep[StateT]): Rep[StateT] = call(0, s)
 }
