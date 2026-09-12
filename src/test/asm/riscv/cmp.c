@@ -15,16 +15,17 @@
  * branches as relocations against local labels, so every offset in the object
  * is one the linker was still expected to rewrite.
  *
- * Naive/Speculative: CBMC fails (leak detected). The leak is in the control
- * flow, so it does not need the cache or the speculation to show up.
+ * Naive/Speculative/Predictive: CBMC fails (leak detected). The leak is in the
+ * control flow, so it does not need the cache or the speculation to show up.
  *
- * Predictive: OOM
+ * The `bnez a1, .LBB0_2` closing the loop is the only backward conditional
+ * branch in any demo, so this is the only file where Predictive opens a window
+ * toward a lower pc. Predicted taken it re-runs the loop body speculatively,
+ * and by then the pointers have advanced, so on the last iteration that reads
+ * guess[n] and secret[n], one past the end of both.
  *
- * The suspect is the `bnez a1, .LBB0_2` that closes the loop. This is the only
- * demo whose backward edge is a conditional branch rather than a jump, so it is
- * the only one where Predictive opens a window toward a lower pc, which is what
- * the forwards-only rule in Speculative forbids. That is worth 35 generated
- * functions against Speculative's 13.
+ * It is also the only demo that has ever been too big to check. Re-verify this
+ * one before believing any change to Predictive.
  */
 __attribute__((section(".secret"))) int secret[4] = {11, 22, 33, 44};
 __attribute__((section(".attacker"))) int guess[4];

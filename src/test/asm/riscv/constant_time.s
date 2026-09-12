@@ -8,9 +8,9 @@
 # and reusing it here as scratch would read as though it mattered.
 #
 # All drivers should pass (no leak). The only conditional branch is the loop
-# exit, whose outcome is the public trip count, so Predictive trains its bit
-# identically in both states. A failure here is a finding about the model rather
-# than about the demo.
+# exit, whose outcome is the public trip count, so Predictive mispredicts in
+# both runs at exactly the same place. A failure here is a finding about the
+# model rather than about the demo.
 
 	.text
 	.globl	constant_time

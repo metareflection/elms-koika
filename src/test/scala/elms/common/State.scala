@@ -10,8 +10,7 @@ case class StateT(
     saved_regs: Array[Int],
     cache_keys: Array[Int],
     cache_vals: Array[Int],
-    timer: Int,
-    bht: Array[Int]
+    timer: Int
 ) derives StructManifest
 
 trait StateTOps extends DslOps {
@@ -22,7 +21,6 @@ trait StateTOps extends DslOps {
     def cache_keys: Rep[Array[Int]] = st.get("cache_keys").asInstanceOf[Rep[Array[Int]]]
     def cache_vals: Rep[Array[Int]] = st.get("cache_vals").asInstanceOf[Rep[Array[Int]]]
     def timer: Rep[Int] = st.get("timer").asInstanceOf[Rep[Int]]
-    def bht: Rep[Array[Int]] = st.get("bht").asInstanceOf[Rep[Array[Int]]]
 
     def mem_=(v: Rep[Array[Int]]): Rep[Unit] = st.set("mem", v)
     def saved_regs_=(v: Rep[Array[Int]]): Rep[Unit] = st.set("saved_regs", v)
