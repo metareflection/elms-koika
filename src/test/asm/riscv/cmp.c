@@ -17,6 +17,14 @@
  *
  * Naive/Speculative: CBMC fails (leak detected). The leak is in the control
  * flow, so it does not need the cache or the speculation to show up.
+ *
+ * Predictive: OOM
+ *
+ * The suspect is the `bnez a1, .LBB0_2` that closes the loop. This is the only
+ * demo whose backward edge is a conditional branch rather than a jump, so it is
+ * the only one where Predictive opens a window toward a lower pc, which is what
+ * the forwards-only rule in Speculative forbids. That is worth 35 generated
+ * functions against Speculative's 13.
  */
 __attribute__((section(".secret"))) int secret[4] = {11, 22, 33, 44};
 __attribute__((section(".attacker"))) int guess[4];

@@ -117,4 +117,11 @@ class RiscVCompiledTests extends KoikaSuite {
     }
     check("speculative", snippet.code)
   }
+
+  // [PredictiveDriver] already carries the `init` the other two spell out, plus
+  // the predictor's own field, so there is nothing left to say here.
+  test("riscv compiled predictive") {
+    val snippet = new CompiledDriver with PredictiveDriver {}
+    check("predictive", snippet.code)
+  }
 }

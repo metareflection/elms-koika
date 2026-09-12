@@ -3,7 +3,9 @@
 # caller. The counter steps by 4, because addresses are bytes.
 #
 # The leak here is in the control flow rather than in the speculation, so every
-# driver sees it.
+# driver sees it. Predictive sees a second one: `bne x10, x11, wrong` is
+# secret-dependent, so the bit it trains diverges between the two states and
+# the misprediction penalty becomes a secret-dependent term of its own.
 #
 # All drivers should detect a timing leak (CBMC should fail).
 

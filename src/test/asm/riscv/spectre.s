@@ -7,7 +7,7 @@
 # which is why `Exec.speculable` admits ALU ops.
 #
 # Naive/Cache: CBMC passes (fail to detect)
-# Speculative: CBMC fails (leak detected)
+# Speculative/Predictive: CBMC fails (leak detected)
 
 	.text
 	.globl	spectre

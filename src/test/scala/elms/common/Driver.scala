@@ -19,25 +19,37 @@ abstract class GenericKoikaDriver[A: Typable, B: Typable] extends DslDriver[A, B
 
   val stateT: String = "StateT"
 
+  // Emitted above [stateTDef], whose array sizes they are. A model that needs
+  // state of its own appends to both rather than restating either.
+  def defines: Seq[(String, Int)] = Seq(
+    "NUM_REGS" -> num_regs,
+    "MEM_SIZE" -> mem_size,
+    "SECRET_SIZE" -> secret_size,
+    "SECRET_OFFSET" -> secret_offset,
+    "CACHE_LRU_SIZE" -> cache_size
+  )
+
   // CR cwong: In theory, this should be derivable from the StateT manifest.
   // However, CBMC doesn't really like dealing with unknown-length arrays, so
   // for now we hardcode this. What we *should* do is introduce some kind of
   // `KnownLengthArray`.
-  val stateTDef: String = s"""struct $stateT {
-  |  int regs[NUM_REGS];
-  |  int mem[MEM_SIZE];
-  |  int saved_regs[NUM_REGS];
-  |  int cache_keys[CACHE_LRU_SIZE];
-  |  int cache_vals[CACHE_LRU_SIZE];
-  |  int timer;
-  |};""".stripMargin
+  def stateTFields: Seq[String] = Seq(
+    "int regs[NUM_REGS];",
+    "int mem[MEM_SIZE];",
+    "int saved_regs[NUM_REGS];",
+    "int cache_keys[CACHE_LRU_SIZE];",
+    "int cache_vals[CACHE_LRU_SIZE];",
+    "int timer;"
+  )
+
+  // Lazy because [stateTFields] is overridable, and an eager `val` here would
+  // read the base list out of a subclass that has not run its own initialisers
+  // yet.
+  lazy val stateTDef: String =
+    s"struct $stateT {\n${stateTFields.map(f => s"  $f").mkString("\n")}\n};"
 
   lazy val header: String = s"""
-#define NUM_REGS $num_regs
-#define MEM_SIZE $mem_size
-#define SECRET_SIZE $secret_size
-#define SECRET_OFFSET $secret_offset
-#define CACHE_LRU_SIZE $cache_size
+${defines.map((k, v) => s"#define $k $v").mkString("\n")}
 #ifndef CBMC
 #define __CPROVER_assert(b,s) 0
 #define nondet_uint() 0
