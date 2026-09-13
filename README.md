@@ -40,7 +40,15 @@ Snapshot files mostly follow the naming convention of `[testfile]/[suffix].check
 
 The examples are verified using [CBMC](#CBMC) as follows:
 
-`cbmc -DCBMC --verbosity 4 --slice-formula --unwind 1000 --refine --compact-trace <file.c>`
+`cbmc -DCBMC --verbosity 4 --slice-formula --unwind 1000 --refine --compact-trace --property main.assertion.1 <file.c>`
+
+`main.assertion.1` is the timing leak. Naming it is what keeps CBMC off the
+automatic properties it generates for the residue, of which
+`fact/naive/salsa20.check.c` has 6536: pointer dereference checks, overflow,
+array bounds, undefined shift. Those ask about the generated C rather than about
+the program it models, and on anything past the twenty-instruction demos they
+are the entire cost. That file answers in five seconds with the flag and had not
+finished in seventy-two minutes without it. No verdict moves either way.
 
 For convenience, we also provide [`verify`](src/out/verify), invoked as
 
@@ -50,6 +58,49 @@ Note that not all `.check.c` files are expected to pass verification -- most
 are intended to demonstrate that CBMC can detect a vulnerability. We are working
 on making a comprehensive list of which files are expected to pass and which do
 not.
+
+## The FaCT suite
+
+[FaCT](https://github.com/PLSysSec/FaCT) is a DSL whose type system rejects
+programs that branch on a secret or index memory with one, and whose compiler
+emits a branchless selection in place of the branch you would have written.
+[`src/test/fact`](src/test/fact) ports the Salsa20 core from
+[fact-eval](https://github.com/PLSysSec/fact-eval), the case studies published
+alongside the FaCT paper.
+
+We do not build the FaCT frontend to run it. What is checked in is the LLVM that
+`factc` emitted, and
+
+`./src/test/fact/build`
+
+lowers it to RV32I with stock `opt`, `llc` and `clang`.
+`./src/test/fact/factc` regenerates the `.ll` from the `.fact` source beside it
+and is the only thing here that wants the FaCT compiler; it builds it under
+`podman` from the image its authors published, and no test run needs it.
+
+This is a positive control and there is no leaky twin. Salsa20 has no
+conditional anywhere in it: every index is a literal and the only loop runs ten
+times whatever the key is, so no model fails. What it adds over
+`constant_time.s` is size. Everything else in the tree that verifies clean does
+so in under twenty instructions; this is 277, and CBMC clears all four models:
+
+| naive | cache | speculative | predictive |
+|---|---|---|---|
+| 5.0s | 6.1s | 6.2s | 8.0s |
+
+Two things it needs that the assembly demos do not. It is the first demo that
+spills, so `init` points `sp` at the top of `mem` rather than leaving it at 0,
+and `mem_size` is computed from the frame the object actually declares. And
+ELMS keys its function table by Java-serializing the staged closure, which
+recurses once per node, so `build.sbt` raises `-Xss` for the forked test JVM;
+under Speculative and Predictive the default 1MB stack overflows partway
+through.
+
+It is also the only case study the tower can take. curve25519-donna, poly1305,
+both OpenSSL MEE versions and the Lucky13 fix in `openssl-ssl3/s3_cbc.fact` are
+all multi-function, and `s3_cbc.fact` opens by declaring `extern void
+SHA1_Transform`. One function per object is the whole budget, because a dynamic
+jump cannot be staged against a static program counter.
 
 ## CBMC
 

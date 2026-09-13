@@ -24,6 +24,13 @@ lazy val root = project
 
     Test / fork := true,
 
+    // ELMS keys its function table by Java-serializing the staged closure, and
+    // the serializer recurses once per node. The RISC-V demos are twenty
+    // instructions and never came close; `src/test/fact/salsa20.o` is 277, and
+    // under Speculative or Predictive the default 1MB stack overflows partway
+    // through writing the graph out.
+    Test / javaOptions += "-Xss512m",
+
     Test / javaOptions += {
       val conv = fileConverter.value
       val cp = (Test / fullClasspath).value

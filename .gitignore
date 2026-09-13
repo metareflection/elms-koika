@@ -25,6 +25,7 @@ local.sbt
 .bloop/
 .metals/
 metals.sbt
+*.semanticdb
 
 # IDEA
 .idea
@@ -38,3 +39,8 @@ src/out/**/*.actual.*
 
 # RISC-V test fixtures, assembled by src/test/asm/riscv/build
 src/test/asm/riscv/*.o
+
+# FaCT test fixtures, built by src/test/fact/build
+src/test/fact/*.o
+src/test/fact/*.s
+src/test/fact/.factc-src/

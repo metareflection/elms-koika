@@ -1,0 +1,64 @@
+#!/usr/bin/env zsh
+
+# usage: ./build
+#
+# Every `.ll` here to an RV32I object the ELF reader can load. The `.ll` files
+# are FaCT's own output and are checked in, so nothing here needs the FaCT
+# compiler; `./factc` beside this script is what regenerates them, and it wants
+# podman and about 3GB of 2018 Ubuntu.
+
+here=${0:a:h}
+
+for tool in opt llc; do
+    (( $+commands[$tool] )) || { echo "no $tool on PATH; install LLVM" >&2; exit 1 }
+done
+
+if ! echo 'addi x1, x0, 1' | clang --target=riscv32 -march=rv32i -mabi=ilp32 \
+        -c -x assembler -o /dev/null - 2>/dev/null; then
+    echo "clang cannot target riscv32; the FaCT suite has no gcc fallback" >&2
+    exit 1
+fi
+
+cc=(clang --target=riscv32 -march=rv32i -mabi=ilp32 -mno-relax)
+
+# FaCT hardcodes an x86-64 module header, and a 64-bit pointer size would make
+# every `getelementptr` in an array function lower wrong. Rewriting the two
+# lines here rather than in the checked-in file keeps the `.ll` verbatim.
+#
+# `nounwind` is the other edit. Without it llc emits `.cfi` directives, the
+# assembler turns those into an allocatable `.eh_frame` with relocations against
+# `.text`, and [Elf.relocatable] rejects the object for having two data
+# sections it cannot place.
+retarget() {
+    sed -e 's|^target datalayout = .*|target datalayout = "e-m:e-p:32:32-i64:64-n32-S128"|' \
+        -e 's|^target triple = .*|target triple = "riscv32"|' \
+        -e 's|^\(define .*\)) {$|\1) nounwind {|' $1
+}
+
+# `mem2reg` and nothing else, for two separate reasons.
+#
+# The allocas have to go. `sp` points at the top of `mem` here rather than at 0,
+# so a frame is no longer fatal, but its size is: [Program.stack] is written
+# down in Scala and [FactDriver.mem_size] is computed from it, and at -O0 every
+# local gets a slot instead of a register. `mem2reg` is what leaves the frame at
+# what register allocation actually spills.
+#
+# Every pass after it is the interesting one. FaCT's `-no-inline-asm` selection
+# is `res ^ (mask & (v ^ res))`, straight-line arithmetic with no branch in it,
+# which is the whole guarantee. `instcombine` recognises that idiom and folds it
+# back into a `select`, and RV32I has no conditional move, so llc lowers the
+# `select` as a branch and the secret is in the control flow again.
+#
+# Salsa20 has no conditional in it, so there is no cmov here to lose that way
+# and today only the first reason bites. The next FaCT program with an `if` in
+# it will want the second, and nothing in the tree checks for it: a branch back
+# on a secret would show up as a changed snapshot and nothing louder.
+passes=mem2reg
+
+for src in $here/*.ll; do
+    echo "Lowering ${src:t}"
+    retarget $src \
+        | opt -passes=$passes -S \
+        | llc -mtriple=riscv32 -O2 --relocation-model=static -o ${src:r}.s || exit 1
+    $cc -c ${src:r}.s -o ${src:r}.o || exit 1
+done

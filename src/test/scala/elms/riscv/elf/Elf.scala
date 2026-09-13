@@ -9,7 +9,12 @@ import RiscV.{Imm, Instr}
 // taint is, `st_size` says how big it is, and `st_info` says whether it is code
 // or data.
 object Elf {
-  private val script = "./src/test/asm/riscv/build"
+  // Whatever built an object sits beside it, under `src/test/asm/riscv` for the
+  // assembly demos and under `src/test/fact` for the FaCT ports, so the script
+  // to name in a "you did not build this" message comes out of the path rather
+  // than out of a constant that is right for only one of the two.
+  private def script(path: String): String =
+    Option(java.nio.file.Path.of(path).getParent).fold("the build script")(d => s"./$d/build")
 
   def read(name: String, bytes: Array[Byte]): Either[List[ElfError], Image] =
     try { relocatable(Obj(name, bytes)) }
@@ -25,7 +30,7 @@ object Elf {
       try { java.nio.file.Files.readAllBytes(java.nio.file.Path.of(path)) }
       catch {
         case _: java.io.IOException =>
-          throw new ElfException(List(ElfError(path, s"no such object; run $script")))
+          throw new ElfException(List(ElfError(path, s"no such object; run ${script(path)}")))
       }
     read(path, bytes).fold(es => throw new ElfException(es), identity)
   }

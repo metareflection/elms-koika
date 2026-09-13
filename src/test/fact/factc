@@ -1,0 +1,57 @@
+#!/usr/bin/env zsh
+
+# usage: ./factc                 regenerate every *.ll from its *.fact
+#        ./factc foo.fact ...    just these
+#
+# Nothing in the test run needs this. The `.ll` files it writes are checked in,
+# and `./build` lowers those; this is only for when a `.fact` source changes.
+#
+# FaCT wants OCaml 4.06 and LLVM 6.0, so it builds inside the image its authors
+# published in 2018. That image is a 3GB pull and the compiler takes a couple of
+# minutes to build the first time.
+
+set -e
+here=${0:a:h}
+image=docker.io/bjohannesmeyer/fact:latest
+
+(( $+commands[podman] )) || { echo "podman is not installed" >&2; exit 1 }
+
+work=$(mktemp -d)
+trap "rm -rf $work" EXIT
+
+if [[ ! -d $here/.factc-src ]]; then
+    echo "Cloning FaCT"
+    git clone --depth 1 https://github.com/PLSysSec/FaCT.git $here/.factc-src
+fi
+
+srcs=(${@:-$here/*.fact})
+cp $srcs $work/
+
+# Runs as root inside the container so that rootless podman maps the output
+# files back to the invoking user. The opam switch lives under /home/docker,
+# hence HOME; libz3 and the LLVM 6 binaries are what the image's own .profile
+# puts on the paths, which `bash -lc` under `podman run` does not source.
+#
+# `-no-inline-asm` is the flag that makes this portable at all. FaCT's default
+# selection primitive is an x86 `cmovnz` written as inline assembly, which
+# cannot lower to RISC-V; the flag swaps it for the XOR-and-mask form, which is
+# target-independent arithmetic. `./build` has the rest of that story.
+podman run --rm --entrypoint /bin/bash \
+    -v "$here/.factc-src:/home/docker/FaCT:z" -v "$work:/work:z" \
+    -e HOME=/home/docker $image -lc '
+        eval $(opam config env)
+        export LD_LIBRARY_PATH=/home/docker/.opam/4.06.0/lib/z3
+        export PATH=/usr/lib/llvm-6.0/bin:$PATH
+        cd /home/docker/FaCT
+        [[ -x factc ]] || { oasis setup >/dev/null 2>&1; make >/dev/null; }
+        cd /work
+        for f in *.fact; do
+            echo "factc $f"
+            /home/docker/FaCT/factc -llvm-out -no-inline-asm $f
+        done
+    ' 2>&1 | grep -vE "ttyname|Running as root|overriding the module target|warning generated"
+
+for f in $work/*.ll; do
+    cp $f $here/${f:t}
+    echo "wrote ${f:t}"
+done
