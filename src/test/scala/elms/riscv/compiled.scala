@@ -3,7 +3,7 @@ package elms.koika.test.riscv
 import elms.prelude.*
 import elms.prelude.given
 
-import elms.koika.test.KoikaSuite
+import elms.koika.test.{KoikaSuite, Verdict}
 import elms.koika.test.common.Speculative
 import elf.{Datum, Taint}
 
@@ -95,7 +95,7 @@ class RiscVCompiledTests extends KoikaSuite {
            |  }
            |}""".stripMargin
     }
-    check("naive", snippet.code)
+    check("naive", snippet.code, Verdict.Leak)
   }
 
   test("riscv compiled speculative") {
@@ -115,13 +115,13 @@ class RiscVCompiledTests extends KoikaSuite {
            |  }
            |}""".stripMargin
     }
-    check("speculative", snippet.code)
+    check("speculative", snippet.code, Verdict.Leak)
   }
 
   // [PredictiveDriver] already carries the `init` the other two spell out, plus
   // the predictor's own field, so there is nothing left to say here.
   test("riscv compiled predictive") {
     val snippet = new CompiledDriver with PredictiveDriver {}
-    check("predictive", snippet.code)
+    check("predictive", snippet.code, Verdict.Leak)
   }
 }

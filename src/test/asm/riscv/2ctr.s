@@ -8,9 +8,6 @@
 # what real Spectre gadgets do with the cache line size, and it is what makes
 # the second probe land in the same range as the first.
 #
-# Naive: CBMC passes (fail to detect)
-# Cache/Speculative/Predictive: CBMC fails (leak detected)
-#
 # `done` is one past the last instruction, which is how the tower halts. No
 # `ret` here or in any of these: the program falls off the end instead.
 

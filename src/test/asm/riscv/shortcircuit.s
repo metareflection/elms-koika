@@ -7,8 +7,6 @@
 # secret-dependent, so what the predictor has learned about it differs between
 # the two runs, and each pays its mispredictions at a different point. The
 # penalty itself becomes a secret-dependent term.
-#
-# All drivers should detect a timing leak (CBMC should fail).
 
 	.text
 	.globl	shortcircuit

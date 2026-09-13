@@ -6,6 +6,9 @@ import java.io._
 import java.nio.file.{Files, Paths}
 import org.scalatest.funsuite.AnyFunSuite
 
+// `snapshot` and not `check`, so that [KoikaSuite.check] is the only `check` a
+// suite can call. Sharing the name, a call that forgot the verdict resolved
+// here instead and wrote a `.check.scala` that read like a test.
 trait SnapshotFunSuite extends AnyFunSuite {
   // global override to accept all diffs
   val overwriteCheckFiles = false
@@ -42,7 +45,7 @@ trait SnapshotFunSuite extends AnyFunSuite {
     out.close()
   }
 
-  def check(
+  def snapshot(
       label: String,
       actual: String,
       ext: String = "scala",

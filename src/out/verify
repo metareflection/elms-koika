@@ -1,7 +1,16 @@
 #!/usr/bin/env zsh
 
-# usage: ./verify <files>...
-
+# usage: ./verify [files...]
+#
+# Checks every residue against the verdict its test declared. With no arguments
+# that is every snapshot under this directory. Exits non-zero when any file
+# disagrees, so this is a test and not a report.
+#
+# The claim lives in the file, on the `// verify:` line that `KoikaSuite.check`
+# writes at the top of it. So the thing this script compares against is the same
+# thing `sbt test` pins, and a demo cannot acquire a verdict by having someone
+# write one in a comment.
+#
 # `--property main.assertion.1` is the timing leak and nothing else.
 #
 # Without it CBMC also checks every automatic property it generates for the
@@ -15,8 +24,45 @@
 # detect a leak still fail; on a twenty-instruction demo the other 6536 checks
 # were just cheap enough not to notice.
 
-for file in $@; do
-    echo "Verifying $file"
+here=${0:a:h}
+
+files=($@)
+(( $#files )) || files=(${here}/**/*.check.c(N))
+
+typeset -i failures=0
+log=$(mktemp)
+
+for file in $files; do
+    name=${file#$PWD/}
+    expected=$(sed -n '1s|^// verify: \([a-z]*\).*|\1|p' $file)
+    if [[ -z $expected ]]; then
+        print -- "no-claim $name (regenerate it with \`sbt test\`)"
+        (( failures++ ))
+        continue
+    fi
+
     cbmc -DCBMC --verbosity 4 --slice-formula --unwind 1000 --refine \
-         --compact-trace --property main.assertion.1 $file
+         --compact-trace --property main.assertion.1 $file >$log 2>&1
+    case $? in
+        0)  actual=clean ;;
+        10) actual=leak ;;
+        *)  actual=error ;;
+    esac
+
+    if [[ $actual == $expected ]]; then
+        print -- "ok       $name ($actual)"
+    else
+        print -- "MISMATCH $name: claims $expected, CBMC says $actual"
+        cat $log
+        (( failures++ ))
+    fi
 done
+
+rm -f $log
+
+if (( failures )); then
+    print -- "$failures of $#files disagree"
+    exit 1
+fi
+
+print -- "all $#files agree"

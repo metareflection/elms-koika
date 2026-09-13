@@ -7,7 +7,7 @@
 # attacker-controlled value into regs[10], which the two SPECTRE demos do read,
 # and reusing it here as scratch would read as though it mattered.
 #
-# All drivers should pass (no leak). The only conditional branch is the loop
+# Nothing here leaks under any model. The only conditional branch is the loop
 # exit, whose outcome is the public trip count, so Predictive mispredicts in
 # both runs at exactly the same place. A failure here is a finding about the
 # model rather than about the demo.

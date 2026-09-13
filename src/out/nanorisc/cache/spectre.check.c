@@ -1,3 +1,4 @@
+// verify: clean (CBMC should report VERIFICATION SUCCESSFUL)
 
 #define NUM_REGS 8
 #define MEM_SIZE 30

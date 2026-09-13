@@ -15,8 +15,8 @@
  * branches as relocations against local labels, so every offset in the object
  * is one the linker was still expected to rewrite.
  *
- * Naive/Speculative/Predictive: CBMC fails (leak detected). The leak is in the
- * control flow, so it does not need the cache or the speculation to show up.
+ * The leak is in the control flow, so it does not need the cache or the
+ * speculation to show up.
  *
  * The `bnez a1, .LBB0_2` closing the loop is the only backward conditional
  * branch in any demo, so this is the only file where Predictive opens a window

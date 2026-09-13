@@ -5,9 +5,6 @@
 # so the address wants an `add`; and `mem` is word-indexed, so the secret wants
 # scaling before it can be used as one. Both sit inside the speculation window,
 # which is why `Exec.speculable` admits ALU ops.
-#
-# Naive/Cache: CBMC passes (fail to detect)
-# Speculative/Predictive: CBMC fails (leak detected)
 
 	.text
 	.globl	spectre

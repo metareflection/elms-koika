@@ -3,7 +3,7 @@ package elms.koika.test.riscv
 import elms.prelude.*
 import elms.prelude.given
 
-import elms.koika.test.KoikaSuite
+import elms.koika.test.{KoikaSuite, Verdict}
 import elms.koika.test.common.Cached
 
 @virtualize
@@ -30,27 +30,27 @@ class RiscVCacheTests extends KoikaSuite {
     val snippet = new CacheDriver {
       override val prog = demo("shortcircuit")
     }
-    check("shortcircuit", snippet.code)
+    check("shortcircuit", snippet.code, Verdict.Leak)
   }
 
   test("riscv cache 2ctr") {
     val snippet = new CacheDriver {
       override val prog = demo("2ctr")
     }
-    check("2ctr", snippet.code)
+    check("2ctr", snippet.code, Verdict.Leak)
   }
 
   test("riscv cache spectre") {
     val snippet = new CacheDriver {
       override val prog = demo("spectre")
     }
-    check("spectre", snippet.code)
+    check("spectre", snippet.code, Verdict.Clean)
   }
 
   test("riscv cache constant_time") {
     val snippet = new CacheDriver {
       override val prog = demo("constant_time")
     }
-    check("constant_time", snippet.code)
+    check("constant_time", snippet.code, Verdict.Clean)
   }
 }

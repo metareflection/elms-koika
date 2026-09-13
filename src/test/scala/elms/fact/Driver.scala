@@ -3,6 +3,7 @@ package elms.koika.test.fact
 import elms.prelude.*
 import elms.prelude.given
 
+import elms.koika.test.Verdict
 import elms.koika.test.riscv.{RiscV, RiscVDriver, elf}
 
 // What the driver puts in an array before entry.
@@ -41,7 +42,12 @@ enum Param derives CanEqual {
 // A ported function and what its arguments mean. [name] is both the object file
 // under `src/test/fact` and the label on the snapshot. [stack] is how many bytes
 // of frame it spills, which the layout has to leave room for.
-case class Program(name: String, params: List[Param], stack: Int) derives CanEqual
+//
+// [expect] is one verdict rather than four because FaCT's whole claim is that
+// the model does not matter. A port that needed a different answer per model
+// would be a finding about FaCT, so make it say so here first.
+case class Program(name: String, params: List[Param], stack: Int, expect: Verdict)
+    derives CanEqual
 
 object Program {
   // Sizes are FaCT's, in words: `uint8[64]`, `uint8[16]`, `uint8[32]`.
@@ -58,7 +64,8 @@ object Program {
         Param.Arr(4, Fill.Secret),
         Param.Arr(8, Fill.Secret)
       ),
-      stack = 96
+      stack = 96,
+      expect = Verdict.Clean
     )
   )
 }

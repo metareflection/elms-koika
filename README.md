@@ -50,14 +50,53 @@ the program it models, and on anything past the twenty-instruction demos they
 are the entire cost. That file answers in five seconds with the flag and had not
 finished in seventy-two minutes without it. No verdict moves either way.
 
-For convenience, we also provide [`verify`](src/out/verify), invoked as
+Most `.check.c` files are not expected to verify. They are demonstrations that
+CBMC can find a vulnerability, so the leak is the result and a clean run would
+be the failure. Which is which is a property of the pair, the demo and the model
+it runs on, and each test says so where it calls `check`:
 
-`./verify <file1.c> <file2.c> ...`
+```scala
+test("riscv naive spectre") {
+  val snippet = new NaiveDriver {
+    override val prog = demo("spectre")
+  }
+  check("spectre", snippet.code, Verdict.Clean)
+}
+```
 
-Note that not all `.check.c` files are expected to pass verification -- most
-are intended to demonstrate that CBMC can detect a vulnerability. We are working
-on making a comprehensive list of which files are expected to pass and which do
-not.
+`Verdict` is a required argument, so a new demo does not compile until somebody
+has said what should happen to it. `check` writes the claim into the first line
+of the generated C, which makes it part of the snapshot `sbt test` pins, and
+[`verify`](src/out/verify) reads it back out and runs the checker:
+
+`./src/out/verify [file.c ...]`
+
+With no arguments it takes every snapshot in the tree. It prints one line per
+file and exits non-zero if CBMC says anything other than what the file claims,
+so a model that stops detecting what it used to detect is a failing run rather
+than a stale comment. The claims themselves are greppable without running
+anything:
+
+`head -qn1 src/out/**/*.check.c`
+
+Here is what they currently say. The first three demos exist for both NanoRisc
+and RISC-V and answer the same on each, so the table does not split them;
+NanoRisc has no predictive model, and RISC-V is what fills that column. The one
+blank is `cmp` under cache, which is a suite nobody has written.
+
+| demo | naive | cache | speculative | predictive |
+|---|---|---|---|---|
+| `shortcircuit` | leak | leak | leak | leak |
+| `2ctr` | clean | leak | leak | leak |
+| `spectre` | clean | clean | leak | leak |
+| `constant_time` | clean | clean | clean | clean |
+| `cmp` | leak | | leak | leak |
+| `salsa20` | clean | clean | clean | clean |
+
+Reading across a row is the tower. No model loses a leak the one to its left
+could see, and `2ctr` and `spectre` are where it starts seeing more: `2ctr`
+needs a cache before the second load's address can cost anything, and `spectre`
+needs speculation before that load happens at all.
 
 ## The FaCT suite
 
