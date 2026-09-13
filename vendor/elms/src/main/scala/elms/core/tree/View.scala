@@ -331,7 +331,12 @@ object View {
     case E(Op.While, s)      => arity2("While", s).map(While(_, _))
 
     case E(Op.ArrayNew(ty), s) => arity1("ArrayNew", s).map(ArrayNew(ty, _))
-    case E(Op.ArrayInit(_), s) => ???
+    // `ArrayInit` has no `View` yet. Reporting it is what lets a backend log an
+    // unsupported term rather than the whole pipeline dying on it.
+    case E(Op.ArrayInit(_), _) => {
+      Log.error("`ArrayInit` is not implemented")
+      None
+    }
     case E(Op.ArrayGet, s)     => arity2("ArrayGet", s).map(ArrayGet(_, _))
     case E(Op.ArraySet, s)     => arity3("ArraySet", s).map(ArraySet(_, _, _))
     case E(Op.ArrayLength, s)  => arity1("ArrayLength", s).map(ArrayLength(_))

@@ -1,5 +1,8 @@
 #include <stdbool.h>
+#include <stdio.h>
 #include <stdlib.h>
+
+const char * hello(int, const char *);
 
 const char * snippet(int x0);
 const char * snippet(int x0) {

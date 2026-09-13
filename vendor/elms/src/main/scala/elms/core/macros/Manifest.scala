@@ -47,7 +47,10 @@ private[core] object Manifest {
       new StructManifest[A] {
         val repr: StructRepr = new StructRepr {
           override val name: String = ${ Expr(clsName) }
-          override val members: Map[String, Type] = ($membersE).toMap
+          // A `VectorMap` so the fields stay in declaration order, which is
+          // what a C backend has to lay the struct out in.
+          override val members: Map[String, Type] =
+            scala.collection.immutable.VectorMap.from($membersE)
         }
       }
     }

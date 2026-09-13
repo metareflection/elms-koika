@@ -70,7 +70,11 @@ object Op {
   case object While extends Control
 
   case class ArrayNew(val typ: Type) extends Effectful
-  case class ArrayInit[T: Typable](init: Seq[T]) extends Effectful
+  // The element type is named rather than left to a context bound, so a backend
+  // can read it off the op the way it reads `ArrayNew`'s.
+  case class ArrayInit[T](init: Seq[T])(using val elem: Typable[T]) extends Effectful {
+    def elemTy: Type = elem.identity
+  }
   case object ArrayGet extends Effectful
   case object ArraySet extends Effectful
   case object ArrayLength extends Pure

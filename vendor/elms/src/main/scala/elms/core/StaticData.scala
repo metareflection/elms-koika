@@ -9,7 +9,7 @@ case class Scalar[A](x: A)(using val prim: Primitive[A]) extends StaticData {
 }
 
 case class SArray(elemTy: Type, elems: Seq[StaticData]) extends StaticData {
-  def ty = ARRAY(elemTy)
+  def ty = ARRAY(elemTy, Some(elems.length))
 }
 
 trait AsStaticData[A: Typable] {

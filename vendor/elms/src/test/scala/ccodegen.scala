@@ -193,4 +193,97 @@ class CCodegenTests extends SnapshotFunSuite {
     }
     check("custom-op", snippet.code)
   }
+
+  test("if inside a short-circuit region") {
+    val snippet = new CSnippetDriver[Int, Boolean] {
+      def snippet(x: Rep[Int]): Rep[Boolean] = {
+        (x > 0) && {
+          Builtins.println("checking")
+          if x > 5 then x < 100 else x === 3
+        }
+      }
+    }
+    check("if-in-region", snippet.code)
+  }
+
+  test("nested short-circuit regions") {
+    val snippet = new CSnippetDriver[Int, Boolean] {
+      def snippet(x: Rep[Int]): Rep[Boolean] = {
+        (x > 0) && {
+          Builtins.println("p")
+          (x > 1) && {
+            Builtins.println("q")
+            x > 2
+          }
+        }
+      }
+    }
+    check("nested-regions", snippet.code)
+  }
+
+  test("unit parameter") {
+    val snippet = new CSnippetDriver[Unit, Int] {
+      def snippet(x: Rep[Unit]): Rep[Int] = { Builtins.println("hi"); 1 }
+    }
+    check("unit-param", snippet.code)
+  }
+
+  test("unit parameter returned") {
+    val snippet = new CSnippetDriver[Unit, Unit] {
+      def snippet(x: Rep[Unit]): Rep[Unit] = x
+    }
+    check("unit-param-returned", snippet.code)
+  }
+
+  test("unit argument at a call site") {
+    val snippet = new CSnippetDriver[Int, Int] {
+      def noop: Rep[Unit => Int] = fun { (u: Rep[Unit]) => unit(7) }
+      def snippet(x: Rep[Int]): Rep[Int] = noop(unit(())) + x
+    }
+    check("unit-arg", snippet.code)
+  }
+
+  test("printing each type") {
+    val snippet = new CSnippetDriver[Int, Int] {
+      def snippet(x: Rep[Int]): Rep[Int] = {
+        Builtins.println("s")
+        Builtins.println(x)
+        Builtins.println(x > 0)
+        Builtins.print(unit('c'))
+        x
+      }
+    }
+    check("print-types", snippet.code)
+  }
+
+  test("custom node with no arguments") {
+    val snippet = new CSnippetDriver[Int, Int] {
+      def now: Rep[Int] = unsafeReflect(elms.core.Op.Custom("now", elms.core.INT))
+      def snippet(x: Rep[Int]): Rep[Int] = now + x
+    }
+    check("custom-op-nullary", snippet.code)
+  }
+
+  test("static data") {
+    val snippet = new CSnippetDriver[Int, Int] {
+      def snippet(x: Rep[Int]): Rep[Int] =
+        staticData(Array(3, 1, 4)).get(x) + staticData(7)
+    }
+    check("static-data", snippet.code)
+  }
+
+  // `ArrayInit` has no implementation yet. What this pins is that reaching it
+  // degrades into a reported error rather than throwing out of the pipeline.
+  test("an unimplemented op is reported, not thrown") {
+    val snippet = new CSnippetDriver[Int, Int] {
+      def snippet(x: Rep[Int]): Rep[Int] = {
+        val arr: Rep[Array[Int]] = unsafeReflect(elms.core.Op.ArrayInit(Seq(1, 2, 3)))
+        arr.get(x)
+      }
+    }
+    // No snapshot: the output is deliberately not valid C, and pinning it would
+    // be a trap for anyone who later compiles every check file.
+    assert(snippet.code.contains("ERROR") && snippet.code.contains("ArrayInit"))
+  }
+
 }

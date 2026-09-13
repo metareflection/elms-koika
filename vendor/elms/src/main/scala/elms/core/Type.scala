@@ -4,7 +4,11 @@ import annotation.implicitNotFound
 
 trait Type derives CanEqual
 
-case class ARRAY(inner: Type) extends Type
+// `len` is C storage layout and nothing else: it decides whether a struct
+// member is inline `int xs[16]` or a pointer. The JVM has no fixed-length array
+// type, so `ScalaCodegen` drops it. The two backends therefore disagree on what
+// copying a struct does to the field, and the C one is right.
+case class ARRAY(inner: Type, len: Option[Int] = None) extends Type
 case class ARROW(args: Type, out: Type) extends Type
 
 sealed trait Primitive[A] extends Type {
@@ -62,3 +66,7 @@ given typPrim[A](using prim: Primitive[A]): Typable[A] with
 
 given typArray[A](using inner: Typable[A]): Typable[Array[A]] with
   val identity = ARRAY(inner.identity)
+
+given typFixedArray[N <: Int, A](using n: ValueOf[N], inner: Typable[A])
+    : Typable[FixedArray[N, A]] with
+  val identity = ARRAY(inner.identity, Some(n.value))

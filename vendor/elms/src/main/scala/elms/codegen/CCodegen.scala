@@ -8,6 +8,7 @@ import elms.core.tree.View
 import elms.core.given
 import elms.util.IndentedWriter
 import elms.util.collection.*
+import elms.util.Plumbing.traverse
 import elms.runtime.Log
 
 class CCodegen(cfg: Config = Config.cDefault) extends Backend(cfg) {
@@ -17,23 +18,44 @@ class CCodegen(cfg: Config = Config.cDefault) extends Backend(cfg) {
     val w = makeIndentedWriter(out)
 
     w.emitln("#include <stdbool.h>")
+    w.emitln("#include <stdio.h>")
     w.emitln("#include <stdlib.h>")
     w.emitln("")
+
+    // Static data is named in the program the same way a function is, so it
+    // belongs in the same env: `inferType` has no other way to reach its type.
+    val topEnv: Env = prog.functions.map { (fname, fdef) =>
+      fname -> functionType(fdef)
+    }.toMap ++ prog.staticData.map { (name, data) => name -> data.ty }
+
+    structsIn(prog).foreach { repr => w.emitStructDecl(repr) }
+
+    val customs = prog.functions.flatMap { (_, fdef) =>
+      customSignatures(topEnv + (fdef.arg -> fdef.inty))(fdef.body)
+    }.distinct
+
+    customs.groupBy(_._1).foreach { (name, sigs) =>
+      if sigs.length > 1 then
+        Log.error(s"Custom operation `$name` is called at more than one type")
+    }
+
+    customs.foreach { (name, ty, argTys) => w.emitCustomHeader(name, ty, argTys) }
+    if customs.nonEmpty then w.emitln("")
 
     prog.staticData.foreach { (name, data) => w.emitNamedStaticData(name, data) }
     if prog.staticData.nonEmpty then w.emitln("")
 
     prog.functions.foreach { (fname, fdef) => w.emitFunctionHeader(fname, fdef) }
 
-    val topEnv: Env = prog.functions.map { (fname, fdef) =>
-      fname -> functionType(fdef)
-    }.toMap
-
     prog.functions.foreach { (fname, fdef) => w.emitFunction(topEnv)(fname, fdef) }
   }
 
-  private def renderArgs(name: Name, ty: Type): String =
-    s"${ty.renderParam} ${name.render(cfg.varPrefix)}"
+  // A unit parameter is spelled as C's empty parameter list. `void` cannot name
+  // a parameter, and a caller has nothing to pass for it anyway.
+  private def renderArgs(name: Name, ty: Type): String = ty match {
+    case UNIT => "void"
+    case _    => s"${ty.renderParam} ${name.render(cfg.varPrefix)}"
+  }
 
   extension [A: Primitive](x: A)
     def render: String = summon[Primitive[A]] match {
@@ -75,7 +97,9 @@ class CCodegen(cfg: Config = Config.cDefault) extends Backend(cfg) {
       case BOOL         => "bool"
       case CHAR         => "char"
       case STRING       => "const char *"
-      case ARRAY(t)     => s"${t.render} *"
+      // A known length never reaches here. It is storage layout, so it only
+      // goes through `renderDeclarator`; elsewhere the array has decayed.
+      case ARRAY(t, _)  => s"${t.render} *"
       case STRUCT(repr) => s"struct ${repr.name} *"
       case _ => {
         Log.error(s"Attempted to render unsupported type $ty")
@@ -83,12 +107,20 @@ class CCodegen(cfg: Config = Config.cDefault) extends Backend(cfg) {
       }
     }
 
+  // C declarator syntax wraps the name: a fixed-length array is `int xs[16]`,
+  // not `int[16] xs`. Only the positions that lay out storage need it, which is
+  // struct members and static data.
+  private def renderDeclarator(ty: Type, name: String): String = ty match {
+    case ARRAY(inner, Some(n)) => s"${inner.render} $name[$n]"
+    case _                     => s"${ty.render} $name"
+  }
+
   extension (ty: Type)
     private def render: String = renderType(ty)
     private def renderParam: String = ty.render
     private def renderElement: String = ty match {
-      case ARRAY(t) => t.render
-      case _        => ty.render
+      case ARRAY(t, _) => t.render
+      case _           => ty.render
     }
 
   extension (t: Term)
@@ -100,7 +132,38 @@ class CCodegen(cfg: Config = Config.cDefault) extends Backend(cfg) {
       case _                              => false
     }
 
+    // Terms with no good C expression form: a `let` needs a GNU statement-
+    // expression, and an `if` needs one as soon as either branch has bindings.
+    private def needsStatements: Boolean = View.view(t) match {
+      case Some(View.Let(_, _, _, _))     => true
+      case Some(View.IfThenElse(_, _, _)) => true
+      case _                              => false
+    }
+
   private type Env = Map[Name, Type]
+
+  // Where a term's value goes once the statements that compute it have run.
+  private enum Sink(val resultTy: Type) {
+    case Return(ty: Type) extends Sink(ty)
+    case Assign(x: Name, ty: Type) extends Sink(ty)
+
+    // The C that consumes a finished expression, written immediately before it.
+    def store: String = this match {
+      case Return(_)    => "return "
+      case Assign(x, _) => s"${x.render(cfg.varPrefix)} = "
+    }
+  }
+
+  // A short-circuiting operator, named by when it goes on to evaluate its right
+  // operand: `&&` only when the left was true, `||` only when it was false.
+  private enum ShortCircuit derives CanEqual { case AndAlso, OrElse }
+
+  // What to hand back for `ty` when there is nothing real to hand back.
+  private def zero(ty: Type): String = ty match {
+    case INT | CHAR => "0"
+    case BOOL       => "false"
+    case _          => "NULL"
+  }
 
   // CR-soon cwong: We can probably perform `inferType` at the same time
   // we walk the tree to print it. This would be a quadratic speedup in term
@@ -143,8 +206,8 @@ class CCodegen(cfg: Config = Config.cDefault) extends Backend(cfg) {
     case View.ArrayNew(ty, _) => Some(ARRAY(ty))
 
     case View.ArrayGet(arr, _) => inferType(env)(arr) match {
-        case Some(ARRAY(elemTy)) => Some(elemTy)
-        case _                   => None
+        case Some(ARRAY(elemTy, _)) => Some(elemTy)
+        case _                      => None
       }
     case View.ArraySet(_, _, _)         => Some(UNIT)
     case View.ArrayLength(_)            => Some(INT)
@@ -171,7 +234,95 @@ class CCodegen(cfg: Config = Config.cDefault) extends Backend(cfg) {
 
   private def functionType(fdef: Function): Type = ARROW(fdef.inty, fdef.outty)
 
+  // `Op.StructSet` carries only the field name, so the receiver's type is the
+  // only route to what that field was declared as.
+  private def memberType(env: Env)(receiver: Term, field: String): Option[Type] =
+    inferType(env)(receiver) match {
+      case Some(STRUCT(repr)) => repr.get(field)
+      case _                  => None
+    }
+
+  // Every struct the program mentions, including any reached only through
+  // another struct's fields. A struct is always behind a pointer in the C this
+  // backend emits, so nothing depends on the order these come out in.
+  private def structsIn(prog: Program): Seq[StructRepr] = {
+    def fromType(seen: Set[String])(ty: Type): Seq[StructRepr] = ty match {
+      case STRUCT(repr) if seen(repr.name) => Seq()
+      case STRUCT(repr) => repr +: repr.members.values.toSeq
+          .flatMap(fromType(seen + repr.name))
+      case ARRAY(inner, _) => fromType(seen)(inner)
+      case ARROW(a, b)     => fromType(seen)(a) ++ fromType(seen)(b)
+      case _               => Seq()
+    }
+
+    def fromOp(op: Op): Seq[Type] = op match {
+      case Op.VarNew(ty)         => Seq(ty)
+      case Op.ArrayNew(ty)       => Seq(ty)
+      case ai @ Op.ArrayInit(_)  => Seq(ARRAY(ai.elemTy))
+      case Op.StructGet(repr, _) => Seq(STRUCT(repr))
+      case Op.Custom(_, ty)      => Seq(ty)
+      case _                     => Seq()
+    }
+
+    def fromTerm(term: Term): Seq[Type] = term match {
+      case V(_)                           => Seq()
+      case Let(_, e1, e2)                 => fromTerm(e1) ++ fromTerm(e2)
+      case Function(_, inty, outty, body) => inty +: outty +: fromTerm(body)
+      case E(op, children)                => fromOp(op) ++ children.flatMap(fromTerm)
+    }
+
+    prog.functions.flatMap { (_, fdef) =>
+      (fdef.inty +: fdef.outty +: fromTerm(fdef.body)).flatMap(fromType(Set()))
+    }.distinctBy(_.name)
+  }
+
+  // Every custom operation the program calls, with the types of its call site.
+  // `Op.Custom` carries only the result type, so the arguments have to come out
+  // of inference.
+  private def customSignatures(env: Env)(term: Term): Seq[(String, Type, Seq[Type])] =
+    term match {
+      case V(_) => Seq()
+
+      case Let(x, e1, e2) => customSignatures(env)(e1) ++
+          customSignatures(env.setOrRemove(x, inferType(env)(e1)))(e2)
+
+      case Function(arg, inty, _, body) => customSignatures(env + (arg -> inty))(body)
+
+      case E(op, children) => {
+        val nested = children.flatMap(customSignatures(env))
+
+        op match {
+          case Op.Custom(name, ty) => children.map(inferType(env)).traverse match {
+              case Some(argTys) => (name, ty, argTys.filterNot(_ == UNIT)) +: nested
+              case None         => {
+                Log.error(s"Could not infer the argument types of `$name`: $term")
+                nested
+              }
+            }
+
+          case _ => nested
+        }
+      }
+    }
+
   extension (out: IndentedWriter)
+    private def emitStructDecl(repr: StructRepr): Unit = {
+      out.emitln(s"struct ${repr.name} {")
+      out.indented {
+        repr.members.foreach { (field, ty) =>
+          out.emitln(s"${renderDeclarator(ty, field)};")
+        }
+      }
+      out.emitln("};")
+      out.emitln("")
+    }
+
+    private def emitCustomHeader(name: String, ty: Type, argTys: Seq[Type]): Unit = {
+      val params =
+        if argTys.isEmpty then "void" else argTys.map(_.renderParam).mkString(", ")
+      out.emitln(s"${ty.render} $name($params);")
+    }
+
     // CR cwong: merge this with `emitFunction`
     private inline def emitFunctionHeader(fname: Name, fdef: Function): Unit = {
       val Function(arg, inty, outty, body) = fdef
@@ -198,7 +349,7 @@ class CCodegen(cfg: Config = Config.cDefault) extends Backend(cfg) {
       out.emitln(s"${outty.render} ${fname.render(cfg.varPrefix)}($argsS) {")
       out.indented {
         if outty == UNIT then out.emitStmt(env)(body)
-        else out.emitReturnTerm(env, outty)(body)
+        else out.emitInto(env, Sink.Return(outty))(body)
       }
       out.emitln("}")
       out.emitln("")
@@ -218,11 +369,28 @@ class CCodegen(cfg: Config = Config.cDefault) extends Backend(cfg) {
 
       ty match {
         case Some(UNIT) => out.emitStmt(env)(e)
-        case Some(ty)   => {
-          out.emit(s"${ty.render} ${x.render(cfg.varPrefix)} = ")
-          out.emitExpr(env)(e)
-          out.emitln(";")
+
+        case Some(ty) => View.view(e) match {
+          case Some(View.And(lhs, rhs)) if rhs.needsStatements =>
+            out.emitShortCircuit(env)(x, lhs, rhs, ShortCircuit.AndAlso)
+
+          case Some(View.Or(lhs, rhs)) if rhs.needsStatements =>
+            out.emitShortCircuit(env)(x, lhs, rhs, ShortCircuit.OrElse)
+
+          // Declare the variable up front and let the term assign into it. Its
+          // pieces only fit in a C expression inside a GNU statement-expression.
+          case _ if e.needsStatements => {
+            out.emitln(s"${ty.render} ${x.render(cfg.varPrefix)};")
+            out.emitInto(env, Sink.Assign(x, ty))(e)
+          }
+
+          case _ => {
+            out.emit(s"${ty.render} ${x.render(cfg.varPrefix)} = ")
+            out.emitExpr(env)(e)
+            out.emitln(";")
+          }
         }
+
         case None => {
           out.invalidTerm(s"Could not infer C type for let-bound term: $e")
           out.emitln(";")
@@ -233,7 +401,12 @@ class CCodegen(cfg: Config = Config.cDefault) extends Backend(cfg) {
     }
 
     private def emitExpr(env: Env)(term: Term): Unit = out.withView(term) {
-      case View.V(name) => out.emit(name.render(cfg.varPrefix))
+      // A unit-typed name has no C value behind it. A unit parameter is not in
+      // the signature, and a unit-typed binding declares no variable.
+      case View.V(name) => env.get(name) match {
+        case Some(UNIT) => out.emit("/* unit */")
+        case _          => out.emit(name.render(cfg.varPrefix))
+      }
 
       case const @ View.Const(_) => out.emit(const.value.render(using const.prim))
 
@@ -296,6 +469,8 @@ class CCodegen(cfg: Config = Config.cDefault) extends Backend(cfg) {
         out.emit(")")
       }
 
+      // Only reachable from an operand position. Anything bound to a variable
+      // takes the statement form in `emitAssign`.
       case View.IfThenElse(guard, tthen, telse) => {
         out.emit("(")
         out.emitExpr(env)(guard)
@@ -314,10 +489,17 @@ class CCodegen(cfg: Config = Config.cDefault) extends Backend(cfg) {
         out.emit("})")
       }
 
-      case View.ArrayNew(ty, t) => {
-        out.emit(s"(${ARRAY(ty).render})malloc(sizeof(${ty.render}) * ")
-        out.emitExpr(env)(t)
-        out.emit(")")
+      // An array of fixed-length arrays needs `int (*)[16]` and a `sizeof` to
+      // match, and `renderType` has no declarator to build either from.
+      case View.ArrayNew(ty, t) => ty match {
+        case ARRAY(_, Some(_)) => out
+            .invalidTerm(s"C backend cannot allocate fixed-length arrays: $ty")
+
+        case _ => {
+          out.emit(s"(${ARRAY(ty).render})malloc(sizeof(${ty.render}) * ")
+          out.emitExpr(env)(t)
+          out.emit(")")
+        }
       }
 
       case View.ArrayGet(arr, i) => {
@@ -333,9 +515,12 @@ class CCodegen(cfg: Config = Config.cDefault) extends Backend(cfg) {
         out.emit("})")
       }
 
-      case View.ArrayLength(arr) => out.invalidTerm(
-          s"C backend cannot emit array length without explicit length metadata: $arr"
-        )
+      case View.ArrayLength(arr) => inferType(env)(arr) match {
+        case Some(ARRAY(_, Some(n))) => out.emit(n.toString)
+        case _ => out.invalidTerm(
+            s"C backend cannot emit array length without explicit length metadata: $arr"
+          )
+      }
 
       case View.StructGet(repr, t, field) => {
         out.emitMaybeParenthesizedExpr(env)(t)
@@ -369,17 +554,8 @@ class CCodegen(cfg: Config = Config.cDefault) extends Backend(cfg) {
       case View.Function(_, _, _, _) => out
           .invalidTerm(s"C backend does not support anonymous functions/lambdas: $term")
 
-      case View.Print(t) => {
-        out.emit("printf(\"%s\", ")
-        out.emitExpr(env)(t)
-        out.emit(")")
-      }
-
-      case View.Println(t) => {
-        out.emit("printf(\"%s\\n\", ")
-        out.emitExpr(env)(t)
-        out.emit(")")
-      }
+      case View.Print(t)   => out.emitPrintf(env)(t, "")
+      case View.Println(t) => out.emitPrintf(env)(t, "\\n")
 
       case View.StringLength(_)          => ???
       case View.StringCharAt(_, _)       => ???
@@ -444,14 +620,29 @@ class CCodegen(cfg: Config = Config.cDefault) extends Backend(cfg) {
         out.emitExpr(env)(x)
         out.emit(" = ")
         out.emitExpr(env)(v)
-        out.emit(";")
+        out.emitln(";")
       }
 
-      case View.StructSet(x, field, v) => {
-        out.emitMaybeParenthesizedExpr(env)(x)
-        out.emit(s"->$field = ")
-        out.emitExpr(env)(v)
-        out.emit(";")
+      // A fixed-length member is inline storage, and C has no assignment
+      // operator for an array, so `s->xs = v` does not compile. Indexing into
+      // the member is unaffected and still goes through `ArraySet`.
+      //
+      // CR-someday cwong: To allow the whole-member write, we could emit
+      // `memcpy(s->xs, v, sizeof s->xs)`. However, that may lead to soundness
+      // errors, as we won't be able to ensure that the source and target are
+      // the right length due to `structSet` taking `Rep[Any]`.
+      case View.StructSet(x, field, v) => memberType(env)(x, field) match {
+        case Some(ARRAY(_, Some(_))) => {
+          out.invalidTerm(s"Cannot assign to fixed-length array member `$field`")
+          out.emitln(";")
+        }
+
+        case _ => {
+          out.emitMaybeParenthesizedExpr(env)(x)
+          out.emit(s"->$field = ")
+          out.emitExpr(env)(v)
+          out.emitln(";")
+        }
       }
 
       case View.App(_, _) => {
@@ -473,33 +664,51 @@ class CCodegen(cfg: Config = Config.cDefault) extends Backend(cfg) {
       }
     }
 
-    private def emitReturnTerm(env: Env, outty: Type)(term: Term): Unit = out
+    // Evaluate the left operand into `x`, then overwrite it from inside the `if`
+    // that decides whether the right operand runs. Statements belonging to the
+    // right operand cannot sit beside the expression, because it only sometimes
+    // runs.
+    private def emitShortCircuit(
+        env: Env
+    )(x: Name, lhs: Term, rhs: Term, op: ShortCircuit): Unit = {
+      val ty = emitAssign(env)(x, lhs).getOrElse(BOOL)
+      val test = op match {
+        case ShortCircuit.AndAlso => x.render(cfg.varPrefix)
+        case ShortCircuit.OrElse  => s"!${x.render(cfg.varPrefix)}"
+      }
+
+      out.emitln(s"if ($test) {")
+      out.indented { out.emitInto(env, Sink.Assign(x, ty))(rhs) }
+      out.emitln("}")
+    }
+
+    private def emitInto(env: Env, sink: Sink)(term: Term): Unit = out
       .withView(term) {
         case View.Let(x, _ty, e1, e2) => {
           val ty = emitAssign(env)(x, e1).getOrElse(UNIT)
-          out.emitReturnTerm(env + (x -> ty), outty)(e2)
+          out.emitInto(env + (x -> ty), sink)(e2)
         }
 
         case View.IfThenElse(guard, tthen, telse) => {
           out.emit("if (")
           out.emitExpr(env)(guard)
           out.emitln(") {")
-          out.indented { out.emitReturnTerm(env, outty)(tthen) }
+          out.indented { out.emitInto(env, sink)(tthen) }
           out.emitln("} else {")
-          out.indented { out.emitReturnTerm(env, outty)(telse) }
+          out.indented { out.emitInto(env, sink)(telse) }
           out.emitln("}")
         }
 
         case View.RangeForEach(_, _, _, _) => {
-          out.invalidTerm(s"Cannot return the result of a for-loop in C: $term")
+          out.invalidTerm(s"Cannot use the result of a for-loop in C: $term")
           out.emitln(";")
-          out.emitReturnFallback(outty)
+          out.emitFallback(sink)
         }
 
         case View.While(_, _) => {
-          out.invalidTerm(s"Cannot return the result of a while-loop in C: $term")
+          out.invalidTerm(s"Cannot use the result of a while-loop in C: $term")
           out.emitln(";")
-          out.emitReturnFallback(outty)
+          out.emitFallback(sink)
         }
 
         case View.Function(_, _, _, _) => {
@@ -507,23 +716,22 @@ class CCodegen(cfg: Config = Config.cDefault) extends Backend(cfg) {
             s"C backend does not support anonymous functions/lambdas: $term"
           )
           out.emitln(";")
-          out.emitReturnFallback(outty)
+          out.emitFallback(sink)
         }
 
         case _ => {
-          out.emit("return ")
+          out.emit(sink.store)
           out.emitExpr(env)(term)
           out.emitln(";")
         }
       }
 
-    private def emitReturnFallback(outty: Type): Unit = outty match {
-      case UNIT       => out.emitln("return;")
-      case INT | CHAR => out.emitln("return 0;")
-      case BOOL       => out.emitln("return false;")
-      case STRING     => out.emitln("return NULL;")
-      case ARRAY(_)   => out.emitln("return NULL;")
-      case STRUCT(_)  => out.emitln("return NULL;")
+    // Store something of the right type after a term that has no C form at all.
+    // The error itself is already logged; this only keeps the surrounding
+    // function compiling.
+    private def emitFallback(sink: Sink): Unit = sink match {
+      case Sink.Return(UNIT) => out.emitln("return;")
+      case _                 => out.emitln(s"${sink.store}${zero(sink.resultTy)};")
     }
 
     private def emitLetExpr(env: Env)(x: Name, e1: Term, e2: Term): Unit = {
@@ -596,9 +804,40 @@ class CCodegen(cfg: Config = Config.cDefault) extends Backend(cfg) {
       }
     }
 
+    // Unit arguments are dropped, to match the parameter list `renderArgs` built.
+    // `printf` needs the conversion that matches its argument, and `%s` was only
+    // ever right for strings.
+    private def emitPrintf(env: Env)(t: Term, terminator: String): Unit = {
+      def call(conv: String)(arg: => Unit): Unit = {
+        out.emit(s"""printf("$conv$terminator", """)
+        arg
+        out.emit(")")
+      }
+
+      inferType(env)(t) match {
+        case Some(STRING) => call("%s") { out.emitExpr(env)(t) }
+        case Some(INT)    => call("%d") { out.emitExpr(env)(t) }
+        case Some(CHAR)   => call("%c") { out.emitExpr(env)(t) }
+
+        // A `bool` has no conversion of its own, so it prints the two words
+        // Scala's `println` would have printed for it.
+        case Some(BOOL) => call("%s") {
+            out.emitMaybeParenthesizedExpr(env)(t)
+            out.emit(" ? \"true\" : \"false\"")
+          }
+
+        case Some(UNIT) => out.emit(s"""printf("()$terminator")""")
+
+        case ty => out
+            .invalidTerm(s"C backend cannot print a value of type $ty: $t")
+      }
+    }
+
     private def emitArgTerms(env: Env)(args: Seq[Term]): Unit = {
+      val passed = args.filterNot { t => inferType(env)(t).exists(_ == UNIT) }
+
       out.emit("(")
-      args.zipWithIndex.foreach { case (t, i) =>
+      passed.zipWithIndex.foreach { case (t, i) =>
         if i != 0 then out.emit(", ")
         out.emitExpr(env)(t)
       }
@@ -611,16 +850,9 @@ class CCodegen(cfg: Config = Config.cDefault) extends Backend(cfg) {
       out.emitMaybeParenthesizedExpr(env)(y)
     }
 
-    private def emitNamedStaticData(name: Name, data: StaticData): Unit = data match {
-      case s @ Scalar(x) =>
-        val ty = s.prim
-        out.emitln(s"static const ${ty.render} ${name.render(cfg.varPrefix)} = ${x
-            .render(using s.prim)};")
-
-      case SArray(elemTy, elems) =>
-        out.emit(s"static const ${elemTy.render} ${name.render(cfg.varPrefix)}[] = ")
-        out.emit(renderStaticDataInitializer(data))
-        out.emitln(";")
+    private def emitNamedStaticData(name: Name, data: StaticData): Unit = {
+      val decl = renderDeclarator(data.ty, name.render(cfg.varPrefix))
+      out.emitln(s"static const $decl = ${renderStaticDataInitializer(data)};")
     }
 
     private def renderStaticDataInitializer(data: StaticData): String = data match {

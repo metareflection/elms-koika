@@ -30,13 +30,13 @@ class ScalaCodegen(cfg: Config = Config.scalaDefault) extends Backend(cfg) {
     }
 
   protected def renderType(ty: Type): String = ty match {
-    case UNIT     => "Unit"
-    case INT      => "Int"
-    case BOOL     => "Boolean"
-    case CHAR     => "Char"
-    case STRING   => "String"
-    case ARRAY(t) => s"Array[${t.render}]"
-    case _        => {
+    case UNIT        => "Unit"
+    case INT         => "Int"
+    case BOOL        => "Boolean"
+    case CHAR        => "Char"
+    case STRING      => "String"
+    case ARRAY(t, _) => s"Array[${t.render}]"
+    case _           => {
       Log.error(s"Attempted to render unsupported type $ty")
       s"/* Unsupported type $ty */ ???"
     }
@@ -278,7 +278,7 @@ class ScalaCodegen(cfg: Config = Config.scalaDefault) extends Backend(cfg) {
       }
       case View.StructSet(t, field, v) => {
         out.emitMaybeParenthesized(t)
-        out.emit(".$field = ")
+        out.emit(s".$field = ")
         out.emitTerm(v)
       }
     })
