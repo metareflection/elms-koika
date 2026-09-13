@@ -4,17 +4,35 @@ import elms.prelude.*
 import elms.prelude.given
 import elms.core.StructManifest
 
-case class StateT(
-    regs: Array[Int],
-    mem: Array[Int],
-    saved_regs: Array[Int],
-    cache_keys: Array[Int],
-    cache_vals: Array[Int],
+// [R] registers, [M] words of memory, [C] cache lines, as type parameters
+// rather than fields. A `FixedArray`'s length is what decides whether the C
+// backend gives a member inline storage or a pointer, and only the inline form
+// is something CBMC can reason about: `main` declares its two states by value.
+case class StateT[R <: Int, M <: Int, C <: Int](
+    regs: FixedArray[R, Int],
+    mem: FixedArray[M, Int],
+    saved_regs: FixedArray[R, Int],
+    cache_keys: FixedArray[C, Int],
+    cache_vals: FixedArray[C, Int],
     timer: Int
-) derives StructManifest
+)
 
+object StateT {
+  // Spelled out rather than `derives`, because the derivation summons a
+  // `Typable` per field and `Typable[FixedArray[R, Int]]` wants a `ValueOf[R]`
+  // that a `derives` clause has no way to ask for.
+  given manifest[R <: Int: ValueOf, M <: Int: ValueOf, C <: Int: ValueOf]
+      : StructManifest[StateT[R, M, C]] = StructManifest.derived
+}
+
+// The fields, against whatever [StateT] the driver fixed. [State] is abstract
+// so that the three lengths stop at [GenericKoikaDriver] rather than being
+// threaded through every trait that touches a register.
 trait StateTOps extends DslOps {
-  extension (st: Rep[StateT])
+  type State
+  given stateManifest: StructManifest[State]
+
+  extension (st: Rep[State])
     def regs: Rep[Array[Int]] = st.get("regs").asInstanceOf[Rep[Array[Int]]]
     def mem: Rep[Array[Int]] = st.get("mem").asInstanceOf[Rep[Array[Int]]]
     def saved_regs: Rep[Array[Int]] = st.get("saved_regs").asInstanceOf[Rep[Array[Int]]]
@@ -22,9 +40,8 @@ trait StateTOps extends DslOps {
     def cache_vals: Rep[Array[Int]] = st.get("cache_vals").asInstanceOf[Rep[Array[Int]]]
     def timer: Rep[Int] = st.get("timer").asInstanceOf[Rep[Int]]
 
-    def mem_=(v: Rep[Array[Int]]): Rep[Unit] = st.set("mem", v)
-    def saved_regs_=(v: Rep[Array[Int]]): Rep[Unit] = st.set("saved_regs", v)
-    def cache_keys_=(v: Rep[Array[Int]]): Rep[Unit] = st.set("cache_keys", v)
-    def cache_vals_=(v: Rep[Array[Int]]): Rep[Unit] = st.set("cache_vals", v)
+    // No setter for the arrays. They are inline storage now, and C has no
+    // assignment operator for an array, so the backend refuses the whole-member
+    // write. Indexing into one is unaffected.
     def timer_=(v: Rep[Int]): Rep[Unit] = st.set("timer", v)
 }

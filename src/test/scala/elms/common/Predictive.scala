@@ -15,7 +15,7 @@ import elms.prelude.given
 // emitted once rather than inlined forever: [Speculative]'s forwards-only guard
 // buys nothing here and is gone.
 //
-// The predictor's history is staging-time rather than a field of [StateT], and
+// The predictor's history is staging-time rather than a field of [State], and
 // that is the whole performance story. A [Rep] guess would force both
 // continuations of every branch to be staged, and the residue's branching call
 // sites are what a bounded checker's cost is exponential in. Specializing on
@@ -69,8 +69,8 @@ trait Predictive extends Cached {
       w: Option[Window],
       l: Map[Int, Boolean],
       pc: Int,
-      s: Rep[StateT]
-  ): Rep[StateT] = under(w, l) { call(pc, s) }
+      s: Rep[State]
+  ): Rep[State] = under(w, l) { call(pc, s) }
 
   override def slot(pc: Int): Int = intern(Key(pc, window, learned))
 
@@ -80,14 +80,14 @@ trait Predictive extends Cached {
     case Key(pc, w, _) => pc < prog.length || w.isDefined
   }
 
-  override def resume(at: Int, s: Rep[StateT]): Rep[StateT] = interned(at) match {
+  override def resume(at: Int, s: Rep[State]): Rep[State] = interned(at) match {
     case Key(pc, w, l) => under(w, l) { run(pc, w, s) }
   }
 
   private def opening(at: Int, cond: Cond, recovery: Int, guess: Boolean): Option[Window] =
     Some(Window(Pending(at, cond, recovery, guess), Vector()))
 
-  private def run(pc: Int, w: Option[Window], s: Rep[StateT]): Rep[StateT] = w match {
+  private def run(pc: Int, w: Option[Window], s: Rep[State]): Rep[State] = w match {
     // [live] has already ruled out `pc == prog.length` on this arm.
     case None => branch(pc, prog(pc)) match {
         case Some((cnd, tgt)) => {
@@ -125,7 +125,7 @@ trait Predictive extends Cached {
   // Reached exactly once per dynamic branch. A window advances only by
   // `pc + 1`, since [speculable] admits no control flow, so its walk is a
   // straight line that ends here or at [prog]'s end.
-  private def resolve(pc: Int, p: Pending, saved: Vector[Reg], s: Rep[StateT]): Rep[StateT] = {
+  private def resolve(pc: Int, p: Pending, saved: Vector[Reg], s: Rep[State]): Rep[State] = {
     val taken = evalCond(s, p.cond)
     if (taken) { settle(pc, p, saved, taken = true, s) }
     else { settle(pc, p, saved, taken = false, s) }
@@ -138,8 +138,8 @@ trait Predictive extends Cached {
       p: Pending,
       saved: Vector[Reg],
       taken: Boolean,
-      s: Rep[StateT]
-  ): Rep[StateT] = {
+      s: Rep[State]
+  ): Rep[State] = {
     // The branch is what the predictor learns from, and it learns the truth
     // rather than the guess.
     val next = learned.updated(p.at, taken)

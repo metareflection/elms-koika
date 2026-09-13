@@ -4,16 +4,16 @@ import elms.prelude.*
 import elms.prelude.given
 
 import elms.codegen.{CCodegen, Config}
-import elms.koika.test.common.{GenericKoikaDriver, StateT}
+import elms.koika.test.common.GenericKoikaDriver
 
-// What RISC-V needs from the driver that NanoRisc does not.
-trait RiscVDriver extends GenericKoikaDriver[StateT, StateT] with Exec {
+// What RISC-V needs from the driver that NanoRisc does not. [M] stays open
+// because the FaCT ports spill and the demos do not, so memory is the one
+// length these two do not agree on.
+trait RiscVDriver[M <: Int: ValueOf] extends GenericKoikaDriver[32, M, 10] with Exec {
   // `CCodegen` names generated C variables `x0`, `x1`, and so does RISC-V name
   // its registers. Nothing breaks, but anyone reading a snapshot would read
   // `x11[0] = 20` as a register write when it is an array of them.
   override val codegen = CCodegen(Config.cDefault.copy(varPrefix = "v"))
-
-  override val num_regs: Int = 32
 
   // Two changes from the generic version. `regs[0]` here is x0 and has to stay
   // zero, so the attacker-controlled value lands in a0, where an argument would

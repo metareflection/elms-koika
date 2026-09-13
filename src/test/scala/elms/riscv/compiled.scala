@@ -16,7 +16,7 @@ class RiscVCompiledTests extends KoikaSuite {
 
   private val image = elf.Elf.load("src/test/asm/riscv/cmp.o")
 
-  trait CompiledDriver extends RiscVDriver {
+  trait CompiledDriver extends RiscVDriver[30] {
     override val prog = image.prog
 
     private def base(d: Datum): Int = d.addr / 4

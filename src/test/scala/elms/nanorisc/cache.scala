@@ -4,13 +4,13 @@ import elms.prelude.*
 import elms.prelude.given
 
 import elms.koika.test.{KoikaSuite, Verdict}
-import elms.koika.test.common.{GenericKoikaDriver, StateT, Cached}
+import elms.koika.test.common.Cached
 
 @virtualize
 class CacheTests extends KoikaSuite {
   val under = "nanorisc/cache/"
 
-  trait CacheDriver extends GenericKoikaDriver[StateT, StateT] with Exec with Cached {
+  trait CacheDriver extends NanoRiscDriver with Cached {
     override val init = s"""void init(struct $stateT *s) {
          |  for (int i=0; i<NUM_REGS; i++) {
          |    s->regs[i] = 0;

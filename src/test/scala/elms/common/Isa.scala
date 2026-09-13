@@ -11,14 +11,14 @@ trait Isa extends StateTOps {
   type Reg
   type Cond
 
-  def get_reg(s: Rep[StateT], i: Rep[Int]): Rep[Int]
-  def set_reg(s: Rep[StateT], i: Rep[Int], v: Rep[Int]): Rep[Unit]
+  def get_reg(s: Rep[State], i: Rep[Int]): Rep[Int]
+  def set_reg(s: Rep[State], i: Rep[Int], v: Rep[Int]): Rep[Unit]
 
   // Word-indexed, not byte-addressed. [Cached] keys its LRU on whatever comes
   // through here and writes back with `s.mem(key)`, so an ISA with byte
   // addresses converts in [step] and one cache entry stays one word.
-  def get_mem(s: Rep[StateT], i: Rep[Int]): Rep[Int]
-  def set_mem(s: Rep[StateT], i: Rep[Int], v: Rep[Int]): Rep[Unit]
+  def get_mem(s: Rep[State], i: Rep[Int]): Rep[Int]
+  def set_mem(s: Rep[State], i: Rep[Int], v: Rep[Int]): Rep[Unit]
 
   def regIndex(r: Reg): Int
 
@@ -44,9 +44,9 @@ trait Isa extends StateTOps {
   // silently corrupts branch resolution, because [evalCond] runs against the
   // live register file at the join point rather than at the branch.
   def reads(c: Cond): Set[Reg]
-  def evalCond(s: Rep[StateT], c: Cond): Rep[Boolean]
+  def evalCond(s: Rep[State], c: Cond): Rep[Boolean]
 
   // Non-speculative semantics for one instruction. Recurses through
   // [Common.call], never through [step].
-  def step(pc: Int, s: Rep[StateT]): Rep[StateT]
+  def step(pc: Int, s: Rep[State]): Rep[State]
 }

@@ -3,7 +3,7 @@ package elms.koika.test.riscv
 import elms.prelude.*
 import elms.prelude.given
 
-import elms.koika.test.common.{Direct, StateT}
+import elms.koika.test.common.Direct
 
 import RiscV.*
 
@@ -52,7 +52,7 @@ trait Exec extends Direct {
     case (_, rs1, rs2) => Set(rs1, rs2)
   }
 
-  override def evalCond(s: Rep[StateT], c: Cond): Rep[Boolean] = c match {
+  override def evalCond(s: Rep[State], c: Cond): Rep[Boolean] = c match {
     case (cmp, rs1, rs2) => {
       val a = read(s, rs1)
       val b = read(s, rs2)
@@ -75,12 +75,12 @@ trait Exec extends Direct {
   // resolve at staging time: reading it is the literal 0, and writing it emits
   // nothing at all. No branch in the generated C, and no override of
   // [set_reg] that would make the mixin order load-bearing again.
-  private def read(s: Rep[StateT], rs: Reg): Rep[Int] = rs match {
+  private def read(s: Rep[State], rs: Reg): Rep[Int] = rs match {
     case RiscV.Reg(0) => unit(0)
     case _            => get_reg(s, rs.i)
   }
 
-  private def write(s: Rep[StateT], rd: Reg, v: Rep[Int]): Rep[Unit] = rd match {
+  private def write(s: Rep[State], rd: Reg, v: Rep[Int]): Rep[Unit] = rd match {
     case RiscV.Reg(0) => unit(())
     case _            => set_reg(s, rd.i, v)
   }
@@ -110,7 +110,7 @@ trait Exec extends Direct {
   // Unaligned `LW`/`LH` are unsupported: the demos are aligned, and asserting
   // alignment in the generated C would add `__CPROVER_assert` noise to every
   // load.
-  private def loadValue(s: Rep[StateT], w: Width, addr: Rep[Int]): Rep[Int] = {
+  private def loadValue(s: Rep[State], w: Width, addr: Rep[Int]): Rep[Int] = {
     val word = get_mem(s, wordOf(addr))
     w match {
       case Width.W  => word
@@ -123,7 +123,7 @@ trait Exec extends Direct {
 
   // `SB` and `SH` are read-modify-write, so they cost two cache probes. That is
   // what a write-allocate cache really does.
-  private def storeValue(s: Rep[StateT], w: Width, addr: Rep[Int], v: Rep[Int]): Rep[Unit] =
+  private def storeValue(s: Rep[State], w: Width, addr: Rep[Int], v: Rep[Int]): Rep[Unit] =
     w match {
       case Width.W => set_mem(s, wordOf(addr), v)
       case _       => {
@@ -137,7 +137,7 @@ trait Exec extends Direct {
       }
     }
 
-  override def step(pc: Int, s: Rep[StateT]): Rep[StateT] =
+  override def step(pc: Int, s: Rep[State]): Rep[State] =
     if (pc < prog.length) {
       tick(s)
       prog(pc) match {

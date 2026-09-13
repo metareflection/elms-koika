@@ -20,21 +20,21 @@ trait Common extends Isa {
   // that number the same share a function whether or not they mean the same
   // thing.
   def slot(pc: Int): Int = pc
-  def resume(at: Int, s: Rep[StateT]): Rep[StateT] = execute(at, s)
+  def resume(at: Int, s: Rep[State]): Rep[State] = execute(at, s)
   def live(at: Int): Boolean = at < prog.length
 
-  private val emitted = mutable.Map[Int, Rep[StateT => StateT]]()
+  private val emitted = mutable.Map[Int, Rep[State => State]]()
 
-  def tick(s: Rep[StateT]): Rep[Unit] = s.timer = s.timer + 1
+  def tick(s: Rep[State]): Rep[Unit] = s.timer = s.timer + 1
 
   // The indirection via `execute` is necessary to generate functions for
   // each instruction. [Speculative] is the only thing that overrides it, and
   // when it wants plain semantics it asks for [step] rather than [super]:
   // "the next `execute` in the chain" would depend on where the ISA lands in
   // the linearization, which is exactly the coupling this split removes.
-  def execute(pc: Int, s: Rep[StateT]): Rep[StateT] = step(pc, s)
+  def execute(pc: Int, s: Rep[State]): Rep[State] = step(pc, s)
 
-  def call(i: Int, s: Rep[StateT]): Rep[StateT] = {
+  def call(i: Int, s: Rep[State]): Rep[State] = {
     require(i >= 0, s"jump to negative pc $i")
     if (useCache) {
       val at = slot(i)
@@ -44,7 +44,7 @@ trait Common extends Isa {
         // evaluated.
         val f = emitted.get(at) match {
           case None => {
-            val f = fun { (s: Rep[StateT]) => resume(at, s) }
+            val f = fun { (s: Rep[State]) => resume(at, s) }
             emitted(at) = f
             f
           }
@@ -55,7 +55,7 @@ trait Common extends Isa {
     } else { resume(slot(i), s) }
   }
 
-  def snippet(s: Rep[StateT]): Rep[StateT] = call(0, s)
+  def snippet(s: Rep[State]): Rep[State] = call(0, s)
 }
 
 // A register file and a memory with no cache in front of either.
@@ -63,18 +63,18 @@ trait Common extends Isa {
 trait Direct extends Common {
   override def useCache = true
 
-  override def get_reg(s: Rep[StateT], i: Rep[Int]): Rep[Int] = s.regs(i)
-  override def set_reg(s: Rep[StateT], i: Rep[Int], v: Rep[Int]): Rep[Unit] =
+  override def get_reg(s: Rep[State], i: Rep[Int]): Rep[Int] = s.regs(i)
+  override def set_reg(s: Rep[State], i: Rep[Int], v: Rep[Int]): Rep[Unit] =
     s.regs(i) = v
 
-  override def get_mem(s: Rep[StateT], i: Rep[Int]): Rep[Int] = s.mem(i)
-  override def set_mem(s: Rep[StateT], i: Rep[Int], v: Rep[Int]): Rep[Unit] =
+  override def get_mem(s: Rep[State], i: Rep[Int]): Rep[Int] = s.mem(i)
+  override def set_mem(s: Rep[State], i: Rep[Int], v: Rep[Int]): Rep[Unit] =
     s.mem(i) = v
 }
 
 @virtualize
 trait Cached extends Direct {
-  def pushLRU(s: Rep[StateT], addr: Rep[Int], v: Rep[Int]): Rep[Unit] = {
+  def pushLRU(s: Rep[State], addr: Rep[Int], v: Rep[Int]): Rep[Unit] = {
     s.cache_keys(1) = s.cache_keys(0)
     s.cache_vals(1) = s.cache_vals(0)
 
@@ -82,7 +82,7 @@ trait Cached extends Direct {
     s.cache_vals(0) = v
   }
 
-  def runCache(s: Rep[StateT], addr: Rep[Int], v: Option[Rep[Int]]): Rep[Int] = {
+  def runCache(s: Rep[State], addr: Rep[Int], v: Option[Rep[Int]]): Rep[Int] = {
     if (s.cache_keys(0) === addr) {
       // address is in cache, return value
       v match {
@@ -124,10 +124,10 @@ trait Cached extends Direct {
     }
   }
 
-  override def get_mem(s: Rep[StateT], addr: Rep[Int]): Rep[Int] =
+  override def get_mem(s: Rep[State], addr: Rep[Int]): Rep[Int] =
     runCache(s, addr, None)
 
-  override def set_mem(s: Rep[StateT], addr: Rep[Int], v: Rep[Int]): Rep[Unit] = {
+  override def set_mem(s: Rep[State], addr: Rep[Int], v: Rep[Int]): Rep[Unit] = {
     runCache(s, addr, Some(v))
     unit(())
   }
@@ -142,14 +142,14 @@ trait Speculative extends Cached {
   // [Reg]'s `hashCode`.
   val savedRegisters = mutable.LinkedHashSet[Reg]()
 
-  def saveForRollback(s: Rep[StateT], rd: Reg): Rep[Unit] = {
+  def saveForRollback(s: Rep[State], rd: Reg): Rep[Unit] = {
     if (!savedRegisters.contains(rd)) {
       s.saved_regs(regIndex(rd)) = get_reg(s, regIndex(rd))
       savedRegisters += rd
     }
     unit(())
   }
-  def rollback(s: Rep[StateT]): Rep[Unit] = {
+  def rollback(s: Rep[State]): Rep[Unit] = {
     s.timer += 15
     for (rd <- savedRegisters) { set_reg(s, regIndex(rd), s.saved_regs(regIndex(rd))) }
     unit(())
@@ -159,7 +159,7 @@ trait Speculative extends Cached {
   var inBranch: Option[(Cond, Int)] = None
 
   override def useCache: Boolean = inBranch.isEmpty
-  override def execute(pc: Int, s: Rep[StateT]): Rep[StateT] = inBranch match {
+  override def execute(pc: Int, s: Rep[State]): Rep[State] = inBranch match {
     case None if pc < prog.length => branch(pc, prog(pc)) match {
         // Forwards only, and the test belongs here rather than in [Isa.branch].
         // While speculating [useCache] is false, so [call] inlines [execute]

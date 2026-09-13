@@ -4,8 +4,7 @@ import elms.prelude.*
 import elms.prelude.given
 
 import elms.koika.test.KoikaSuite
-import elms.koika.test.common.{Cached, Speculative}
-import elms.koika.test.riscv.PredictiveDriver
+import elms.koika.test.common.{Cached, Predictive, Speculative}
 
 // The Salsa20 core against the four models. There is no leaky twin here and no
 // model is expected to fail: this is a positive control, and what it is control
@@ -57,16 +56,13 @@ class FactSpecTests extends KoikaSuite {
   }
 }
 
-// [PredictiveDriver] carries an `init` of its own, and it is the RISC-V one,
-// which leaves `sp` at 0. Overriding it is what gives this suite the stack the
-// other three get from [Init].
 @virtualize
 class FactPredictiveTests extends KoikaSuite {
   val under = "fact/predictive/"
 
   for (p <- Program.all) {
     test(s"fact predictive ${p.name}") {
-      val snippet = new FactDriver(p) with PredictiveDriver {
+      val snippet = new FactDriver(p) with Predictive {
         override val init = Init.speculative(stateT)
       }
       check(p.name, snippet.code, p.expect)

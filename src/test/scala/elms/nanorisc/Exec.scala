@@ -3,7 +3,7 @@ package elms.koika.test.nanorisc
 import elms.prelude.*
 import elms.prelude.given
 
-import elms.koika.test.common.{Direct, StateT}
+import elms.koika.test.common.Direct
 
 import NanoRisc.*
 
@@ -35,16 +35,16 @@ trait Exec extends Direct with NanoRisc.Ops {
       })
   }
 
-  override def evalCond(s: Rep[StateT], c: Cond): Rep[Boolean] = c match {
+  override def evalCond(s: Rep[State], c: Cond): Rep[Boolean] = c match {
     case (cmp, src1, src2) => cmp.eval(operand(s, src1), operand(s, src2))
   }
 
-  def operand(s: Rep[StateT], vl: Operand): Rep[Int] = vl match {
+  def operand(s: Rep[State], vl: Operand): Rep[Int] = vl match {
     case Imm(i) => i
     case Reg(i) => get_reg(s, i)
   }
 
-  override def step(pc: Int, s: Rep[StateT]): Rep[StateT] =
+  override def step(pc: Int, s: Rep[State]): Rep[State] =
     if (pc < prog.length) {
       tick(s)
       prog(pc) match {

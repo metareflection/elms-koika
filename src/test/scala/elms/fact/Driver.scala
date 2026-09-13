@@ -82,7 +82,7 @@ object Program {
 // to read [program] while this constructor is still running. As a parameter it
 // is set before the body; as an abstract member it would not be set until the
 // subclass body ran, which is afterwards.
-abstract class FactDriver(val program: Program) extends RiscVDriver {
+abstract class FactDriver(val program: Program) extends RiscVDriver[64] {
   override val prog: Vector[RiscV.Instr] =
     elf.Elf.load(s"src/test/fact/${program.name}.o").prog
 
@@ -106,13 +106,13 @@ abstract class FactDriver(val program: Program) extends RiscVDriver {
   private lazy val argWords: Int =
     program.params.map { case Param.Arr(n, _) => n; case Param.Word(_, _) => 0 }.sum
 
-  // Arguments from word 0 up, frame from the top down, and the default 30 words
-  // is not enough for either. Rounded to a multiple of 16 so that the number in
-  // the snapshot is a size rather than the exact sum of two accidents.
-  override val mem_size: Int = {
-    val need = argWords + (program.stack + 3) / 4
-    math.max(30, ((need + 15) / 16) * 16)
-  }
+  // Arguments from word 0 up and the frame from the top down, which the 30
+  // words the demos run on cannot hold between them. The length is pinned in
+  // the type now, so this checks it rather than deriving one.
+  require(
+    argWords + (program.stack + 3) / 4 <= mem_size,
+    s"${program.name} wants more than $mem_size words of memory"
+  )
 
   // `mem` is word-indexed and the program does its own arithmetic in bytes.
   private def address(at: Int): Int = 4 * at

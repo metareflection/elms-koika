@@ -9,7 +9,7 @@ import elms.koika.test.common.Predictive
 // Nothing here that [SpecDriver] does not also want. The predictor leaves no
 // trace in the struct, because its history is specialized away: what it
 // believes is which generated function the program is in.
-trait PredictiveDriver extends RiscVDriver with Predictive {
+trait PredictiveDriver extends RiscVDriver[30] with Predictive {
   override val init = s"""void init(struct $stateT *s) {
        |  for (int i=0; i<NUM_REGS; i++) {
        |    s->regs[i] = 0;

@@ -16,35 +16,23 @@ int bounded(int low, int high) {
   __CPROVER_assume(low <= x && x <= high);
   return x;
 }
-struct StateT {
-  int regs[NUM_REGS];
-  int mem[MEM_SIZE];
-  int saved_regs[NUM_REGS];
-  int cache_keys[CACHE_LRU_SIZE];
-  int cache_vals[CACHE_LRU_SIZE];
-  int timer;
-};
-
-void init(struct StateT *s) {
-  for (int i=0; i<NUM_REGS; i++) {
-    s->regs[i] = 0;
-  }
-  s->timer = 0;
-  for (int i=0; i<MEM_SIZE; i++) {
-    s->mem[i] = 0;
-  }
-  for (int i=0; i<CACHE_LRU_SIZE; i++) {
-    s->cache_keys[i] = -1;
-    s->cache_vals[i] = -1;
-  }
-}
 
 /*****************************************
 Emitting C Generated Code
 *******************************************/
 
 #include <stdbool.h>
+#include <stdio.h>
 #include <stdlib.h>
+
+struct StateT {
+  int regs[8];
+  int mem[30];
+  int saved_regs[8];
+  int cache_keys[10];
+  int cache_vals[10];
+  int timer;
+};
 
 struct StateT * snippet(struct StateT * x0);
 struct StateT * x1(struct StateT * x2);
@@ -58,33 +46,40 @@ struct StateT * snippet(struct StateT * x0) {
 struct StateT * x1(struct StateT * x2) {
   int x3 = x2->timer;
   int x219 = x3 + 1;
-  x2->timer = x219;int * x5 = x2->regs;
+  x2->timer = x219;
+  int * x5 = x2->regs;
   int x6 = x5[0];
   bool x222 = x6 == 0;
-  struct StateT * x217 = (x222 ? x2 : ({
+  struct StateT * x217;
+  if (x222) {
+    x217 = x2;
+  } else {
     struct StateT * x215 = x8(x2);
-    x215;
-  }));
+    x217 = x215;
+  }
   return x217;
 }
 
 struct StateT * x8(struct StateT * x9) {
   int x10 = x9->timer;
   int x170 = x10 + 1;
-  x9->timer = x170;int * x12 = x9->regs;
+  x9->timer = x170;
+  int * x12 = x9->regs;
   int x13 = x12[0];
   int * x14 = x9->cache_keys;
   int x15 = x14[0];
   bool x174 = x15 == x13;
-  int x63 = (x174 ? ({
+  int x63;
+  if (x174) {
     int * x16 = x9->cache_vals;
     int x17 = x16[0];
-    x17;
-  }) : ({
+    x63 = x17;
+  } else {
     int * x19 = x9->cache_keys;
     int x20 = x19[1];
     bool x179 = x20 == x13;
-    int x61 = (x179 ? ({
+    int x61;
+    if (x179) {
       int * x21 = x9->cache_vals;
       int x22 = x21[1];
       int * x23 = x9->cache_keys;
@@ -101,8 +96,9 @@ struct StateT * x8(struct StateT * x9) {
       x33[0] = x22;
       int x35 = x9->timer;
       int x191 = x35 + 1;
-      x9->timer = x191;x22;
-    }) : ({
+      x9->timer = x191;
+      x61 = x22;
+    } else {
       int * x38 = x9->mem;
       int x39 = x38[x13];
       int * x40 = x9->mem;
@@ -125,10 +121,11 @@ struct StateT * x8(struct StateT * x9) {
       x56[0] = x39;
       int x58 = x9->timer;
       int x208 = x58 + 100;
-      x9->timer = x208;x39;
-    }));
-    x61;
-  }));
+      x9->timer = x208;
+      x61 = x39;
+    }
+    x63 = x61;
+  }
   int * x64 = x9->regs;
   x64[1] = x63;
   struct StateT * x168 = x66(x9);
@@ -138,20 +135,23 @@ struct StateT * x8(struct StateT * x9) {
 struct StateT * x66(struct StateT * x67) {
   int x68 = x67->timer;
   int x125 = x68 + 1;
-  x67->timer = x125;int * x70 = x67->regs;
+  x67->timer = x125;
+  int * x70 = x67->regs;
   int x71 = x70[1];
   int * x72 = x67->cache_keys;
   int x73 = x72[0];
   bool x130 = x73 == (x71 + 4);
-  int x121 = (x130 ? ({
+  int x121;
+  if (x130) {
     int * x74 = x67->cache_vals;
     int x75 = x74[0];
-    x75;
-  }) : ({
+    x121 = x75;
+  } else {
     int * x77 = x67->cache_keys;
     int x78 = x77[1];
     bool x134 = x78 == (x71 + 4);
-    int x119 = (x134 ? ({
+    int x119;
+    if (x134) {
       int * x79 = x67->cache_vals;
       int x80 = x79[1];
       int * x81 = x67->cache_keys;
@@ -169,8 +169,9 @@ struct StateT * x66(struct StateT * x67) {
       x91[0] = x80;
       int x93 = x67->timer;
       int x146 = x93 + 1;
-      x67->timer = x146;x80;
-    }) : ({
+      x67->timer = x146;
+      x119 = x80;
+    } else {
       int * x96 = x67->mem;
       int x148 = x71 + 4;
       int x97 = x96[x148];
@@ -194,10 +195,11 @@ struct StateT * x66(struct StateT * x67) {
       x114[0] = x97;
       int x116 = x67->timer;
       int x163 = x116 + 100;
-      x67->timer = x163;x97;
-    }));
-    x119;
-  }));
+      x67->timer = x163;
+      x119 = x97;
+    }
+    x121 = x119;
+  }
   int * x122 = x67->regs;
   x122[2] = x121;
   return x67;
@@ -208,6 +210,20 @@ struct StateT * x66(struct StateT * x67) {
 /*****************************************
 End of C Generated Code
 *******************************************/
+
+void init(struct StateT *s) {
+  for (int i=0; i<NUM_REGS; i++) {
+    s->regs[i] = 0;
+  }
+  s->timer = 0;
+  for (int i=0; i<MEM_SIZE; i++) {
+    s->mem[i] = 0;
+  }
+  for (int i=0; i<CACHE_LRU_SIZE; i++) {
+    s->cache_keys[i] = -1;
+    s->cache_vals[i] = -1;
+  }
+}
 
 int main(int argc, char* argv[]) {
   struct StateT s1, s2;

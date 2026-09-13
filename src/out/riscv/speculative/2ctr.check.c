@@ -16,36 +16,23 @@ int bounded(int low, int high) {
   __CPROVER_assume(low <= x && x <= high);
   return x;
 }
-struct StateT {
-  int regs[NUM_REGS];
-  int mem[MEM_SIZE];
-  int saved_regs[NUM_REGS];
-  int cache_keys[CACHE_LRU_SIZE];
-  int cache_vals[CACHE_LRU_SIZE];
-  int timer;
-};
-
-void init(struct StateT *s) {
-  for (int i=0; i<NUM_REGS; i++) {
-    s->regs[i] = 0;
-    s->saved_regs[i] = 0;
-  }
-  s->timer = 0;
-  for (int i=0; i<MEM_SIZE; i++) {
-    s->mem[i] = 0;
-  }
-  for (int i=0; i<CACHE_LRU_SIZE; i++) {
-    s->cache_keys[i] = -1;
-    s->cache_vals[i] = -1;
-  }
-}
 
 /*****************************************
 Emitting C Generated Code
 *******************************************/
 
 #include <stdbool.h>
+#include <stdio.h>
 #include <stdlib.h>
+
+struct StateT {
+  int regs[32];
+  int mem[30];
+  int saved_regs[32];
+  int cache_keys[10];
+  int cache_vals[10];
+  int timer;
+};
 
 struct StateT * snippet(struct StateT * v0);
 struct StateT * v1(struct StateT * v2);
@@ -61,20 +48,23 @@ struct StateT * v1(struct StateT * v2) {
   v3[11] = v5;
   int v7 = v2->timer;
   int v149 = v7 + 1;
-  v2->timer = v149;int * v9 = v2->regs;
+  v2->timer = v149;
+  int * v9 = v2->regs;
   int v10 = v9[10];
   int * v11 = v2->cache_keys;
   int v12 = v11[0];
   bool v154 = v12 == ((int)((unsigned int)v10 >> 2));
-  int v60 = (v154 ? ({
+  int v60;
+  if (v154) {
     int * v13 = v2->cache_vals;
     int v14 = v13[0];
-    v14;
-  }) : ({
+    v60 = v14;
+  } else {
     int * v16 = v2->cache_keys;
     int v17 = v16[1];
     bool v159 = v17 == ((int)((unsigned int)v10 >> 2));
-    int v58 = (v159 ? ({
+    int v58;
+    if (v159) {
       int * v18 = v2->cache_vals;
       int v19 = v18[1];
       int * v20 = v2->cache_keys;
@@ -92,8 +82,9 @@ struct StateT * v1(struct StateT * v2) {
       v30[0] = v19;
       int v32 = v2->timer;
       int v171 = v32 + 1;
-      v2->timer = v171;v19;
-    }) : ({
+      v2->timer = v171;
+      v58 = v19;
+    } else {
       int * v35 = v2->mem;
       int v173 = (int)((unsigned int)v10 >> 2);
       int v36 = v35[v173];
@@ -117,15 +108,17 @@ struct StateT * v1(struct StateT * v2) {
       v53[0] = v36;
       int v55 = v2->timer;
       int v188 = v55 + 100;
-      v2->timer = v188;v36;
-    }));
-    v58;
-  }));
+      v2->timer = v188;
+      v58 = v36;
+    }
+    v60 = v58;
+  }
   int * v61 = v2->regs;
   v61[11] = v60;
   int v63 = v2->timer;
   int v192 = v63 + 1;
-  v2->timer = v192;int * v65 = v2->regs;
+  v2->timer = v192;
+  int * v65 = v2->regs;
   int v66 = v65[11];
   int * v67 = v2->regs;
   int v195 = v66 << 2;
@@ -136,20 +129,23 @@ struct StateT * v1(struct StateT * v2) {
   v69[12] = v71;
   int v73 = v2->timer;
   int v200 = v73 + 1;
-  v2->timer = v200;int * v75 = v2->regs;
+  v2->timer = v200;
+  int * v75 = v2->regs;
   int v76 = v75[11];
   int * v77 = v2->cache_keys;
   int v78 = v77[0];
   bool v203 = v78 == ((int)((unsigned int)(v76 + 16) >> 2));
-  int v126 = (v203 ? ({
+  int v126;
+  if (v203) {
     int * v79 = v2->cache_vals;
     int v80 = v79[0];
-    v80;
-  }) : ({
+    v126 = v80;
+  } else {
     int * v82 = v2->cache_keys;
     int v83 = v82[1];
     bool v208 = v83 == ((int)((unsigned int)(v76 + 16) >> 2));
-    int v124 = (v208 ? ({
+    int v124;
+    if (v208) {
       int * v84 = v2->cache_vals;
       int v85 = v84[1];
       int * v86 = v2->cache_keys;
@@ -167,8 +163,9 @@ struct StateT * v1(struct StateT * v2) {
       v96[0] = v85;
       int v98 = v2->timer;
       int v220 = v98 + 1;
-      v2->timer = v220;v85;
-    }) : ({
+      v2->timer = v220;
+      v124 = v85;
+    } else {
       int * v101 = v2->mem;
       int v222 = (int)((unsigned int)(v76 + 16) >> 2);
       int v102 = v101[v222];
@@ -192,10 +189,11 @@ struct StateT * v1(struct StateT * v2) {
       v119[0] = v102;
       int v121 = v2->timer;
       int v237 = v121 + 100;
-      v2->timer = v237;v102;
-    }));
-    v124;
-  }));
+      v2->timer = v237;
+      v124 = v102;
+    }
+    v126 = v124;
+  }
   int * v127 = v2->regs;
   v127[12] = v126;
   int * v129 = v2->regs;
@@ -204,7 +202,8 @@ struct StateT * v1(struct StateT * v2) {
   if (v242) {
     int v131 = v2->timer;
     int v243 = v131 + 15;
-    v2->timer = v243;int * v133 = v2->saved_regs;
+    v2->timer = v243;
+    int * v133 = v2->saved_regs;
     int v134 = v133[11];
     int * v135 = v2->regs;
     v135[11] = v134;
@@ -224,6 +223,21 @@ struct StateT * v1(struct StateT * v2) {
 /*****************************************
 End of C Generated Code
 *******************************************/
+
+void init(struct StateT *s) {
+  for (int i=0; i<NUM_REGS; i++) {
+    s->regs[i] = 0;
+    s->saved_regs[i] = 0;
+  }
+  s->timer = 0;
+  for (int i=0; i<MEM_SIZE; i++) {
+    s->mem[i] = 0;
+  }
+  for (int i=0; i<CACHE_LRU_SIZE; i++) {
+    s->cache_keys[i] = -1;
+    s->cache_vals[i] = -1;
+  }
+}
 
 int main(int argc, char* argv[]) {
   struct StateT s1, s2;

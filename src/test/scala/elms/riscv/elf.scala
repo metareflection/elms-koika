@@ -153,7 +153,7 @@ class RiscVElfTests extends AnyFunSuite {
 
   // The two byte counts the build script duplicates live on the driver, and
   // nothing here stages, so one bare instance is enough to read them off.
-  private val driver = new RiscVDriver { override val init = ""; override val prog = Vector() }
+  private val driver = new RiscVDriver[30] { override val init = ""; override val prog = Vector() }
 
   private def rejects(name: String): List[String] =
     Elf.read(name, bytes(name)).fold(_.map(_.toString), i => fail(s"read ${i.prog}"))

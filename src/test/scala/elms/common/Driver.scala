@@ -3,24 +3,36 @@ package elms.koika.test.common
 import elms.prelude.*
 import elms.prelude.given
 import elms.codegen.CCodegen
+import elms.core.StructManifest
 import elms.pipeline.eqsat.Ruleset
 
 abstract class DslDriver[A: Typable, B: Typable]
     extends OptimizingSnippetDriver[A, B](Ruleset(Seq())) with DslOps
 
-abstract class GenericKoikaDriver[A: Typable, B: Typable] extends DslDriver[A, B] {
+// [R] registers, [M] words of memory and [C] cache lines, fixed here because
+// this is the last place that can see all three at once: the struct members get
+// them from [State], and the `#define`s the hand-written C reads get them from
+// `valueOf`. One literal each, so the two cannot drift.
+abstract class GenericKoikaDriver[R <: Int: ValueOf, M <: Int: ValueOf, C <: Int: ValueOf]
+    extends DslDriver[StateT[R, M, C], StateT[R, M, C]] with StateTOps {
+  override type State = StateT[R, M, C]
+  override given stateManifest: StructManifest[State] = StateT.manifest
+
   override val codegen = CCodegen()
 
-  val num_regs: Int = 8
-  val mem_size: Int = 30
+  // Final, because the struct's members are already laid out at these lengths
+  // and an override would only desync the `#define`s from them.
+  final val num_regs: Int = valueOf[R]
+  final val mem_size: Int = valueOf[M]
+  final val cache_size: Int = valueOf[C]
   val secret_size: Int = 10
   val secret_offset: Int = 20
-  val cache_size: Int = 10
 
   val stateT: String = "StateT"
 
-  // Emitted above [stateTDef], whose array sizes they are. A model that needs
-  // state of its own appends to both rather than restating either.
+  // The struct itself comes out of the generator, which reads the same three
+  // lengths off [State]. These are for the hand-written C around it. A model
+  // that needs state of its own appends here.
   def defines: Seq[(String, Int)] = Seq(
     "NUM_REGS" -> num_regs,
     "MEM_SIZE" -> mem_size,
@@ -28,25 +40,6 @@ abstract class GenericKoikaDriver[A: Typable, B: Typable] extends DslDriver[A, B
     "SECRET_OFFSET" -> secret_offset,
     "CACHE_LRU_SIZE" -> cache_size
   )
-
-  // CR cwong: In theory, this should be derivable from the StateT manifest.
-  // However, CBMC doesn't really like dealing with unknown-length arrays, so
-  // for now we hardcode this. What we *should* do is introduce some kind of
-  // `KnownLengthArray`.
-  def stateTFields: Seq[String] = Seq(
-    "int regs[NUM_REGS];",
-    "int mem[MEM_SIZE];",
-    "int saved_regs[NUM_REGS];",
-    "int cache_keys[CACHE_LRU_SIZE];",
-    "int cache_vals[CACHE_LRU_SIZE];",
-    "int timer;"
-  )
-
-  // Lazy because [stateTFields] is overridable, and an eager `val` here would
-  // read the base list out of a subclass that has not run its own initialisers
-  // yet.
-  lazy val stateTDef: String =
-    s"struct $stateT {\n${stateTFields.map(f => s"  $f").mkString("\n")}\n};"
 
   lazy val header: String = s"""
 ${defines.map((k, v) => s"#define $k $v").mkString("\n")}
@@ -61,7 +54,6 @@ int bounded(int low, int high) {
   __CPROVER_assume(low <= x && x <= high);
   return x;
 }
-$stateTDef
 """
 
   val init: String
@@ -93,10 +85,11 @@ $stateTDef
        |  return 0;
        |}""".stripMargin
 
+  // [init] and [main] come after the generated code and not before it, because
+  // `struct StateT` is now the generator's to declare and both of them
+  // dereference one.
   override def code =
     s"""$header
-       |$init
-       |
        |/*****************************************
        |Emitting C Generated Code
        |*******************************************/
@@ -106,6 +99,8 @@ $stateTDef
        |/*****************************************
        |End of C Generated Code
        |*******************************************/
+       |
+       |$init
        |
        |$main""".stripMargin
 }

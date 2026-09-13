@@ -4,13 +4,13 @@ import elms.prelude.*
 import elms.prelude.given
 
 import elms.koika.test.{KoikaSuite, Verdict}
-import elms.koika.test.common.{GenericKoikaDriver, StateT, Speculative}
+import elms.koika.test.common.Speculative
 
 @virtualize
 class SpecTests extends KoikaSuite {
   val under = "nanorisc/speculative/"
 
-  trait SpecDriver extends GenericKoikaDriver[StateT, StateT] with Exec with Speculative {
+  trait SpecDriver extends NanoRiscDriver with Speculative {
     override val init = s"""void init(struct $stateT *s) {
          |  for (int i=0; i<NUM_REGS; i++) {
          |    s->regs[i] = 0;

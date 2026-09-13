@@ -16,31 +16,23 @@ int bounded(int low, int high) {
   __CPROVER_assume(low <= x && x <= high);
   return x;
 }
-struct StateT {
-  int regs[NUM_REGS];
-  int mem[MEM_SIZE];
-  int saved_regs[NUM_REGS];
-  int cache_keys[CACHE_LRU_SIZE];
-  int cache_vals[CACHE_LRU_SIZE];
-  int timer;
-};
-
-void init(struct StateT *s) {
-  for (int i=0; i<NUM_REGS; i++) {
-    s->regs[i] = 0;
-  }
-  s->timer = 0;
-  for (int i=0; i<MEM_SIZE; i++) {
-    s->mem[i] = 0;
-  }
-}
 
 /*****************************************
 Emitting C Generated Code
 *******************************************/
 
 #include <stdbool.h>
+#include <stdio.h>
 #include <stdlib.h>
+
+struct StateT {
+  int regs[8];
+  int mem[30];
+  int saved_regs[8];
+  int cache_keys[10];
+  int cache_vals[10];
+  int timer;
+};
 
 struct StateT * snippet(struct StateT * x0);
 struct StateT * x1(struct StateT * x2);
@@ -54,20 +46,25 @@ struct StateT * snippet(struct StateT * x0) {
 struct StateT * x1(struct StateT * x2) {
   int x3 = x2->timer;
   int x53 = x3 + 1;
-  x2->timer = x53;int * x5 = x2->regs;
+  x2->timer = x53;
+  int * x5 = x2->regs;
   int x6 = x5[0];
   bool x56 = x6 == 0;
-  struct StateT * x51 = (x56 ? x2 : ({
+  struct StateT * x51;
+  if (x56) {
+    x51 = x2;
+  } else {
     struct StateT * x49 = x8(x2);
-    x49;
-  }));
+    x51 = x49;
+  }
   return x51;
 }
 
 struct StateT * x8(struct StateT * x9) {
   int x10 = x9->timer;
   int x39 = x10 + 1;
-  x9->timer = x39;int * x12 = x9->regs;
+  x9->timer = x39;
+  int * x12 = x9->regs;
   int x13 = x12[0];
   int * x14 = x9->mem;
   int x15 = x14[x13];
@@ -80,7 +77,8 @@ struct StateT * x8(struct StateT * x9) {
 struct StateT * x18(struct StateT * x19) {
   int x20 = x19->timer;
   int x29 = x20 + 1;
-  x19->timer = x29;int * x22 = x19->regs;
+  x19->timer = x29;
+  int * x22 = x19->regs;
   int x23 = x22[1];
   int * x24 = x19->mem;
   int x33 = x23 + 4;
@@ -95,6 +93,16 @@ struct StateT * x18(struct StateT * x19) {
 /*****************************************
 End of C Generated Code
 *******************************************/
+
+void init(struct StateT *s) {
+  for (int i=0; i<NUM_REGS; i++) {
+    s->regs[i] = 0;
+  }
+  s->timer = 0;
+  for (int i=0; i<MEM_SIZE; i++) {
+    s->mem[i] = 0;
+  }
+}
 
 int main(int argc, char* argv[]) {
   struct StateT s1, s2;
