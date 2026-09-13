@@ -35,57 +35,57 @@ struct StateT {
 };
 
 struct StateT * snippet(struct StateT * x0);
-struct StateT * x1(struct StateT * x2);
-struct StateT * x8(struct StateT * x9);
-struct StateT * x18(struct StateT * x19);
+struct StateT * slot_1(struct StateT * x19);
+struct StateT * slot_2(struct StateT * x40);
+struct StateT * slot_0(struct StateT * x2);
 struct StateT * snippet(struct StateT * x0) {
-  struct StateT * x60 = x1(x0);
-  return x60;
+  struct StateT * x1 = slot_0(x0);
+  return x1;
 }
 
-struct StateT * x1(struct StateT * x2) {
+struct StateT * slot_1(struct StateT * x19) {
+  int x20 = x19->timer;
+  int x30 = x20 + 1;
+  x19->timer = x30;
+  int * x22 = x19->regs;
+  int x23 = x22[0];
+  int * x24 = x19->mem;
+  int x25 = x24[x23];
+  int * x26 = x19->regs;
+  x26[1] = x25;
+  struct StateT * x28 = slot_2(x19);
+  return x28;
+}
+
+struct StateT * slot_2(struct StateT * x40) {
+  int x41 = x40->timer;
+  int x50 = x41 + 1;
+  x40->timer = x50;
+  int * x43 = x40->regs;
+  int x44 = x43[1];
+  int * x45 = x40->mem;
+  int x54 = x44 + 4;
+  int x46 = x45[x54];
+  int * x47 = x40->regs;
+  x47[2] = x46;
+  return x40;
+}
+
+struct StateT * slot_0(struct StateT * x2) {
   int x3 = x2->timer;
-  int x53 = x3 + 1;
-  x2->timer = x53;
+  int x12 = x3 + 1;
+  x2->timer = x12;
   int * x5 = x2->regs;
   int x6 = x5[0];
-  bool x56 = x6 == 0;
-  struct StateT * x51;
-  if (x56) {
-    x51 = x2;
+  bool x15 = x6 == 0;
+  struct StateT * x10;
+  if (x15) {
+    x10 = x2;
   } else {
-    struct StateT * x49 = x8(x2);
-    x51 = x49;
+    struct StateT * x8 = slot_1(x2);
+    x10 = x8;
   }
-  return x51;
-}
-
-struct StateT * x8(struct StateT * x9) {
-  int x10 = x9->timer;
-  int x39 = x10 + 1;
-  x9->timer = x39;
-  int * x12 = x9->regs;
-  int x13 = x12[0];
-  int * x14 = x9->mem;
-  int x15 = x14[x13];
-  int * x16 = x9->regs;
-  x16[1] = x15;
-  struct StateT * x37 = x18(x9);
-  return x37;
-}
-
-struct StateT * x18(struct StateT * x19) {
-  int x20 = x19->timer;
-  int x29 = x20 + 1;
-  x19->timer = x29;
-  int * x22 = x19->regs;
-  int x23 = x22[1];
-  int * x24 = x19->mem;
-  int x33 = x23 + 4;
-  int x25 = x24[x33];
-  int * x26 = x19->regs;
-  x26[2] = x25;
-  return x19;
+  return x10;
 }
 
 

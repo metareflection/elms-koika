@@ -34,289 +34,289 @@ struct StateT {
   int timer;
 };
 
-struct StateT * x19(struct StateT * x20);
-struct StateT * x25(struct StateT * x26);
-struct StateT * x158(struct StateT * x159);
-struct StateT * x38(struct StateT * x39);
-struct StateT * x195(struct StateT * x196);
-struct StateT * x187(struct StateT * x188);
-struct StateT * x172(struct StateT * x173);
+struct StateT * slot_6(struct StateT * x288);
+struct StateT * slot_5(struct StateT * x179);
+struct StateT * slot_2(struct StateT * x28);
+struct StateT * slot_7(struct StateT * x324);
+struct StateT * slot_3(struct StateT * x41);
 struct StateT * snippet(struct StateT * x0);
-struct StateT * x1(struct StateT * x2);
-struct StateT * x7(struct StateT * x8);
-struct StateT * x13(struct StateT * x14);
-struct StateT * x98(struct StateT * x99);
-struct StateT * x166(struct StateT * x167);
-struct StateT * x19(struct StateT * x20) {
-  int x21 = x20->timer;
-  int x332 = x21 + 1;
-  x20->timer = x332;
-  int * x23 = x20->regs;
-  int x24 = x23[4];
-  bool x335 = x24 >= 4;
-  struct StateT * x330;
-  if (x335) {
-    struct StateT * x36 = x25(x20);
-    x330 = x36;
+struct StateT * slot_10(struct StateT * x340);
+struct StateT * slot_1(struct StateT * x15);
+struct StateT * slot_8(struct StateT * x345);
+struct StateT * slot_4(struct StateT * x71);
+struct StateT * slot_9(struct StateT * x312);
+struct StateT * slot_11(struct StateT * x61);
+struct StateT * slot_0(struct StateT * x2);
+struct StateT * slot_6(struct StateT * x288) {
+  int x289 = x288->timer;
+  int x301 = x289 + 1;
+  x288->timer = x301;
+  int * x291 = x288->regs;
+  int x292 = x291[0];
+  int * x293 = x288->regs;
+  int x294 = x293[1];
+  bool x306 = !(x292 == x294);
+  struct StateT * x299;
+  if (x306) {
+    struct StateT * x295 = slot_9(x288);
+    x299 = x295;
   } else {
-    struct StateT * x328 = x38(x20);
-    x330 = x328;
+    struct StateT * x297 = slot_7(x288);
+    x299 = x297;
   }
-  return x330;
+  return x299;
 }
 
-struct StateT * x25(struct StateT * x26) {
-  int x27 = x26->timer;
-  int x32 = x27 + 1;
-  x26->timer = x32;
-  int * x29 = x26->regs;
-  x29[0] = 1;
-  return x26;
-}
-
-struct StateT * x158(struct StateT * x159) {
-  int x160 = x159->timer;
-  int x218 = x160 + 1;
-  x159->timer = x218;
-  int * x162 = x159->regs;
-  int x163 = x162[0];
-  int * x164 = x159->regs;
-  int x165 = x164[1];
-  bool x223 = !(x163 == x165);
-  struct StateT * x216;
-  if (x223) {
-    struct StateT * x185 = x166(x159);
-    x216 = x185;
+struct StateT * slot_5(struct StateT * x179) {
+  int x180 = x179->timer;
+  int x240 = x180 + 1;
+  x179->timer = x240;
+  int * x182 = x179->regs;
+  int x183 = x182[3];
+  int * x184 = x179->regs;
+  int x185 = x184[4];
+  int * x186 = x179->cache_keys;
+  int x187 = x186[0];
+  bool x247 = x187 == (x183 + x185);
+  int x235;
+  if (x247) {
+    int * x188 = x179->cache_vals;
+    int x189 = x188[0];
+    x235 = x189;
   } else {
-    struct StateT * x214 = x187(x159);
-    x216 = x214;
-  }
-  return x216;
-}
-
-struct StateT * x38(struct StateT * x39) {
-  int x40 = x39->timer;
-  int x281 = x40 + 1;
-  x39->timer = x281;
-  int * x42 = x39->regs;
-  int x43 = x42[2];
-  int * x44 = x39->regs;
-  int x45 = x44[4];
-  int * x46 = x39->cache_keys;
-  int x47 = x46[0];
-  bool x288 = x47 == (x43 + x45);
-  int x95;
-  if (x288) {
-    int * x48 = x39->cache_vals;
-    int x49 = x48[0];
-    x95 = x49;
-  } else {
-    int * x51 = x39->cache_keys;
-    int x52 = x51[1];
-    bool x293 = x52 == (x43 + x45);
-    int x93;
-    if (x293) {
-      int * x53 = x39->cache_vals;
-      int x54 = x53[1];
-      int * x55 = x39->cache_keys;
-      int * x56 = x39->cache_keys;
-      int x57 = x56[0];
-      x55[1] = x57;
-      int * x59 = x39->cache_vals;
-      int * x60 = x39->cache_vals;
-      int x61 = x60[0];
-      x59[1] = x61;
-      int * x63 = x39->cache_keys;
-      int x302 = x43 + x45;
-      x63[0] = x302;
-      int * x65 = x39->cache_vals;
-      x65[0] = x54;
-      int x67 = x39->timer;
-      int x305 = x67 + 1;
-      x39->timer = x305;
-      x93 = x54;
+    int * x191 = x179->cache_keys;
+    int x192 = x191[1];
+    bool x252 = x192 == (x183 + x185);
+    int x233;
+    if (x252) {
+      int * x193 = x179->cache_vals;
+      int x194 = x193[1];
+      int * x195 = x179->cache_keys;
+      int * x196 = x179->cache_keys;
+      int x197 = x196[0];
+      x195[1] = x197;
+      int * x199 = x179->cache_vals;
+      int * x200 = x179->cache_vals;
+      int x201 = x200[0];
+      x199[1] = x201;
+      int * x203 = x179->cache_keys;
+      int x261 = x183 + x185;
+      x203[0] = x261;
+      int * x205 = x179->cache_vals;
+      x205[0] = x194;
+      int x207 = x179->timer;
+      int x264 = x207 + 1;
+      x179->timer = x264;
+      x233 = x194;
     } else {
-      int * x70 = x39->mem;
-      int x307 = x43 + x45;
-      int x71 = x70[x307];
-      int * x72 = x39->mem;
-      int * x73 = x39->cache_keys;
-      int x74 = x73[1];
-      int * x75 = x39->cache_vals;
-      int x76 = x75[1];
-      x72[x74] = x76;
-      int * x78 = x39->cache_keys;
-      int * x79 = x39->cache_keys;
-      int x80 = x79[0];
-      x78[1] = x80;
-      int * x82 = x39->cache_vals;
-      int * x83 = x39->cache_vals;
-      int x84 = x83[0];
-      x82[1] = x84;
-      int * x86 = x39->cache_keys;
-      x86[0] = x307;
-      int * x88 = x39->cache_vals;
-      x88[0] = x71;
-      int x90 = x39->timer;
-      int x322 = x90 + 100;
-      x39->timer = x322;
-      x93 = x71;
+      int * x210 = x179->mem;
+      int x266 = x183 + x185;
+      int x211 = x210[x266];
+      int * x212 = x179->mem;
+      int * x213 = x179->cache_keys;
+      int x214 = x213[1];
+      int * x215 = x179->cache_vals;
+      int x216 = x215[1];
+      x212[x214] = x216;
+      int * x218 = x179->cache_keys;
+      int * x219 = x179->cache_keys;
+      int x220 = x219[0];
+      x218[1] = x220;
+      int * x222 = x179->cache_vals;
+      int * x223 = x179->cache_vals;
+      int x224 = x223[0];
+      x222[1] = x224;
+      int * x226 = x179->cache_keys;
+      x226[0] = x266;
+      int * x228 = x179->cache_vals;
+      x228[0] = x211;
+      int x230 = x179->timer;
+      int x281 = x230 + 100;
+      x179->timer = x281;
+      x233 = x211;
     }
-    x95 = x93;
+    x235 = x233;
   }
-  int * x96 = x39->regs;
-  x96[0] = x95;
-  struct StateT * x279 = x98(x39);
-  return x279;
+  int * x236 = x179->regs;
+  x236[1] = x235;
+  struct StateT * x238 = slot_6(x179);
+  return x238;
 }
 
-struct StateT * x195(struct StateT * x196) {
-  int x197 = x196->timer;
-  int x202 = x197 + 1;
-  x196->timer = x202;
-  struct StateT * x200 = x19(x196);
-  return x200;
+struct StateT * slot_2(struct StateT * x28) {
+  int x29 = x28->timer;
+  int x35 = x29 + 1;
+  x28->timer = x35;
+  int * x31 = x28->regs;
+  x31[4] = 0;
+  struct StateT * x33 = slot_3(x28);
+  return x33;
 }
 
-struct StateT * x187(struct StateT * x188) {
-  int x189 = x188->timer;
-  int x207 = x189 + 1;
-  x188->timer = x207;
-  int * x191 = x188->regs;
-  int x192 = x191[4];
-  int * x193 = x188->regs;
-  int x211 = x192 + 1;
-  x193[4] = x211;
-  struct StateT * x205 = x195(x188);
-  return x205;
+struct StateT * slot_7(struct StateT * x324) {
+  int x325 = x324->timer;
+  int x333 = x325 + 1;
+  x324->timer = x333;
+  int * x327 = x324->regs;
+  int x328 = x327[4];
+  int * x329 = x324->regs;
+  int x337 = x328 + 1;
+  x329[4] = x337;
+  struct StateT * x331 = slot_8(x324);
+  return x331;
 }
 
-struct StateT * x172(struct StateT * x173) {
-  int x174 = x173->timer;
-  int x177 = x174 + 1;
-  x173->timer = x177;
-  return x173;
+struct StateT * slot_3(struct StateT * x41) {
+  int x42 = x41->timer;
+  int x52 = x42 + 1;
+  x41->timer = x52;
+  int * x44 = x41->regs;
+  int x45 = x44[4];
+  bool x55 = x45 >= 4;
+  struct StateT * x50;
+  if (x55) {
+    struct StateT * x46 = slot_11(x41);
+    x50 = x46;
+  } else {
+    struct StateT * x48 = slot_4(x41);
+    x50 = x48;
+  }
+  return x50;
 }
 
 struct StateT * snippet(struct StateT * x0) {
-  struct StateT * x365 = x1(x0);
-  return x365;
+  struct StateT * x1 = slot_0(x0);
+  return x1;
 }
 
-struct StateT * x1(struct StateT * x2) {
+struct StateT * slot_10(struct StateT * x340) {
+  int x341 = x340->timer;
+  int x344 = x341 + 1;
+  x340->timer = x344;
+  return x340;
+}
+
+struct StateT * slot_1(struct StateT * x15) {
+  int x16 = x15->timer;
+  int x22 = x16 + 1;
+  x15->timer = x22;
+  int * x18 = x15->regs;
+  x18[3] = 20;
+  struct StateT * x20 = slot_2(x15);
+  return x20;
+}
+
+struct StateT * slot_8(struct StateT * x345) {
+  int x346 = x345->timer;
+  int x350 = x346 + 1;
+  x345->timer = x350;
+  struct StateT * x348 = slot_3(x345);
+  return x348;
+}
+
+struct StateT * slot_4(struct StateT * x71) {
+  int x72 = x71->timer;
+  int x132 = x72 + 1;
+  x71->timer = x132;
+  int * x74 = x71->regs;
+  int x75 = x74[2];
+  int * x76 = x71->regs;
+  int x77 = x76[4];
+  int * x78 = x71->cache_keys;
+  int x79 = x78[0];
+  bool x139 = x79 == (x75 + x77);
+  int x127;
+  if (x139) {
+    int * x80 = x71->cache_vals;
+    int x81 = x80[0];
+    x127 = x81;
+  } else {
+    int * x83 = x71->cache_keys;
+    int x84 = x83[1];
+    bool x144 = x84 == (x75 + x77);
+    int x125;
+    if (x144) {
+      int * x85 = x71->cache_vals;
+      int x86 = x85[1];
+      int * x87 = x71->cache_keys;
+      int * x88 = x71->cache_keys;
+      int x89 = x88[0];
+      x87[1] = x89;
+      int * x91 = x71->cache_vals;
+      int * x92 = x71->cache_vals;
+      int x93 = x92[0];
+      x91[1] = x93;
+      int * x95 = x71->cache_keys;
+      int x153 = x75 + x77;
+      x95[0] = x153;
+      int * x97 = x71->cache_vals;
+      x97[0] = x86;
+      int x99 = x71->timer;
+      int x156 = x99 + 1;
+      x71->timer = x156;
+      x125 = x86;
+    } else {
+      int * x102 = x71->mem;
+      int x158 = x75 + x77;
+      int x103 = x102[x158];
+      int * x104 = x71->mem;
+      int * x105 = x71->cache_keys;
+      int x106 = x105[1];
+      int * x107 = x71->cache_vals;
+      int x108 = x107[1];
+      x104[x106] = x108;
+      int * x110 = x71->cache_keys;
+      int * x111 = x71->cache_keys;
+      int x112 = x111[0];
+      x110[1] = x112;
+      int * x114 = x71->cache_vals;
+      int * x115 = x71->cache_vals;
+      int x116 = x115[0];
+      x114[1] = x116;
+      int * x118 = x71->cache_keys;
+      x118[0] = x158;
+      int * x120 = x71->cache_vals;
+      x120[0] = x103;
+      int x122 = x71->timer;
+      int x173 = x122 + 100;
+      x71->timer = x173;
+      x125 = x103;
+    }
+    x127 = x125;
+  }
+  int * x128 = x71->regs;
+  x128[0] = x127;
+  struct StateT * x130 = slot_5(x71);
+  return x130;
+}
+
+struct StateT * slot_9(struct StateT * x312) {
+  int x313 = x312->timer;
+  int x319 = x313 + 1;
+  x312->timer = x319;
+  int * x315 = x312->regs;
+  x315[0] = 0;
+  struct StateT * x317 = slot_10(x312);
+  return x317;
+}
+
+struct StateT * slot_11(struct StateT * x61) {
+  int x62 = x61->timer;
+  int x67 = x62 + 1;
+  x61->timer = x67;
+  int * x64 = x61->regs;
+  x64[0] = 1;
+  return x61;
+}
+
+struct StateT * slot_0(struct StateT * x2) {
   int x3 = x2->timer;
-  int x359 = x3 + 1;
-  x2->timer = x359;
+  int x9 = x3 + 1;
+  x2->timer = x9;
   int * x5 = x2->regs;
   x5[2] = 0;
-  struct StateT * x357 = x7(x2);
-  return x357;
-}
-
-struct StateT * x7(struct StateT * x8) {
-  int x9 = x8->timer;
-  int x351 = x9 + 1;
-  x8->timer = x351;
-  int * x11 = x8->regs;
-  x11[3] = 20;
-  struct StateT * x349 = x13(x8);
-  return x349;
-}
-
-struct StateT * x13(struct StateT * x14) {
-  int x15 = x14->timer;
-  int x343 = x15 + 1;
-  x14->timer = x343;
-  int * x17 = x14->regs;
-  x17[4] = 0;
-  struct StateT * x341 = x19(x14);
-  return x341;
-}
-
-struct StateT * x98(struct StateT * x99) {
-  int x100 = x99->timer;
-  int x231 = x100 + 1;
-  x99->timer = x231;
-  int * x102 = x99->regs;
-  int x103 = x102[3];
-  int * x104 = x99->regs;
-  int x105 = x104[4];
-  int * x106 = x99->cache_keys;
-  int x107 = x106[0];
-  bool x238 = x107 == (x103 + x105);
-  int x155;
-  if (x238) {
-    int * x108 = x99->cache_vals;
-    int x109 = x108[0];
-    x155 = x109;
-  } else {
-    int * x111 = x99->cache_keys;
-    int x112 = x111[1];
-    bool x243 = x112 == (x103 + x105);
-    int x153;
-    if (x243) {
-      int * x113 = x99->cache_vals;
-      int x114 = x113[1];
-      int * x115 = x99->cache_keys;
-      int * x116 = x99->cache_keys;
-      int x117 = x116[0];
-      x115[1] = x117;
-      int * x119 = x99->cache_vals;
-      int * x120 = x99->cache_vals;
-      int x121 = x120[0];
-      x119[1] = x121;
-      int * x123 = x99->cache_keys;
-      int x252 = x103 + x105;
-      x123[0] = x252;
-      int * x125 = x99->cache_vals;
-      x125[0] = x114;
-      int x127 = x99->timer;
-      int x255 = x127 + 1;
-      x99->timer = x255;
-      x153 = x114;
-    } else {
-      int * x130 = x99->mem;
-      int x257 = x103 + x105;
-      int x131 = x130[x257];
-      int * x132 = x99->mem;
-      int * x133 = x99->cache_keys;
-      int x134 = x133[1];
-      int * x135 = x99->cache_vals;
-      int x136 = x135[1];
-      x132[x134] = x136;
-      int * x138 = x99->cache_keys;
-      int * x139 = x99->cache_keys;
-      int x140 = x139[0];
-      x138[1] = x140;
-      int * x142 = x99->cache_vals;
-      int * x143 = x99->cache_vals;
-      int x144 = x143[0];
-      x142[1] = x144;
-      int * x146 = x99->cache_keys;
-      x146[0] = x257;
-      int * x148 = x99->cache_vals;
-      x148[0] = x131;
-      int x150 = x99->timer;
-      int x272 = x150 + 100;
-      x99->timer = x272;
-      x153 = x131;
-    }
-    x155 = x153;
-  }
-  int * x156 = x99->regs;
-  x156[1] = x155;
-  struct StateT * x229 = x158(x99);
-  return x229;
-}
-
-struct StateT * x166(struct StateT * x167) {
-  int x168 = x167->timer;
-  int x180 = x168 + 1;
-  x167->timer = x180;
-  int * x170 = x167->regs;
-  x170[0] = 0;
-  struct StateT * x178 = x172(x167);
-  return x178;
+  struct StateT * x7 = slot_1(x2);
+  return x7;
 }
 
 

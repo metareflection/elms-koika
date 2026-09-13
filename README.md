@@ -130,10 +130,12 @@ so in under twenty instructions; this is 277, and CBMC clears all four models:
 Two things it needs that the assembly demos do not. It is the first demo that
 spills, so `init` points `sp` at the top of `mem` rather than leaving it at 0,
 and `mem_size` is computed from the frame the object actually declares. And
-ELMS keys its function table by Java-serializing the staged closure, which
-recurses once per node, so `build.sbt` raises `-Xss` for the forked test JVM;
-under Speculative and Predictive the default 1MB stack overflows partway
-through.
+Speculative alone wants a bigger stack than the JVM's default 1MB, so
+`build.sbt` raises `-Xss` for the forked test JVM. It inlines a speculation
+window into the function that opened it, salsa20's longest runs 1696
+statements, and ELMS elaborates a function body by recursing once per
+statement. Nothing else here comes near that; naive, cache and predictive all
+stage salsa20 on the default stack.
 
 It is also the only case study the tower can take. curve25519-donna, poly1305,
 both OpenSSL MEE versions and the Lucky13 fix in `openssl-ssl3/s3_cbc.fact` are

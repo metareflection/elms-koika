@@ -35,13 +35,13 @@ struct StateT {
 };
 
 struct StateT * snippet(struct StateT * v0);
-struct StateT * v1(struct StateT * v2);
+struct StateT * slot_0(struct StateT * v2);
 struct StateT * snippet(struct StateT * v0) {
-  struct StateT * v252 = v1(v0);
-  return v252;
+  struct StateT * v1 = slot_0(v0);
+  return v1;
 }
 
-struct StateT * v1(struct StateT * v2) {
+struct StateT * slot_0(struct StateT * v2) {
   int * v3 = v2->saved_regs;
   int * v4 = v2->regs;
   int v5 = v4[11];

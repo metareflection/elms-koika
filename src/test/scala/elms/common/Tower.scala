@@ -14,16 +14,29 @@ trait Common extends Isa {
   // [Predictive], which needs one per lookahead state and so hands out its own
   // numbering.
   //
-  // The number is also what the closure [call] stages captures, and that is
-  // load-bearing. ELMS keys its own function table by Java-serializing that
-  // closure, and the driver it captures serializes to nothing, so two slots
-  // that number the same share a function whether or not they mean the same
-  // thing.
+  // The number is the function's identity, not a hint: it is what [slotName]
+  // spells and what every call site to that slot writes down. Two slots that
+  // number the same are one function whether or not they mean the same thing.
   def slot(pc: Int): Int = pc
   def resume(at: Int, s: Rep[State]): Rep[State] = execute(at, s)
   def live(at: Int): Boolean = at < prog.length
 
-  private val emitted = mutable.Map[Int, Rep[State => State]]()
+  private val declared = mutable.Set[Int]()
+
+  // Slots asked for but not yet staged, and how to put the staging-time state
+  // back the way the [call] that asked left it.
+  private val pending = mutable.Queue[(Int, () => Unit)]()
+
+  // The name is the forward reference. `fun` stages a body the moment it is
+  // handed one, so a call site that wants a slot the worklist has not reached
+  // has nothing to apply but the name that slot's function will be given.
+  private def slotName(at: Int): String = s"slot_$at"
+
+  // A slot's body is staged where the worklist reaches it rather than where the
+  // [call] that asked for it sits, so a model that carries staging-time state
+  // in a `var` between instructions has to send a copy along. [Predictive]
+  // interns all of its into the slot number and so needs nothing here.
+  def checkpoint(): () => Unit = () => ()
 
   def tick(s: Rep[State]): Rep[Unit] = s.timer = s.timer + 1
 
@@ -38,24 +51,40 @@ trait Common extends Isa {
     require(i >= 0, s"jump to negative pc $i")
     if (useCache) {
       val at = slot(i)
-      if (live(at)) {
-        // Not `getOrElseUpdate`: staging the body re-enters [call], so a
-        // self-recursive slot writes this map while the default is still being
-        // evaluated.
-        val f = emitted.get(at) match {
-          case None => {
-            val f = fun { (s: Rep[State]) => resume(at, s) }
-            emitted(at) = f
-            f
-          }
-          case Some(f) => f
-        }
-        f(s)
-      } else { s }
+      if (live(at)) { declare(at)(s) } else { s }
     } else { resume(slot(i), s) }
   }
 
-  def snippet(s: Rep[State]): Rep[State] = call(0, s)
+  // Put [at] on the worklist the first time anything asks for it, and hand this
+  // call site a reference to the function it will be given. Nothing is staged
+  // here, which is what keeps [call] from re-entering itself: the old version
+  // staged the body inline and so nested one `fill` per instruction, which a
+  // few hundred instructions of RISC-V is enough to overflow the stack with.
+  //
+  // The reference is rebuilt per call site rather than memoized with the slot.
+  // What comes back names a class in the e-graph of whichever function is open,
+  // and every function has its own, so one handed to a second function reaches
+  // whatever that index happens to mean over there.
+  private def declare(at: Int): Rep[State => State] = {
+    if (declared.add(at)) { pending.enqueue((at, checkpoint())) }
+    unsafeDeclare[State => State](slotName(at))
+  }
+
+  // Slots come off this list and go back on it while it drains, which is the
+  // point: every body is staged at the same depth, so how deep the program's
+  // own call graph runs stops being a question about the JVM stack.
+  private def drain(): Unit =
+    while (pending.nonEmpty) {
+      val (at, restore) = pending.dequeue()
+      restore()
+      fun(slotName(at)) { (s: Rep[State]) => resume(at, s) }
+    }
+
+  def snippet(s: Rep[State]): Rep[State] = {
+    val entry = call(0, s)
+    drain()
+    entry
+  }
 }
 
 // A register file and a memory with no cache in front of either.
@@ -157,6 +186,19 @@ trait Speculative extends Cached {
   def resetSaved(): Unit = { savedRegisters.clear() }
 
   var inBranch: Option[(Cond, Int)] = None
+
+  // [useCache] is `inBranch.isEmpty`, so a slot only ever reaches the worklist
+  // with the window closed and there is nothing to remember about that. The
+  // saved registers are another matter: the join-point arm of [execute] calls
+  // before it clears them, so the set travels with the slot.
+  override def checkpoint(): () => Unit = {
+    val saved = savedRegisters.toVector
+    () => {
+      inBranch = None
+      resetSaved()
+      savedRegisters ++= saved
+    }
+  }
 
   override def useCache: Boolean = inBranch.isEmpty
   override def execute(pc: Int, s: Rep[State]): Rep[State] = inBranch match {

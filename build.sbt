@@ -24,12 +24,12 @@ lazy val root = project
 
     Test / fork := true,
 
-    // ELMS keys its function table by Java-serializing the staged closure, and
-    // the serializer recurses once per node. The RISC-V demos are twenty
-    // instructions and never came close; `src/test/fact/salsa20.o` is 277, and
-    // under Speculative or Predictive the default 1MB stack overflows partway
-    // through writing the graph out.
-    Test / javaOptions += "-Xss512m",
+    // Speculative inlines a whole speculation window into the function it
+    // opened in, and ELMS elaborates a function body by recursing once per
+    // statement. `src/test/fact/salsa20.o` has a window 1696 statements long,
+    // which is more than the default 1MB stack holds. The other three models
+    // emit nothing longer than a hundred lines and want none of this.
+    Test / javaOptions += "-Xss16m",
 
     Test / javaOptions += {
       val conv = fileConverter.value

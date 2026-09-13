@@ -34,694 +34,694 @@ struct StateT {
   int timer;
 };
 
-struct StateT * v469(struct StateT * v470);
-struct StateT * v19(struct StateT * v20);
-struct StateT * v276(struct StateT * v277);
-struct StateT * v481(struct StateT * v482);
-struct StateT * v25(struct StateT * v26);
-struct StateT * v218(struct StateT * v219);
-struct StateT * v366(struct StateT * v367);
-struct StateT * v290(struct StateT * v291);
-struct StateT * v465(struct StateT * v466);
-struct StateT * v29(struct StateT * v30);
-struct StateT * v452(struct StateT * v453);
-struct StateT * v7(struct StateT * v8);
-struct StateT * v105(struct StateT * v106);
-struct StateT * v234(struct StateT * v235);
-struct StateT * v13(struct StateT * v14);
-struct StateT * v181(struct StateT * v182);
-struct StateT * v43(struct StateT * v44);
-struct StateT * v222(struct StateT * v223);
-struct StateT * v252(struct StateT * v253);
-struct StateT * v246(struct StateT * v247);
-struct StateT * v119(struct StateT * v120);
-struct StateT * v268(struct StateT * v269);
-struct StateT * v428(struct StateT * v429);
+struct StateT * slot_6(struct StateT * v90);
+struct StateT * slot_29(struct StateT * v882);
+struct StateT * slot_25(struct StateT * v841);
+struct StateT * slot_16(struct StateT * v484);
+struct StateT * slot_23(struct StateT * v673);
+struct StateT * slot_5(struct StateT * v62);
+struct StateT * slot_2(struct StateT * v28);
+struct StateT * slot_7(struct StateT * v202);
+struct StateT * slot_21(struct StateT * v533);
+struct StateT * slot_3(struct StateT * v41);
+struct StateT * slot_26(struct StateT * v851);
+struct StateT * slot_10(struct StateT * v398);
+struct StateT * slot_1(struct StateT * v15);
+struct StateT * slot_13(struct StateT * v416);
+struct StateT * slot_24(struct StateT * v785);
+struct StateT * slot_0(struct StateT * v2);
+struct StateT * slot_14(struct StateT * v439);
+struct StateT * slot_28(struct StateT * v859);
+struct StateT * slot_17(struct StateT * v492);
+struct StateT * slot_20(struct StateT * v505);
 struct StateT * snippet(struct StateT * v0);
-struct StateT * v1(struct StateT * v2);
-struct StateT * v352(struct StateT * v353);
-struct StateT * v205(struct StateT * v206);
-struct StateT * v272(struct StateT * v273);
-struct StateT * v469(struct StateT * v470) {
-  int * v471 = v470->saved_regs;
-  int * v472 = v470->regs;
-  int v473 = v472[14];
-  v471[14] = v473;
-  int v475 = v470->timer;
-  int v521 = v475 + 1;
-  v470->timer = v521;
-  int * v477 = v470->regs;
-  int v478 = v477[14];
-  int * v479 = v470->regs;
-  int v524 = v478 + 4;
-  v479[14] = v524;
-  struct StateT * v515 = v481(v470);
-  return v515;
-}
-
-struct StateT * v19(struct StateT * v20) {
-  int v21 = v20->timer;
-  int v911 = v21 + 1;
-  v20->timer = v911;
-  int * v23 = v20->regs;
-  v23[15] = 16;
-  struct StateT * v909 = v25(v20);
-  return v909;
-}
-
-struct StateT * v276(struct StateT * v277) {
-  int * v278 = v277->saved_regs;
-  int * v279 = v277->regs;
-  int v280 = v279[5];
-  v278[5] = v280;
-  int v282 = v277->timer;
-  int v686 = v282 + 1;
-  v277->timer = v686;
-  int * v284 = v277->regs;
-  int v285 = v284[12];
-  int * v286 = v277->regs;
-  int v287 = v286[14];
-  int * v288 = v277->regs;
-  int v692 = v285 + v287;
-  v288[5] = v692;
-  struct StateT * v680 = v290(v277);
-  return v680;
-}
-
-struct StateT * v481(struct StateT * v482) {
-  int * v483 = v482->regs;
-  int v484 = v483[10];
-  int * v485 = v482->regs;
-  int v486 = v485[11];
-  bool v504 = !(v484 == v486);
-  struct StateT * v498;
-  if (v504) {
-    int v487 = v482->timer;
-    int v505 = v487 + 15;
-    v482->timer = v505;
-    int * v489 = v482->saved_regs;
-    int v490 = v489[14];
-    int * v491 = v482->regs;
-    v491[14] = v490;
-    struct StateT * v493 = v246(v482);
-    v498 = v493;
+struct StateT * slot_8(struct StateT * v230);
+struct StateT * slot_4(struct StateT * v54);
+struct StateT * slot_15(struct StateT * v471);
+struct StateT * slot_18(struct StateT * v497);
+struct StateT * slot_9(struct StateT * v342);
+struct StateT * slot_22(struct StateT * v645);
+struct StateT * slot_11(struct StateT * v408);
+struct StateT * slot_6(struct StateT * v90) {
+  int * v91 = v90->saved_regs;
+  int * v92 = v90->regs;
+  int v93 = v92[10];
+  v91[10] = v93;
+  int v95 = v90->timer;
+  int v157 = v95 + 1;
+  v90->timer = v157;
+  int * v97 = v90->regs;
+  int v98 = v97[5];
+  int * v99 = v90->cache_keys;
+  int v100 = v99[0];
+  bool v162 = v100 == ((int)((unsigned int)v98 >> 2));
+  int v148;
+  if (v162) {
+    int * v101 = v90->cache_vals;
+    int v102 = v101[0];
+    v148 = v102;
   } else {
-    struct StateT * v496 = v268(v482);
-    v498 = v496;
-  }
-  return v498;
-}
-
-struct StateT * v25(struct StateT * v26) {
-  int v27 = v26->timer;
-  int v906 = v27 + 1;
-  v26->timer = v906;
-  struct StateT * v904 = v29(v26);
-  return v904;
-}
-
-struct StateT * v218(struct StateT * v219) {
-  int v220 = v219->timer;
-  int v738 = v220 + 1;
-  v219->timer = v738;
-  struct StateT * v736 = v222(v219);
-  return v736;
-}
-
-struct StateT * v366(struct StateT * v367) {
-  int * v368 = v367->saved_regs;
-  int * v369 = v367->regs;
-  int v370 = v369[11];
-  v368[11] = v370;
-  int v372 = v367->timer;
-  int v569 = v372 + 1;
-  v367->timer = v569;
-  int * v374 = v367->regs;
-  int v375 = v374[6];
-  int * v376 = v367->cache_keys;
-  int v377 = v376[0];
-  bool v574 = v377 == ((int)((unsigned int)v375 >> 2));
-  int v425;
-  if (v574) {
-    int * v378 = v367->cache_vals;
-    int v379 = v378[0];
-    v425 = v379;
-  } else {
-    int * v381 = v367->cache_keys;
-    int v382 = v381[1];
-    bool v579 = v382 == ((int)((unsigned int)v375 >> 2));
-    int v423;
-    if (v579) {
-      int * v383 = v367->cache_vals;
-      int v384 = v383[1];
-      int * v385 = v367->cache_keys;
-      int * v386 = v367->cache_keys;
-      int v387 = v386[0];
-      v385[1] = v387;
-      int * v389 = v367->cache_vals;
-      int * v390 = v367->cache_vals;
-      int v391 = v390[0];
-      v389[1] = v391;
-      int * v393 = v367->cache_keys;
-      int v588 = (int)((unsigned int)v375 >> 2);
-      v393[0] = v588;
-      int * v395 = v367->cache_vals;
-      v395[0] = v384;
-      int v397 = v367->timer;
-      int v591 = v397 + 1;
-      v367->timer = v591;
-      v423 = v384;
+    int * v104 = v90->cache_keys;
+    int v105 = v104[1];
+    bool v167 = v105 == ((int)((unsigned int)v98 >> 2));
+    int v146;
+    if (v167) {
+      int * v106 = v90->cache_vals;
+      int v107 = v106[1];
+      int * v108 = v90->cache_keys;
+      int * v109 = v90->cache_keys;
+      int v110 = v109[0];
+      v108[1] = v110;
+      int * v112 = v90->cache_vals;
+      int * v113 = v90->cache_vals;
+      int v114 = v113[0];
+      v112[1] = v114;
+      int * v116 = v90->cache_keys;
+      int v176 = (int)((unsigned int)v98 >> 2);
+      v116[0] = v176;
+      int * v118 = v90->cache_vals;
+      v118[0] = v107;
+      int v120 = v90->timer;
+      int v179 = v120 + 1;
+      v90->timer = v179;
+      v146 = v107;
     } else {
-      int * v400 = v367->mem;
-      int v593 = (int)((unsigned int)v375 >> 2);
-      int v401 = v400[v593];
-      int * v402 = v367->mem;
-      int * v403 = v367->cache_keys;
-      int v404 = v403[1];
-      int * v405 = v367->cache_vals;
-      int v406 = v405[1];
-      v402[v404] = v406;
-      int * v408 = v367->cache_keys;
-      int * v409 = v367->cache_keys;
-      int v410 = v409[0];
-      v408[1] = v410;
-      int * v412 = v367->cache_vals;
-      int * v413 = v367->cache_vals;
-      int v414 = v413[0];
-      v412[1] = v414;
-      int * v416 = v367->cache_keys;
-      v416[0] = v593;
-      int * v418 = v367->cache_vals;
-      v418[0] = v401;
-      int v420 = v367->timer;
-      int v608 = v420 + 100;
-      v367->timer = v608;
-      v423 = v401;
+      int * v123 = v90->mem;
+      int v181 = (int)((unsigned int)v98 >> 2);
+      int v124 = v123[v181];
+      int * v125 = v90->mem;
+      int * v126 = v90->cache_keys;
+      int v127 = v126[1];
+      int * v128 = v90->cache_vals;
+      int v129 = v128[1];
+      v125[v127] = v129;
+      int * v131 = v90->cache_keys;
+      int * v132 = v90->cache_keys;
+      int v133 = v132[0];
+      v131[1] = v133;
+      int * v135 = v90->cache_vals;
+      int * v136 = v90->cache_vals;
+      int v137 = v136[0];
+      v135[1] = v137;
+      int * v139 = v90->cache_keys;
+      v139[0] = v181;
+      int * v141 = v90->cache_vals;
+      v141[0] = v124;
+      int v143 = v90->timer;
+      int v196 = v143 + 100;
+      v90->timer = v196;
+      v146 = v124;
     }
-    v425 = v423;
+    v148 = v146;
   }
-  int * v426 = v367->regs;
-  v426[11] = v425;
-  struct StateT * v563 = v428(v367);
-  return v563;
+  int * v149 = v90->regs;
+  v149[10] = v148;
+  struct StateT * v151 = slot_7(v90);
+  return v151;
 }
 
-struct StateT * v290(struct StateT * v291) {
-  int * v292 = v291->saved_regs;
-  int * v293 = v291->regs;
-  int v294 = v293[10];
-  v292[10] = v294;
-  int v296 = v291->timer;
-  int v635 = v296 + 1;
-  v291->timer = v635;
-  int * v298 = v291->regs;
-  int v299 = v298[5];
-  int * v300 = v291->cache_keys;
-  int v301 = v300[0];
-  bool v640 = v301 == ((int)((unsigned int)v299 >> 2));
-  int v349;
-  if (v640) {
-    int * v302 = v291->cache_vals;
-    int v303 = v302[0];
-    v349 = v303;
+struct StateT * slot_29(struct StateT * v882) {
+  int * v883 = v882->regs;
+  int v884 = v883[10];
+  int * v885 = v882->regs;
+  int v886 = v885[11];
+  bool v903 = !(v884 == v886);
+  struct StateT * v897;
+  if (v903) {
+    int v887 = v882->timer;
+    int v904 = v887 + 15;
+    v882->timer = v904;
+    int * v889 = v882->saved_regs;
+    int v890 = v889[14];
+    int * v891 = v882->regs;
+    v891[14] = v890;
+    struct StateT * v893 = slot_15(v882);
+    v897 = v893;
   } else {
-    int * v305 = v291->cache_keys;
-    int v306 = v305[1];
-    bool v645 = v306 == ((int)((unsigned int)v299 >> 2));
-    int v347;
-    if (v645) {
-      int * v307 = v291->cache_vals;
-      int v308 = v307[1];
-      int * v309 = v291->cache_keys;
-      int * v310 = v291->cache_keys;
-      int v311 = v310[0];
-      v309[1] = v311;
-      int * v313 = v291->cache_vals;
-      int * v314 = v291->cache_vals;
-      int v315 = v314[0];
-      v313[1] = v315;
-      int * v317 = v291->cache_keys;
-      int v654 = (int)((unsigned int)v299 >> 2);
-      v317[0] = v654;
-      int * v319 = v291->cache_vals;
-      v319[0] = v308;
-      int v321 = v291->timer;
-      int v657 = v321 + 1;
-      v291->timer = v657;
-      v347 = v308;
+    struct StateT * v895 = slot_16(v882);
+    v897 = v895;
+  }
+  return v897;
+}
+
+struct StateT * slot_25(struct StateT * v841) {
+  int v842 = v841->timer;
+  int v847 = v842 + 1;
+  v841->timer = v847;
+  int * v844 = v841->regs;
+  v844[10] = 1;
+  return v841;
+}
+
+struct StateT * slot_16(struct StateT * v484) {
+  int v485 = v484->timer;
+  int v489 = v485 + 1;
+  v484->timer = v489;
+  struct StateT * v487 = slot_18(v484);
+  return v487;
+}
+
+struct StateT * slot_23(struct StateT * v673) {
+  int * v674 = v673->saved_regs;
+  int * v675 = v673->regs;
+  int v676 = v675[11];
+  v674[11] = v676;
+  int v678 = v673->timer;
+  int v740 = v678 + 1;
+  v673->timer = v740;
+  int * v680 = v673->regs;
+  int v681 = v680[6];
+  int * v682 = v673->cache_keys;
+  int v683 = v682[0];
+  bool v745 = v683 == ((int)((unsigned int)v681 >> 2));
+  int v731;
+  if (v745) {
+    int * v684 = v673->cache_vals;
+    int v685 = v684[0];
+    v731 = v685;
+  } else {
+    int * v687 = v673->cache_keys;
+    int v688 = v687[1];
+    bool v750 = v688 == ((int)((unsigned int)v681 >> 2));
+    int v729;
+    if (v750) {
+      int * v689 = v673->cache_vals;
+      int v690 = v689[1];
+      int * v691 = v673->cache_keys;
+      int * v692 = v673->cache_keys;
+      int v693 = v692[0];
+      v691[1] = v693;
+      int * v695 = v673->cache_vals;
+      int * v696 = v673->cache_vals;
+      int v697 = v696[0];
+      v695[1] = v697;
+      int * v699 = v673->cache_keys;
+      int v759 = (int)((unsigned int)v681 >> 2);
+      v699[0] = v759;
+      int * v701 = v673->cache_vals;
+      v701[0] = v690;
+      int v703 = v673->timer;
+      int v762 = v703 + 1;
+      v673->timer = v762;
+      v729 = v690;
     } else {
-      int * v324 = v291->mem;
-      int v659 = (int)((unsigned int)v299 >> 2);
-      int v325 = v324[v659];
-      int * v326 = v291->mem;
-      int * v327 = v291->cache_keys;
-      int v328 = v327[1];
-      int * v329 = v291->cache_vals;
-      int v330 = v329[1];
-      v326[v328] = v330;
-      int * v332 = v291->cache_keys;
-      int * v333 = v291->cache_keys;
-      int v334 = v333[0];
-      v332[1] = v334;
-      int * v336 = v291->cache_vals;
-      int * v337 = v291->cache_vals;
-      int v338 = v337[0];
-      v336[1] = v338;
-      int * v340 = v291->cache_keys;
-      v340[0] = v659;
-      int * v342 = v291->cache_vals;
-      v342[0] = v325;
-      int v344 = v291->timer;
-      int v674 = v344 + 100;
-      v291->timer = v674;
-      v347 = v325;
+      int * v706 = v673->mem;
+      int v764 = (int)((unsigned int)v681 >> 2);
+      int v707 = v706[v764];
+      int * v708 = v673->mem;
+      int * v709 = v673->cache_keys;
+      int v710 = v709[1];
+      int * v711 = v673->cache_vals;
+      int v712 = v711[1];
+      v708[v710] = v712;
+      int * v714 = v673->cache_keys;
+      int * v715 = v673->cache_keys;
+      int v716 = v715[0];
+      v714[1] = v716;
+      int * v718 = v673->cache_vals;
+      int * v719 = v673->cache_vals;
+      int v720 = v719[0];
+      v718[1] = v720;
+      int * v722 = v673->cache_keys;
+      v722[0] = v764;
+      int * v724 = v673->cache_vals;
+      v724[0] = v707;
+      int v726 = v673->timer;
+      int v779 = v726 + 100;
+      v673->timer = v779;
+      v729 = v707;
     }
-    v349 = v347;
+    v731 = v729;
   }
-  int * v350 = v291->regs;
-  v350[10] = v349;
-  struct StateT * v629 = v352(v291);
-  return v629;
+  int * v732 = v673->regs;
+  v732[11] = v731;
+  struct StateT * v734 = slot_24(v673);
+  return v734;
 }
 
-struct StateT * v465(struct StateT * v466) {
-  int v467 = v466->timer;
-  int v529 = v467 + 1;
-  v466->timer = v529;
-  struct StateT * v527 = v469(v466);
-  return v527;
+struct StateT * slot_5(struct StateT * v62) {
+  int * v63 = v62->saved_regs;
+  int * v64 = v62->regs;
+  int v65 = v64[5];
+  v63[5] = v65;
+  int v67 = v62->timer;
+  int v81 = v67 + 1;
+  v62->timer = v81;
+  int * v69 = v62->regs;
+  int v70 = v69[12];
+  int * v71 = v62->regs;
+  int v72 = v71[14];
+  int * v73 = v62->regs;
+  int v87 = v70 + v72;
+  v73[5] = v87;
+  struct StateT * v75 = slot_6(v62);
+  return v75;
 }
 
-struct StateT * v29(struct StateT * v30) {
-  int * v31 = v30->saved_regs;
-  int * v32 = v30->regs;
-  int v33 = v32[5];
-  v31[5] = v33;
-  int v35 = v30->timer;
-  int v895 = v35 + 1;
-  v30->timer = v895;
-  int * v37 = v30->regs;
-  int v38 = v37[12];
-  int * v39 = v30->regs;
-  int v40 = v39[14];
-  int * v41 = v30->regs;
-  int v901 = v38 + v40;
-  v41[5] = v901;
-  struct StateT * v889 = v43(v30);
-  return v889;
+struct StateT * slot_2(struct StateT * v28) {
+  int v29 = v28->timer;
+  int v35 = v29 + 1;
+  v28->timer = v35;
+  int * v31 = v28->regs;
+  v31[14] = 0;
+  struct StateT * v33 = slot_3(v28);
+  return v33;
 }
 
-struct StateT * v452(struct StateT * v453) {
-  int v454 = v453->timer;
-  int v459 = v454 + 1;
-  v453->timer = v459;
-  int * v456 = v453->regs;
-  v456[10] = 1;
-  return v453;
+struct StateT * slot_7(struct StateT * v202) {
+  int * v203 = v202->saved_regs;
+  int * v204 = v202->regs;
+  int v205 = v204[6];
+  v203[6] = v205;
+  int v207 = v202->timer;
+  int v221 = v207 + 1;
+  v202->timer = v221;
+  int * v209 = v202->regs;
+  int v210 = v209[13];
+  int * v211 = v202->regs;
+  int v212 = v211[14];
+  int * v213 = v202->regs;
+  int v227 = v210 + v212;
+  v213[6] = v227;
+  struct StateT * v215 = slot_8(v202);
+  return v215;
 }
 
-struct StateT * v7(struct StateT * v8) {
-  int v9 = v8->timer;
-  int v927 = v9 + 1;
-  v8->timer = v927;
-  int * v11 = v8->regs;
-  v11[13] = 80;
-  struct StateT * v925 = v13(v8);
-  return v925;
-}
-
-struct StateT * v105(struct StateT * v106) {
-  int * v107 = v106->saved_regs;
-  int * v108 = v106->regs;
-  int v109 = v108[6];
-  v107[6] = v109;
-  int v111 = v106->timer;
-  int v829 = v111 + 1;
-  v106->timer = v829;
-  int * v113 = v106->regs;
-  int v114 = v113[13];
-  int * v115 = v106->regs;
-  int v116 = v115[14];
-  int * v117 = v106->regs;
-  int v835 = v114 + v116;
-  v117[6] = v835;
-  struct StateT * v823 = v119(v106);
-  return v823;
-}
-
-struct StateT * v234(struct StateT * v235) {
-  int * v236 = v235->regs;
-  int v237 = v236[10];
-  int * v238 = v235->regs;
-  int v239 = v238[11];
-  bool v713 = !(v237 == v239);
-  struct StateT * v707;
-  if (v713) {
-    int v240 = v235->timer;
-    int v714 = v240 + 15;
-    v235->timer = v714;
-    int * v242 = v235->saved_regs;
-    int v243 = v242[14];
-    int * v244 = v235->regs;
-    v244[14] = v243;
-    struct StateT * v266 = v246(v235);
-    v707 = v266;
+struct StateT * slot_21(struct StateT * v533) {
+  int * v534 = v533->saved_regs;
+  int * v535 = v533->regs;
+  int v536 = v535[10];
+  v534[10] = v536;
+  int v538 = v533->timer;
+  int v600 = v538 + 1;
+  v533->timer = v600;
+  int * v540 = v533->regs;
+  int v541 = v540[5];
+  int * v542 = v533->cache_keys;
+  int v543 = v542[0];
+  bool v605 = v543 == ((int)((unsigned int)v541 >> 2));
+  int v591;
+  if (v605) {
+    int * v544 = v533->cache_vals;
+    int v545 = v544[0];
+    v591 = v545;
   } else {
-    struct StateT * v705 = v268(v235);
-    v707 = v705;
-  }
-  return v707;
-}
-
-struct StateT * v13(struct StateT * v14) {
-  int v15 = v14->timer;
-  int v919 = v15 + 1;
-  v14->timer = v919;
-  int * v17 = v14->regs;
-  v17[14] = 0;
-  struct StateT * v917 = v19(v14);
-  return v917;
-}
-
-struct StateT * v181(struct StateT * v182) {
-  int * v183 = v182->regs;
-  int v184 = v183[14];
-  int * v185 = v182->regs;
-  int v186 = v185[15];
-  bool v749 = v184 >= v186;
-  struct StateT * v743;
-  if (v749) {
-    int v187 = v182->timer;
-    int v750 = v187 + 15;
-    v182->timer = v750;
-    int * v189 = v182->saved_regs;
-    int v190 = v189[5];
-    int * v191 = v182->regs;
-    v191[5] = v190;
-    int * v193 = v182->saved_regs;
-    int v194 = v193[10];
-    int * v195 = v182->regs;
-    v195[10] = v194;
-    int * v197 = v182->saved_regs;
-    int v198 = v197[6];
-    int * v199 = v182->regs;
-    v199[6] = v198;
-    int * v201 = v182->saved_regs;
-    int v202 = v201[11];
-    int * v203 = v182->regs;
-    v203[11] = v202;
-    struct StateT * v216 = v205(v182);
-    v743 = v216;
-  } else {
-    struct StateT * v741 = v218(v182);
-    v743 = v741;
-  }
-  return v743;
-}
-
-struct StateT * v43(struct StateT * v44) {
-  int * v45 = v44->saved_regs;
-  int * v46 = v44->regs;
-  int v47 = v46[10];
-  v45[10] = v47;
-  int v49 = v44->timer;
-  int v844 = v49 + 1;
-  v44->timer = v844;
-  int * v51 = v44->regs;
-  int v52 = v51[5];
-  int * v53 = v44->cache_keys;
-  int v54 = v53[0];
-  bool v849 = v54 == ((int)((unsigned int)v52 >> 2));
-  int v102;
-  if (v849) {
-    int * v55 = v44->cache_vals;
-    int v56 = v55[0];
-    v102 = v56;
-  } else {
-    int * v58 = v44->cache_keys;
-    int v59 = v58[1];
-    bool v854 = v59 == ((int)((unsigned int)v52 >> 2));
-    int v100;
-    if (v854) {
-      int * v60 = v44->cache_vals;
-      int v61 = v60[1];
-      int * v62 = v44->cache_keys;
-      int * v63 = v44->cache_keys;
-      int v64 = v63[0];
-      v62[1] = v64;
-      int * v66 = v44->cache_vals;
-      int * v67 = v44->cache_vals;
-      int v68 = v67[0];
-      v66[1] = v68;
-      int * v70 = v44->cache_keys;
-      int v863 = (int)((unsigned int)v52 >> 2);
-      v70[0] = v863;
-      int * v72 = v44->cache_vals;
-      v72[0] = v61;
-      int v74 = v44->timer;
-      int v866 = v74 + 1;
-      v44->timer = v866;
-      v100 = v61;
+    int * v547 = v533->cache_keys;
+    int v548 = v547[1];
+    bool v610 = v548 == ((int)((unsigned int)v541 >> 2));
+    int v589;
+    if (v610) {
+      int * v549 = v533->cache_vals;
+      int v550 = v549[1];
+      int * v551 = v533->cache_keys;
+      int * v552 = v533->cache_keys;
+      int v553 = v552[0];
+      v551[1] = v553;
+      int * v555 = v533->cache_vals;
+      int * v556 = v533->cache_vals;
+      int v557 = v556[0];
+      v555[1] = v557;
+      int * v559 = v533->cache_keys;
+      int v619 = (int)((unsigned int)v541 >> 2);
+      v559[0] = v619;
+      int * v561 = v533->cache_vals;
+      v561[0] = v550;
+      int v563 = v533->timer;
+      int v622 = v563 + 1;
+      v533->timer = v622;
+      v589 = v550;
     } else {
-      int * v77 = v44->mem;
-      int v868 = (int)((unsigned int)v52 >> 2);
-      int v78 = v77[v868];
-      int * v79 = v44->mem;
-      int * v80 = v44->cache_keys;
-      int v81 = v80[1];
-      int * v82 = v44->cache_vals;
-      int v83 = v82[1];
-      v79[v81] = v83;
-      int * v85 = v44->cache_keys;
-      int * v86 = v44->cache_keys;
-      int v87 = v86[0];
-      v85[1] = v87;
-      int * v89 = v44->cache_vals;
-      int * v90 = v44->cache_vals;
-      int v91 = v90[0];
-      v89[1] = v91;
-      int * v93 = v44->cache_keys;
-      v93[0] = v868;
-      int * v95 = v44->cache_vals;
-      v95[0] = v78;
-      int v97 = v44->timer;
-      int v883 = v97 + 100;
-      v44->timer = v883;
-      v100 = v78;
+      int * v566 = v533->mem;
+      int v624 = (int)((unsigned int)v541 >> 2);
+      int v567 = v566[v624];
+      int * v568 = v533->mem;
+      int * v569 = v533->cache_keys;
+      int v570 = v569[1];
+      int * v571 = v533->cache_vals;
+      int v572 = v571[1];
+      v568[v570] = v572;
+      int * v574 = v533->cache_keys;
+      int * v575 = v533->cache_keys;
+      int v576 = v575[0];
+      v574[1] = v576;
+      int * v578 = v533->cache_vals;
+      int * v579 = v533->cache_vals;
+      int v580 = v579[0];
+      v578[1] = v580;
+      int * v582 = v533->cache_keys;
+      v582[0] = v624;
+      int * v584 = v533->cache_vals;
+      v584[0] = v567;
+      int v586 = v533->timer;
+      int v639 = v586 + 100;
+      v533->timer = v639;
+      v589 = v567;
     }
-    v102 = v100;
+    v591 = v589;
   }
-  int * v103 = v44->regs;
-  v103[10] = v102;
-  struct StateT * v838 = v105(v44);
-  return v838;
+  int * v592 = v533->regs;
+  v592[10] = v591;
+  struct StateT * v594 = slot_22(v533);
+  return v594;
 }
 
-struct StateT * v222(struct StateT * v223) {
-  int * v224 = v223->saved_regs;
-  int * v225 = v223->regs;
-  int v226 = v225[14];
-  v224[14] = v226;
-  int v228 = v223->timer;
-  int v730 = v228 + 1;
-  v223->timer = v730;
-  int * v230 = v223->regs;
-  int v231 = v230[14];
-  int * v232 = v223->regs;
-  int v733 = v231 + 4;
-  v232[14] = v733;
-  struct StateT * v724 = v234(v223);
-  return v724;
+struct StateT * slot_3(struct StateT * v41) {
+  int v42 = v41->timer;
+  int v48 = v42 + 1;
+  v41->timer = v48;
+  int * v44 = v41->regs;
+  v44[15] = 16;
+  struct StateT * v46 = slot_4(v41);
+  return v46;
 }
 
-struct StateT * v252(struct StateT * v253) {
-  int v254 = v253->timer;
-  int v257 = v254 + 1;
-  v253->timer = v257;
-  return v253;
+struct StateT * slot_26(struct StateT * v851) {
+  int v852 = v851->timer;
+  int v856 = v852 + 1;
+  v851->timer = v856;
+  struct StateT * v854 = slot_28(v851);
+  return v854;
 }
 
-struct StateT * v246(struct StateT * v247) {
-  int v248 = v247->timer;
-  int v260 = v248 + 1;
-  v247->timer = v260;
-  int * v250 = v247->regs;
-  v250[10] = 0;
-  struct StateT * v258 = v252(v247);
-  return v258;
+struct StateT * slot_10(struct StateT * v398) {
+  int v399 = v398->timer;
+  int v404 = v399 + 1;
+  v398->timer = v404;
+  int * v401 = v398->regs;
+  v401[10] = 1;
+  return v398;
 }
 
-struct StateT * v119(struct StateT * v120) {
-  int * v121 = v120->saved_regs;
-  int * v122 = v120->regs;
-  int v123 = v122[11];
-  v121[11] = v123;
-  int v125 = v120->timer;
-  int v778 = v125 + 1;
-  v120->timer = v778;
-  int * v127 = v120->regs;
-  int v128 = v127[6];
-  int * v129 = v120->cache_keys;
-  int v130 = v129[0];
-  bool v783 = v130 == ((int)((unsigned int)v128 >> 2));
-  int v178;
-  if (v783) {
-    int * v131 = v120->cache_vals;
-    int v132 = v131[0];
-    v178 = v132;
+struct StateT * slot_1(struct StateT * v15) {
+  int v16 = v15->timer;
+  int v22 = v16 + 1;
+  v15->timer = v22;
+  int * v18 = v15->regs;
+  v18[13] = 80;
+  struct StateT * v20 = slot_2(v15);
+  return v20;
+}
+
+struct StateT * slot_13(struct StateT * v416) {
+  int * v417 = v416->saved_regs;
+  int * v418 = v416->regs;
+  int v419 = v418[14];
+  v417[14] = v419;
+  int v421 = v416->timer;
+  int v433 = v421 + 1;
+  v416->timer = v433;
+  int * v423 = v416->regs;
+  int v424 = v423[14];
+  int * v425 = v416->regs;
+  int v436 = v424 + 4;
+  v425[14] = v436;
+  struct StateT * v427 = slot_14(v416);
+  return v427;
+}
+
+struct StateT * slot_24(struct StateT * v785) {
+  int * v786 = v785->regs;
+  int v787 = v786[14];
+  int * v788 = v785->regs;
+  int v789 = v788[15];
+  bool v818 = v787 >= v789;
+  struct StateT * v812;
+  if (v818) {
+    int v790 = v785->timer;
+    int v819 = v790 + 15;
+    v785->timer = v819;
+    int * v792 = v785->saved_regs;
+    int v793 = v792[5];
+    int * v794 = v785->regs;
+    v794[5] = v793;
+    int * v796 = v785->saved_regs;
+    int v797 = v796[10];
+    int * v798 = v785->regs;
+    v798[10] = v797;
+    int * v800 = v785->saved_regs;
+    int v801 = v800[6];
+    int * v802 = v785->regs;
+    v802[6] = v801;
+    int * v804 = v785->saved_regs;
+    int v805 = v804[11];
+    int * v806 = v785->regs;
+    v806[11] = v805;
+    struct StateT * v808 = slot_25(v785);
+    v812 = v808;
   } else {
-    int * v134 = v120->cache_keys;
-    int v135 = v134[1];
-    bool v788 = v135 == ((int)((unsigned int)v128 >> 2));
-    int v176;
-    if (v788) {
-      int * v136 = v120->cache_vals;
-      int v137 = v136[1];
-      int * v138 = v120->cache_keys;
-      int * v139 = v120->cache_keys;
-      int v140 = v139[0];
-      v138[1] = v140;
-      int * v142 = v120->cache_vals;
-      int * v143 = v120->cache_vals;
-      int v144 = v143[0];
-      v142[1] = v144;
-      int * v146 = v120->cache_keys;
-      int v797 = (int)((unsigned int)v128 >> 2);
-      v146[0] = v797;
-      int * v148 = v120->cache_vals;
-      v148[0] = v137;
-      int v150 = v120->timer;
-      int v800 = v150 + 1;
-      v120->timer = v800;
-      v176 = v137;
-    } else {
-      int * v153 = v120->mem;
-      int v802 = (int)((unsigned int)v128 >> 2);
-      int v154 = v153[v802];
-      int * v155 = v120->mem;
-      int * v156 = v120->cache_keys;
-      int v157 = v156[1];
-      int * v158 = v120->cache_vals;
-      int v159 = v158[1];
-      v155[v157] = v159;
-      int * v161 = v120->cache_keys;
-      int * v162 = v120->cache_keys;
-      int v163 = v162[0];
-      v161[1] = v163;
-      int * v165 = v120->cache_vals;
-      int * v166 = v120->cache_vals;
-      int v167 = v166[0];
-      v165[1] = v167;
-      int * v169 = v120->cache_keys;
-      v169[0] = v802;
-      int * v171 = v120->cache_vals;
-      v171[0] = v154;
-      int v173 = v120->timer;
-      int v817 = v173 + 100;
-      v120->timer = v817;
-      v176 = v154;
-    }
-    v178 = v176;
+    struct StateT * v810 = slot_26(v785);
+    v812 = v810;
   }
-  int * v179 = v120->regs;
-  v179[11] = v178;
-  struct StateT * v772 = v181(v120);
-  return v772;
+  return v812;
 }
 
-struct StateT * v268(struct StateT * v269) {
-  int v270 = v269->timer;
-  int v702 = v270 + 1;
-  v269->timer = v702;
-  struct StateT * v700 = v272(v269);
-  return v700;
+struct StateT * slot_0(struct StateT * v2) {
+  int v3 = v2->timer;
+  int v9 = v3 + 1;
+  v2->timer = v9;
+  int * v5 = v2->regs;
+  v5[12] = 0;
+  struct StateT * v7 = slot_1(v2);
+  return v7;
 }
 
-struct StateT * v428(struct StateT * v429) {
-  int * v430 = v429->regs;
-  int v431 = v430[14];
-  int * v432 = v429->regs;
-  int v433 = v432[15];
-  bool v540 = v431 >= v433;
-  struct StateT * v534;
-  if (v540) {
-    int v434 = v429->timer;
-    int v541 = v434 + 15;
-    v429->timer = v541;
-    int * v436 = v429->saved_regs;
-    int v437 = v436[5];
-    int * v438 = v429->regs;
-    v438[5] = v437;
-    int * v440 = v429->saved_regs;
-    int v441 = v440[10];
-    int * v442 = v429->regs;
-    v442[10] = v441;
-    int * v444 = v429->saved_regs;
-    int v445 = v444[6];
-    int * v446 = v429->regs;
-    v446[6] = v445;
-    int * v448 = v429->saved_regs;
-    int v449 = v448[11];
-    int * v450 = v429->regs;
-    v450[11] = v449;
-    struct StateT * v463 = v452(v429);
-    v534 = v463;
+struct StateT * slot_14(struct StateT * v439) {
+  int * v440 = v439->regs;
+  int v441 = v440[10];
+  int * v442 = v439->regs;
+  int v443 = v442[11];
+  bool v460 = !(v441 == v443);
+  struct StateT * v454;
+  if (v460) {
+    int v444 = v439->timer;
+    int v461 = v444 + 15;
+    v439->timer = v461;
+    int * v446 = v439->saved_regs;
+    int v447 = v446[14];
+    int * v448 = v439->regs;
+    v448[14] = v447;
+    struct StateT * v450 = slot_15(v439);
+    v454 = v450;
   } else {
-    struct StateT * v532 = v465(v429);
-    v534 = v532;
+    struct StateT * v452 = slot_16(v439);
+    v454 = v452;
   }
-  return v534;
+  return v454;
+}
+
+struct StateT * slot_28(struct StateT * v859) {
+  int * v860 = v859->saved_regs;
+  int * v861 = v859->regs;
+  int v862 = v861[14];
+  v860[14] = v862;
+  int v864 = v859->timer;
+  int v876 = v864 + 1;
+  v859->timer = v876;
+  int * v866 = v859->regs;
+  int v867 = v866[14];
+  int * v868 = v859->regs;
+  int v879 = v867 + 4;
+  v868[14] = v879;
+  struct StateT * v870 = slot_29(v859);
+  return v870;
+}
+
+struct StateT * slot_17(struct StateT * v492) {
+  int v493 = v492->timer;
+  int v496 = v493 + 1;
+  v492->timer = v496;
+  return v492;
+}
+
+struct StateT * slot_20(struct StateT * v505) {
+  int * v506 = v505->saved_regs;
+  int * v507 = v505->regs;
+  int v508 = v507[5];
+  v506[5] = v508;
+  int v510 = v505->timer;
+  int v524 = v510 + 1;
+  v505->timer = v524;
+  int * v512 = v505->regs;
+  int v513 = v512[12];
+  int * v514 = v505->regs;
+  int v515 = v514[14];
+  int * v516 = v505->regs;
+  int v530 = v513 + v515;
+  v516[5] = v530;
+  struct StateT * v518 = slot_21(v505);
+  return v518;
 }
 
 struct StateT * snippet(struct StateT * v0) {
-  struct StateT * v941 = v1(v0);
-  return v941;
+  struct StateT * v1 = slot_0(v0);
+  return v1;
 }
 
-struct StateT * v1(struct StateT * v2) {
-  int v3 = v2->timer;
-  int v935 = v3 + 1;
-  v2->timer = v935;
-  int * v5 = v2->regs;
-  v5[12] = 0;
-  struct StateT * v933 = v7(v2);
-  return v933;
+struct StateT * slot_8(struct StateT * v230) {
+  int * v231 = v230->saved_regs;
+  int * v232 = v230->regs;
+  int v233 = v232[11];
+  v231[11] = v233;
+  int v235 = v230->timer;
+  int v297 = v235 + 1;
+  v230->timer = v297;
+  int * v237 = v230->regs;
+  int v238 = v237[6];
+  int * v239 = v230->cache_keys;
+  int v240 = v239[0];
+  bool v302 = v240 == ((int)((unsigned int)v238 >> 2));
+  int v288;
+  if (v302) {
+    int * v241 = v230->cache_vals;
+    int v242 = v241[0];
+    v288 = v242;
+  } else {
+    int * v244 = v230->cache_keys;
+    int v245 = v244[1];
+    bool v307 = v245 == ((int)((unsigned int)v238 >> 2));
+    int v286;
+    if (v307) {
+      int * v246 = v230->cache_vals;
+      int v247 = v246[1];
+      int * v248 = v230->cache_keys;
+      int * v249 = v230->cache_keys;
+      int v250 = v249[0];
+      v248[1] = v250;
+      int * v252 = v230->cache_vals;
+      int * v253 = v230->cache_vals;
+      int v254 = v253[0];
+      v252[1] = v254;
+      int * v256 = v230->cache_keys;
+      int v316 = (int)((unsigned int)v238 >> 2);
+      v256[0] = v316;
+      int * v258 = v230->cache_vals;
+      v258[0] = v247;
+      int v260 = v230->timer;
+      int v319 = v260 + 1;
+      v230->timer = v319;
+      v286 = v247;
+    } else {
+      int * v263 = v230->mem;
+      int v321 = (int)((unsigned int)v238 >> 2);
+      int v264 = v263[v321];
+      int * v265 = v230->mem;
+      int * v266 = v230->cache_keys;
+      int v267 = v266[1];
+      int * v268 = v230->cache_vals;
+      int v269 = v268[1];
+      v265[v267] = v269;
+      int * v271 = v230->cache_keys;
+      int * v272 = v230->cache_keys;
+      int v273 = v272[0];
+      v271[1] = v273;
+      int * v275 = v230->cache_vals;
+      int * v276 = v230->cache_vals;
+      int v277 = v276[0];
+      v275[1] = v277;
+      int * v279 = v230->cache_keys;
+      v279[0] = v321;
+      int * v281 = v230->cache_vals;
+      v281[0] = v264;
+      int v283 = v230->timer;
+      int v336 = v283 + 100;
+      v230->timer = v336;
+      v286 = v264;
+    }
+    v288 = v286;
+  }
+  int * v289 = v230->regs;
+  v289[11] = v288;
+  struct StateT * v291 = slot_9(v230);
+  return v291;
 }
 
-struct StateT * v352(struct StateT * v353) {
-  int * v354 = v353->saved_regs;
-  int * v355 = v353->regs;
-  int v356 = v355[6];
-  v354[6] = v356;
-  int v358 = v353->timer;
-  int v620 = v358 + 1;
-  v353->timer = v620;
-  int * v360 = v353->regs;
-  int v361 = v360[13];
-  int * v362 = v353->regs;
-  int v363 = v362[14];
-  int * v364 = v353->regs;
-  int v626 = v361 + v363;
-  v364[6] = v626;
-  struct StateT * v614 = v366(v353);
-  return v614;
+struct StateT * slot_4(struct StateT * v54) {
+  int v55 = v54->timer;
+  int v59 = v55 + 1;
+  v54->timer = v59;
+  struct StateT * v57 = slot_5(v54);
+  return v57;
 }
 
-struct StateT * v205(struct StateT * v206) {
-  int v207 = v206->timer;
-  int v212 = v207 + 1;
-  v206->timer = v212;
-  int * v209 = v206->regs;
-  v209[10] = 1;
-  return v206;
+struct StateT * slot_15(struct StateT * v471) {
+  int v472 = v471->timer;
+  int v478 = v472 + 1;
+  v471->timer = v478;
+  int * v474 = v471->regs;
+  v474[10] = 0;
+  struct StateT * v476 = slot_17(v471);
+  return v476;
 }
 
-struct StateT * v272(struct StateT * v273) {
-  int v274 = v273->timer;
-  int v697 = v274 + 1;
-  v273->timer = v697;
-  struct StateT * v695 = v276(v273);
-  return v695;
+struct StateT * slot_18(struct StateT * v497) {
+  int v498 = v497->timer;
+  int v502 = v498 + 1;
+  v497->timer = v502;
+  struct StateT * v500 = slot_20(v497);
+  return v500;
+}
+
+struct StateT * slot_9(struct StateT * v342) {
+  int * v343 = v342->regs;
+  int v344 = v343[14];
+  int * v345 = v342->regs;
+  int v346 = v345[15];
+  bool v375 = v344 >= v346;
+  struct StateT * v369;
+  if (v375) {
+    int v347 = v342->timer;
+    int v376 = v347 + 15;
+    v342->timer = v376;
+    int * v349 = v342->saved_regs;
+    int v350 = v349[5];
+    int * v351 = v342->regs;
+    v351[5] = v350;
+    int * v353 = v342->saved_regs;
+    int v354 = v353[10];
+    int * v355 = v342->regs;
+    v355[10] = v354;
+    int * v357 = v342->saved_regs;
+    int v358 = v357[6];
+    int * v359 = v342->regs;
+    v359[6] = v358;
+    int * v361 = v342->saved_regs;
+    int v362 = v361[11];
+    int * v363 = v342->regs;
+    v363[11] = v362;
+    struct StateT * v365 = slot_10(v342);
+    v369 = v365;
+  } else {
+    struct StateT * v367 = slot_11(v342);
+    v369 = v367;
+  }
+  return v369;
+}
+
+struct StateT * slot_22(struct StateT * v645) {
+  int * v646 = v645->saved_regs;
+  int * v647 = v645->regs;
+  int v648 = v647[6];
+  v646[6] = v648;
+  int v650 = v645->timer;
+  int v664 = v650 + 1;
+  v645->timer = v664;
+  int * v652 = v645->regs;
+  int v653 = v652[13];
+  int * v654 = v645->regs;
+  int v655 = v654[14];
+  int * v656 = v645->regs;
+  int v670 = v653 + v655;
+  v656[6] = v670;
+  struct StateT * v658 = slot_23(v645);
+  return v658;
+}
+
+struct StateT * slot_11(struct StateT * v408) {
+  int v409 = v408->timer;
+  int v413 = v409 + 1;
+  v408->timer = v413;
+  struct StateT * v411 = slot_13(v408);
+  return v411;
 }
 
 

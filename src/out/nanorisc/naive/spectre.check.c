@@ -35,81 +35,81 @@ struct StateT {
 };
 
 struct StateT * snippet(struct StateT * x0);
-struct StateT * x1(struct StateT * x2);
-struct StateT * x20(struct StateT * x21);
-struct StateT * x7(struct StateT * x8);
-struct StateT * x32(struct StateT * x33);
-struct StateT * x13(struct StateT * x14);
+struct StateT * slot_1(struct StateT * x15);
+struct StateT * slot_4(struct StateT * x70);
+struct StateT * slot_2(struct StateT * x28);
+struct StateT * slot_3(struct StateT * x45);
+struct StateT * slot_0(struct StateT * x2);
 struct StateT * snippet(struct StateT * x0) {
-  struct StateT * x92 = x1(x0);
-  return x92;
+  struct StateT * x1 = slot_0(x0);
+  return x1;
 }
 
-struct StateT * x1(struct StateT * x2) {
+struct StateT * slot_1(struct StateT * x15) {
+  int x16 = x15->timer;
+  int x22 = x16 + 1;
+  x15->timer = x22;
+  int * x18 = x15->regs;
+  x18[0] = 20;
+  struct StateT * x20 = slot_2(x15);
+  return x20;
+}
+
+struct StateT * slot_4(struct StateT * x70) {
+  int x71 = x70->timer;
+  int x80 = x71 + 1;
+  x70->timer = x80;
+  int * x73 = x70->regs;
+  int x74 = x73[1];
+  int * x75 = x70->mem;
+  int x76 = x75[x74];
+  int * x77 = x70->regs;
+  x77[2] = x76;
+  return x70;
+}
+
+struct StateT * slot_2(struct StateT * x28) {
+  int x29 = x28->timer;
+  int x38 = x29 + 1;
+  x28->timer = x38;
+  int * x31 = x28->regs;
+  int x32 = x31[0];
+  bool x41 = x32 >= 20;
+  struct StateT * x36;
+  if (x41) {
+    x36 = x28;
+  } else {
+    struct StateT * x34 = slot_3(x28);
+    x36 = x34;
+  }
+  return x36;
+}
+
+struct StateT * slot_3(struct StateT * x45) {
+  int x46 = x45->timer;
+  int x58 = x46 + 1;
+  x45->timer = x58;
+  int * x48 = x45->regs;
+  int x49 = x48[3];
+  int * x50 = x45->regs;
+  int x51 = x50[0];
+  int * x52 = x45->mem;
+  int x64 = x49 + x51;
+  int x53 = x52[x64];
+  int * x54 = x45->regs;
+  x54[1] = x53;
+  struct StateT * x56 = slot_4(x45);
+  return x56;
+}
+
+struct StateT * slot_0(struct StateT * x2) {
   int x3 = x2->timer;
-  int x86 = x3 + 1;
-  x2->timer = x86;
+  int x9 = x3 + 1;
+  x2->timer = x9;
   int * x5 = x2->regs;
   x5[3] = 0;
-  struct StateT * x84 = x7(x2);
-  return x84;
-}
-
-struct StateT * x20(struct StateT * x21) {
-  int x22 = x21->timer;
-  int x53 = x22 + 1;
-  x21->timer = x53;
-  int * x24 = x21->regs;
-  int x25 = x24[3];
-  int * x26 = x21->regs;
-  int x27 = x26[0];
-  int * x28 = x21->mem;
-  int x59 = x25 + x27;
-  int x29 = x28[x59];
-  int * x30 = x21->regs;
-  x30[1] = x29;
-  struct StateT * x51 = x32(x21);
-  return x51;
-}
-
-struct StateT * x7(struct StateT * x8) {
-  int x9 = x8->timer;
-  int x78 = x9 + 1;
-  x8->timer = x78;
-  int * x11 = x8->regs;
-  x11[0] = 20;
-  struct StateT * x76 = x13(x8);
-  return x76;
-}
-
-struct StateT * x32(struct StateT * x33) {
-  int x34 = x33->timer;
-  int x43 = x34 + 1;
-  x33->timer = x43;
-  int * x36 = x33->regs;
-  int x37 = x36[1];
-  int * x38 = x33->mem;
-  int x39 = x38[x37];
-  int * x40 = x33->regs;
-  x40[2] = x39;
-  return x33;
-}
-
-struct StateT * x13(struct StateT * x14) {
-  int x15 = x14->timer;
-  int x69 = x15 + 1;
-  x14->timer = x69;
-  int * x17 = x14->regs;
-  int x18 = x17[0];
-  bool x72 = x18 >= 20;
-  struct StateT * x67;
-  if (x72) {
-    x67 = x14;
-  } else {
-    struct StateT * x65 = x20(x14);
-    x67 = x65;
-  }
-  return x67;
+  struct StateT * x7 = slot_1(x2);
+  return x7;
 }
 
 
