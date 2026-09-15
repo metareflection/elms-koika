@@ -13,17 +13,7 @@ trait SnapshotFunSuite extends AnyFunSuite {
   // global override to accept all diffs
   val overwriteCheckFiles = false
 
-  val prefix = "src/out/"
   val under: String
-
-  try {
-    val fullPrefix = this.prefix + this.under
-    val i = fullPrefix.lastIndexOf('/')
-    if (i != -1) then {
-      val path = Paths.get(fullPrefix.substring(0, i))
-      Files.createDirectories(path)
-    }
-  } catch { case e: IOException => () }
 
   def readFile(name: String): String = {
     try {
@@ -49,9 +39,10 @@ trait SnapshotFunSuite extends AnyFunSuite {
       label: String,
       actual: String,
       ext: String = "scala",
-      accept: Boolean = false
+      accept: Boolean = false,
+      root: String
   ) = {
-    val filePrefix = prefix + under + label
+    val filePrefix = root + under + label
     val checkName = filePrefix + ".check." + ext
     val actualName = filePrefix + ".actual." + ext
 

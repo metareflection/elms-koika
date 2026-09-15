@@ -50,20 +50,10 @@ abstract class GenericKoikaDriver[R <: Int: ValueOf, M <: Int: ValueOf, C <: Int
     "CACHE_LRU_SIZE" -> cache_size
   )
 
-  lazy val header: String = s"""
-${defines.map((k, v) => s"#define $k $v").mkString("\n")}
-#ifndef CBMC
-#define __CPROVER_assert(b,s) 0
-#define nondet_uint() 0
-#else
-int nondet_uint();
-#endif
-int bounded(int low, int high) {
-  int x = nondet_uint();
-  __CPROVER_assume(low <= x && x <= high);
-  return x;
-}
-"""
+  def header(prover: Prover): String =
+    s"""${defines.map((k, v) => s"#define $k $v").mkString("\n")}
+       |
+       |${prover.prelude}""".stripMargin
 
   val init: String
 
@@ -81,7 +71,9 @@ int bounded(int low, int high) {
       |    s2.mem[SECRET_OFFSET+i] = bounded(0, 20);
       |  }""".stripMargin
 
-  lazy val main: String =
+  // Takes the prover only so [Lockstepped] can, which needs it for the two
+  // helpers it declares. Nothing here does.
+  def main(prover: Prover): String =
     s"""int main(int argc, char* argv[]) {
        |  struct $stateT s1, s2;
        |  init(&s1);
@@ -90,20 +82,25 @@ int bounded(int low, int high) {
        |  $initialize_secret
        |  struct $stateT *s1_ = snippet(&s1);
        |  struct $stateT *s2_ = snippet(&s2);
-       |  __CPROVER_assert(s1_->timer==s2_->timer, "timing leak");
+       |  koika_assert(s1_->timer==s2_->timer, "timing leak");
        |  return 0;
        |}""".stripMargin
+
+  // Memoized, because [SnippetDriver.code] stages `snippet` into the builder
+  // as a side effect of rendering it and [render] now runs once per backend.
+  override lazy val code: String = super.code
 
   // [init] and [main] come after the generated code and not before it, because
   // `struct StateT` is now the generator's to declare and both of them
   // dereference one.
-  override def code =
-    s"""$header
+  def render(prover: Prover): String =
+    s"""${header(prover)}
+       |
        |/*****************************************
        |Emitting C Generated Code
        |*******************************************/
        |
-       |${super.code}
+       |$code
        |
        |/*****************************************
        |End of C Generated Code
@@ -111,5 +108,5 @@ int bounded(int low, int high) {
        |
        |$init
        |
-       |$main""".stripMargin
+       |${main(prover)}""".stripMargin
 }

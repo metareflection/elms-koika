@@ -4,6 +4,7 @@ import elms.prelude.*
 import elms.prelude.given
 
 import elms.koika.test.{KoikaSuite, Verdict}
+import elms.koika.test.common.Reach
 import elms.koika.test.common.{Cached, Predictive, Speculative}
 
 // `branchy.s`'s own driver. At file scope because it has its own memory: the
@@ -60,6 +61,9 @@ class RiscVBranchyTests extends KoikaSuite {
   // their own.
   val under = "riscv/"
 
+  // Every model but [naive] puts a cache in front of the twelve probes, and
+  // `runCache` forks three ways per load, so KLEE walks (3^12 + 1) / 2 paths
+  // and does not arrive. CBMC answers all four in under eight seconds.
   test("riscv naive branchy") {
     val snippet = new BranchyDriver {}
     check("naive/branchy", snippet, Verdict.Clean)
@@ -67,16 +71,16 @@ class RiscVBranchyTests extends KoikaSuite {
 
   test("riscv cache branchy") {
     val snippet = new BranchyDriver with Cached {}
-    check("cache/branchy", snippet, Verdict.Clean)
+    check("cache/branchy", snippet, Verdict.Clean, klee = Reach.LikelyTimeout)
   }
 
   test("riscv spec branchy") {
     val snippet = new BranchyDriver with Speculative {}
-    check("speculative/branchy", snippet, Verdict.Clean)
+    check("speculative/branchy", snippet, Verdict.Clean, klee = Reach.LikelyTimeout)
   }
 
   test("riscv predictive branchy") {
     val snippet = new BranchyDriver with Predictive {}
-    check("predictive/branchy", snippet, Verdict.Clean)
+    check("predictive/branchy", snippet, Verdict.Clean, klee = Reach.LikelyTimeout)
   }
 }

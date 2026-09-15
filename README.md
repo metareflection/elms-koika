@@ -33,12 +33,15 @@ That wants either `clang`, whose integrated assembler covers RISC-V and so needs
 no cross toolchain, or a `riscv{64,32}-*-gcc`. The `.o` files are not checked in,
 and a suite that cannot find one aborts with a message naming the script.
 
-Running `sbt test` from the root will run all the tests,
-generating `.actual` files and checking them against the `.check` files in [`src/out`](src/out).
+Running `sbt test` from the root will run all the tests, generating `.actual`
+files and checking them against the `.check` files under
+[`src/out/cbmc`](src/out/cbmc) and [`src/out/klee`](src/out/klee), one tree
+per backend.
 Failing tests will leave the generated `.actual` files for inspection.
 Snapshot files mostly follow the naming convention of `[testfile]/[suffix].check.c`.
 
-The examples are verified using [CBMC](#CBMC) as follows:
+The examples are verified twice, once with [CBMC](#CBMC) and once with
+[KLEE](#KLEE). CBMC first.
 
 `cbmc -DCBMC --verbosity 4 --slice-formula --unwind <N> --refine --compact-trace --no-standard-checks <file.c>`
 
@@ -82,9 +85,9 @@ test("riscv naive spectre") {
 `Verdict` is a required argument, so a new demo does not compile until somebody
 has said what should happen to it. `check` writes the claim into the first line
 of the generated C, which makes it part of the snapshot `sbt test` pins, and
-[`verify`](src/out/verify) reads it back out and runs the checker:
+[`verify`](src/out/cbmc/verify) reads it back out and runs the checker:
 
-`./src/out/verify [--certify] [file.c ...]`
+`./src/out/cbmc/verify [--certify] [file.c ...]`
 
 With no arguments it takes every snapshot in the tree, 41 of them in 58 seconds.
 It prints one line per file and exits non-zero if CBMC says anything other than
@@ -92,9 +95,9 @@ what the file claims, so a model that stops detecting what it used to detect is
 a failing run rather than a stale comment. The claims themselves are greppable
 without running anything:
 
-`head -qn1 src/out/**/*.check.c`
+`head -qn1 src/out/cbmc/**/*.check.c`
 
-The tree under [`src/out/lockstep`](src/out/lockstep) is the same demos answered
+The tree under [`src/out/cbmc/lockstep`](src/out/cbmc/lockstep) is the same demos answered
 a different way. `Lockstep` rewrites a residue into a product of itself with
 itself, so one run of one copy of the control flow carries both states and the
 timers are compared on entry to every slot rather than once at the end. Every
@@ -136,6 +139,79 @@ solver, where `salsa20` spends 4.3 of its 4.8 in symbolic execution. Every other
 is cheap for the wrong reason, `constant_time` because it has three branches and
 `salsa20` because it has none, so neither says anything about a checker that has
 to rule out a path space rather than exhibit one member of it.
+
+## Checking with KLEE
+
+`src/out/klee` is the same 41 residues checked by [KLEE](#KLEE) instead, and
+[`src/out/klee/verify`](src/out/klee/verify) is its script:
+
+`./src/out/klee/verify [--slow | --only-slow] [file.c ...]`
+
+Both trees agree, 41 verdicts for 41, model sensitivity included. That agreement
+is the point of having two: a residue really is an ordinary C program, and
+nothing about the claim depends on which checker reads it.
+
+Only the prelude differs between a pair of snapshots, so
+
+`diff src/out/{cbmc,klee}/riscv/cache/2ctr.check.c`
+
+changes thirteen lines, and so does every one of the other 40 pairs.
+`Prover.intrinsics` is that block. The residue, `init` and `main` are one text
+spelled in terms of `koika_assert`,
+`koika_assume` and `koika_draw`, which each backend defines its own way and a
+file compiled with neither `-DCBMC` nor `-DKLEE` stubs out so it can still be
+run natively. Adding a third backend is adding a case to
+[`Prover`](src/test/scala/elms/common/Prover.scala).
+
+What does not carry over is how a verdict is read. CBMC exits 0 or 10; KLEE
+exits 0 either way and writes `*.assert.err` into its output directory, so a
+verdict there takes three conditions rather than one. Any error file is a leak.
+No error file is only clean if the run also finished, which is
+`completed paths > 0` with `partially completed paths == 0` and no
+`halting execution` on stderr. Drop the last two and an exploration that ran out
+of time reports exactly like a proof.
+
+That case is real and four files in the tree are it. `runCache` is a two-way LRU
+with three arms, so it forks threefold per symbolic load, and `branchy`'s twelve
+probes are (3^12 + 1) / 2 paths. CBMC answers each in under eight seconds and
+KLEE does not arrive, so those tests say so where they call `check`:
+
+```scala
+check("cache/branchy", snippet, Verdict.Clean, klee = Reach.LikelyTimeout)
+```
+
+which writes `clean likely-timeout` onto the line. The verdict is still the
+program's, and a run that somehow finishes has to produce it; what
+`LikelyTimeout` adds is that running out of budget is also a pass. Demanding the
+timeout would turn a faster solver into a failing test, and demanding the
+verdict asks KLEE for something it cannot give here, so either outcome is
+accepted and a wrong one still is not. `naive/branchy` has no cache in front of
+those probes, walks one path, and verifies.
+
+Each of those four costs a full budget, so a default run skips them and says
+which it skipped:
+
+```
+skip     src/out/klee/riscv/cache/branchy.check.c (likely-timeout; pass --slow to run it)
+all 37 agree (4 skipped)
+```
+
+`--slow` adds them back, and `--only-slow` runs nothing else, which is the one
+to reach for after touching `Lockstep` or the cache model.
+
+KLEE reads bitcode, and bitcode only loads into a KLEE built against the same
+LLVM, so the script compiles and checks inside a pinned
+`docker.io/klee/klee:3.1` under `podman` rather than pairing the host's `clang`
+with whatever `klee` is nearby. `KOIKA_KLEE_NATIVE=1` uses a `klee` and `clang`
+from `PATH` instead, and `KOIKA_KLEE_IMAGE` names a different image.
+
+Which backend wins is predictable from the model rather than from the program,
+and the two do not overlap much. A `naive` residue never branches on a load, so
+KLEE walks one path and beats CBMC on a large one: `fact/naive/salsa20` is 0.68s
+against 4.53s, because CBMC's cost is a formula over 277 instructions and 6536
+generated properties while KLEE just runs it. Put a cache in front of a symbolic
+load and it reverses, from 4x behind on a five-path space to not answering at
+all. CBMC finishes every residue here; KLEE finishes 37 of 41.
 
 ## The FaCT suite
 
@@ -189,3 +265,14 @@ We use the C Bounded Model Checker (CBMC) as an off-the-shelf analyzer since our
 - [original CMBC website](https://www.cprover.org/cbmc/)
 - [a maintained implementation](https://github.com/diffblue/cbmc) with [latest releases](https://github.com/diffblue/cbmc/releases)
 - [original manual](http://www.cprover.org/cprover-manual/) also in [PDF](https://www.cprover.org/cbmc/doc/manual.pdf)
+
+## KLEE
+
+KLEE is a symbolic execution engine over LLVM bitcode, and the second
+off-the-shelf analyzer the residues are checked with. It answers the same
+questions CBMC does and charges for them differently, per path rather than per
+formula, which is what makes having both worth the plumbing.
+
+- [website](https://klee-se.org/)
+- [the repository](https://github.com/klee/klee) and its [releases](https://github.com/klee/klee/releases)
+- [the tutorials](https://klee-se.org/tutorials/), of which the first covers `klee_make_symbolic` and `klee_assume`

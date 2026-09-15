@@ -3,10 +3,10 @@ package elms.koika.test
 import elms.prelude.*
 import elms.prelude.given
 
-import elms.koika.test.common.{Cached, Lockstepped}
+import elms.koika.test.common.{Cached, Lockstepped, Reach}
 import elms.koika.test.riscv.{BranchyDriver, CompiledDriver, RiscVDriver}
 
-// The same demos as `src/out/riscv`, checked by [Lockstep] instead of by
+// The same demos as `src/out/*/riscv`, checked by [Lockstep] instead of by
 // self-composition. Every verdict here has to match the one next door, because
 // the two are answering the same question about the same program.
 //
@@ -56,9 +56,14 @@ class LockstepSuite extends KoikaSuite {
 
   // The demo the pass exists for: clean, and solver-bound rather than
   // symex-bound, so the assumptions have a path space to cut down.
+  //
+  // Cutting it is not the same as clearing it. The pass gets KLEE from zero
+  // completed paths to a few hundred of 265,721, because `lockstep_assume`
+  // prunes a solver's formula and KLEE has already paid for the fork by the
+  // time it runs.
   test("lockstep riscv cache branchy") {
     val snippet = new BranchyDriver with Cached with Lockstepped[32, 32, 10] {}
-    check("cache/branchy", snippet, Verdict.Clean)
+    check("cache/branchy", snippet, Verdict.Clean, klee = Reach.LikelyTimeout)
   }
 
   test("lockstep riscv compiled naive") {

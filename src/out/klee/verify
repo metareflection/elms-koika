@@ -1,0 +1,195 @@
+#!/usr/bin/env zsh
+
+# usage: ./verify [--slow | --only-slow] [files...]
+#
+# Checks every KLEE residue against the verdict its test declared. With no
+# arguments that is every snapshot under this directory. Exits non-zero when any
+# file disagrees, so this is a test and not a report.
+#
+# A file whose line says `likely-timeout` is one the tree expects KLEE not to
+# finish, and those are skipped unless you pass --slow, or --only-slow to run
+# nothing else. Skipped files are printed, so a default run still says what it
+# did not look at. Four files are in that state and each costs a full budget,
+# which is the whole reason for the flag.
+#
+# The claim lives in the file, on the `// verify:` line that `KoikaSuite.check`
+# writes at the top of it, same as `src/out/cbmc/verify` reads. What differs is
+# the bound: CBMC gets a loop unwinding depth, KLEE gets wall-clock, because
+# KLEE unrolls symbolically until every path terminates and so has no depth to
+# cap.
+#
+# The residue is the same text here as it is under `src/out/cbmc`. Only the
+# prelude differs, which is `Prover.intrinsics` and nothing else, so
+#
+#   diff src/out/{cbmc,klee}/riscv/cache/2ctr.check.c
+#
+# should show that block and no more.
+
+# Reading a verdict out of KLEE takes three conditions, and the obvious two are
+# not enough.
+#
+# KLEE exits 0 whether or not an assertion fired and writes `*.assert.err` into
+# its output directory instead, so the error files are condition one. Condition
+# two is that the run actually finished: `completed paths > 0` with
+# `partially completed paths == 0`. Condition three is that KLEE did not stop
+# early, which its stderr says and nothing else does.
+#
+# Two and three are what CBMC does not need. A short `--unwind` shows up under
+# `src/out/cbmc/verify --certify` as a failed unwinding assertion, so CBMC's
+# incompleteness is a bound that can be checked. KLEE's is an exploration that
+# stops, and a stopped run exits 0 with no error files, which is byte-identical
+# to a residue it genuinely verified. `riscv/cache/branchy` is the live example:
+# 265,721 paths, none of them walked, and nothing in the exit status says so.
+#
+# Condition two only means anything once one is empty, because an error
+# termination counts as a partial path too. `shortcircuit` reports twenty
+# partial paths alongside one real error and is sound.
+#
+# A `likely-timeout` file passes on either its declared verdict or `unknown`.
+# Demanding `unknown` would turn a faster solver into a failing test, and
+# demanding the verdict is the thing KLEE cannot deliver here. Either way a
+# finishing run still has to agree, so the claim never gets weaker than what
+# CBMC already pinned next door.
+
+here=${0:a:h}
+
+slow=0
+only_slow=0
+while [[ $1 == --* ]]; do
+    case $1 in
+        --slow)      slow=1 ;;
+        --only-slow) slow=1; only_slow=1 ;;
+        *) print -u2 -- "unknown flag $1"; exit 2 ;;
+    esac
+    shift
+done
+
+# KLEE reads bitcode, and bitcode only loads into a KLEE built against the same
+# LLVM. So the clang that compiles a file has to be the one sitting beside the
+# klee that reads it, which is why this does not reach for the host's.
+#
+# The pinned image is the default because it makes that pairing somebody else's
+# problem. Set KOIKA_KLEE_NATIVE=1 to use a `klee` and `clang` already on PATH,
+# which is on you to have built against matching versions.
+image=${KOIKA_KLEE_IMAGE:-docker.io/klee/klee:3.1}
+native=${KOIKA_KLEE_NATIVE:-0}
+
+# Compile [1]/subject.c and check it with a [2] second budget, leaving
+# `klee-out` beside it. Both arms write the same tree, so everything downstream
+# reads one shape.
+check_one() {
+    local dir=$1 budget=$2
+    if (( native )); then
+        clang -emit-llvm -c -g -O0 -Xclang -disable-O0-optnone -DKLEE \
+              $dir/subject.c -o $dir/subject.bc >$dir/cc.log 2>&1 || return 1
+        klee --max-time=${budget}s --output-dir=$dir/klee-out \
+             $dir/subject.bc >$dir/klee.log 2>&1
+    else
+        podman run --rm --user root -v $dir:/work:rw,Z -w /work $image bash -c "
+            export PATH=/home/klee/klee_build/bin:/tmp/llvm-130-install_O_D_A/bin:\$PATH
+            clang -I /home/klee/klee_src/include -emit-llvm -c -g -O0 \
+                  -Xclang -disable-O0-optnone -DKLEE \
+                  subject.c -o subject.bc >cc.log 2>&1 || exit 1
+            klee --max-time=${budget}s --output-dir=/work/klee-out \
+                 subject.bc >klee.log 2>&1
+        " >/dev/null 2>&1
+    fi
+    # Not the exit status of either tool. clang's is the only one that means
+    # anything, and a failed compile is the `return 1` above.
+    [[ -f $dir/klee-out/info ]]
+}
+
+# clean, leak or unknown, by the three conditions above.
+outcome() {
+    local dir=$1
+    local info=$dir/klee-out/info
+
+    local errs=($dir/klee-out/*.err(N))
+    if (( $#errs )); then
+        print leak
+        return
+    fi
+
+    local completed=$(sed -n 's/.*completed paths = \([0-9]*\)/\1/p' $info | head -1)
+    local partial=$(sed -n 's/.*partially completed paths = \([0-9]*\)/\1/p' $info)
+    : ${completed:=0} ${partial:=0}
+
+    if grep -qi 'halting execution' $dir/klee.log || (( partial > 0 || completed == 0 )); then
+        print unknown
+    else
+        print clean
+    fi
+}
+
+files=($@)
+(( $#files )) || files=(${here}/**/*.check.c(N))
+
+if (( ! $#files )); then
+    print -- "no snapshots under ${here#$PWD/} (generate them with \`sbt test\`)"
+    exit 1
+fi
+
+typeset -i failures=0 skipped=0
+work=$(mktemp -d)
+trap "rm -rf $work" EXIT
+
+for file in $files; do
+    name=${file#$PWD/}
+    expected=$(sed -n '1s|^// verify: \([a-z]*\).*|\1|p' $file)
+    if [[ -z $expected ]]; then
+        print -- "no-claim $name (regenerate it with \`sbt test\`)"
+        (( failures++ ))
+        continue
+    fi
+
+    # A demo the tree expects KLEE not to finish. Both outcomes pass: the
+    # verdict if it somehow gets there, `unknown` if it runs out of budget.
+    if sed -n '1p' $file | grep -q likely-timeout; then
+        if (( ! slow )); then
+            print -- "skip     $name (likely-timeout; pass --slow to run it)"
+            (( skipped++ ))
+            continue
+        fi
+        alternative=unknown
+    else
+        if (( only_slow )); then
+            (( skipped++ ))
+            continue
+        fi
+        alternative=$expected
+    fi
+
+    budget=$(sed -n '1s|.*\[budget \([0-9]*\)s\].*|\1|p' $file)
+    : ${budget:=120}
+
+    dir=$work/run
+    rm -rf $dir && mkdir -p $dir
+    cp $file $dir/subject.c
+
+    if ! check_one $dir $budget; then
+        print -- "ERROR    $name did not compile or KLEE did not start"
+        cat $dir/cc.log $dir/klee.log 2>/dev/null
+        (( failures++ ))
+        continue
+    fi
+
+    actual=$(outcome $dir)
+
+    if [[ $actual == $expected || $actual == $alternative ]]; then
+        print -- "ok       $name ($actual, ${budget}s)"
+    else
+        print -- "MISMATCH $name: claims $expected, KLEE says $actual"
+        cat $dir/klee.log
+        (( failures++ ))
+    fi
+done
+
+note=""
+(( skipped )) && note=" ($skipped skipped)"
+
+if (( failures )); then
+    print -- "$failures of $#files disagree$note"
+    exit 1
+fi
+
+print -- "all $(( $#files - skipped )) agree$note"

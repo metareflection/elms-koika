@@ -19,10 +19,12 @@ trait Lockstepped[R <: Int: ValueOf, M <: Int: ValueOf, C <: Int: ValueOf]
     Lockstep.run(state, clock = "timer")(super.extract())
 
   // Declared by the generated code, defined here, because a `#define` would be
-  // macro-expanded into the prototype `CCodegen` emits for it.
-  override lazy val main: String =
-    s"""void lockstep_assert(bool c) { __CPROVER_assert(c, "lockstep drift"); }
-       |void lockstep_assume(bool c) { __CPROVER_assume(c); }
+  // macro-expanded into the prototype `CCodegen` emits for it. `koika_assert`
+  // is a macro and so has to be wrapped in a function rather than named
+  // directly at the call sites [Lockstep] emits.
+  override def main(prover: Prover): String =
+    s"""void lockstep_assert(bool c) { koika_assert(c, "lockstep drift"); }
+       |void lockstep_assume(bool c) { koika_assume(c); }
        |
        |int main(int argc, char* argv[]) {
        |  struct $stateT s1, s2;
@@ -32,7 +34,7 @@ trait Lockstepped[R <: Int: ValueOf, M <: Int: ValueOf, C <: Int: ValueOf]
        |  $initialize_secret
        |  struct ${paired.name} p = { .a = &s1, .b = &s2 };
        |  struct ${paired.name} *p_ = snippet(&p);
-       |  __CPROVER_assert(p_->a->timer==p_->b->timer, "timing leak");
+       |  koika_assert(p_->a->timer==p_->b->timer, "timing leak");
        |  return 0;
        |}""".stripMargin
 }
