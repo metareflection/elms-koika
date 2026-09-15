@@ -1,4 +1,4 @@
-// verify: leak (CBMC should report VERIFICATION FAILED)
+// verify: leak (CBMC should report VERIFICATION FAILED) [unwind 31]
 
 #define NUM_REGS 8
 #define MEM_SIZE 30

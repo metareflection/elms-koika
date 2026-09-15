@@ -27,27 +27,27 @@ class RiscVNaiveTests extends KoikaSuite {
     val snippet = new NaiveDriver {
       override val prog = demo("shortcircuit")
     }
-    check("shortcircuit", snippet.code, Verdict.Leak)
+    check("shortcircuit", snippet, Verdict.Leak)
   }
 
   test("riscv naive 2ctr") {
     val snippet = new NaiveDriver {
       override val prog = demo("2ctr")
     }
-    check("2ctr", snippet.code, Verdict.Clean)
+    check("2ctr", snippet, Verdict.Clean)
   }
 
   test("riscv naive spectre") {
     val snippet = new NaiveDriver {
       override val prog = demo("spectre")
     }
-    check("spectre", snippet.code, Verdict.Clean)
+    check("spectre", snippet, Verdict.Clean)
   }
 
   test("riscv naive constant_time") {
     val snippet = new NaiveDriver {
       override val prog = demo("constant_time")
     }
-    check("constant_time", snippet.code, Verdict.Clean)
+    check("constant_time", snippet, Verdict.Clean)
   }
 }

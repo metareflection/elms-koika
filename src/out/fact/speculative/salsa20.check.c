@@ -1,4 +1,4 @@
-// verify: clean (CBMC should report VERIFICATION SUCCESSFUL)
+// verify: clean (CBMC should report VERIFICATION SUCCESSFUL) [unwind 65]
 
 #define NUM_REGS 32
 #define MEM_SIZE 64

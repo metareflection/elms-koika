@@ -27,20 +27,20 @@ class NaiveTests extends KoikaSuite {
     val snippet = new NaiveDriver {
       override val prog = NanoRiscDemos.build_shortcircuit_demo(secret_offset, 4)
     }
-    check("shortcircuit", snippet.code, Verdict.Leak)
+    check("shortcircuit", snippet, Verdict.Leak)
   }
 
   test("nanorisc naive 2ctr") {
     val snippet = new NaiveDriver {
       override val prog = NanoRiscDemos.spec_small
     }
-    check("2ctr", snippet.code, Verdict.Clean)
+    check("2ctr", snippet, Verdict.Clean)
   }
 
   test("nanorisc naive spectre") {
     val snippet = new NaiveDriver {
       override val prog = NanoRiscDemos.build_spectre_demo(secret_offset)
     }
-    check("spectre", snippet.code, Verdict.Clean)
+    check("spectre", snippet, Verdict.Clean)
   }
 }

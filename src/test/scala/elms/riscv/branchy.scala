@@ -62,21 +62,21 @@ class RiscVBranchyTests extends KoikaSuite {
 
   test("riscv naive branchy") {
     val snippet = new BranchyDriver {}
-    check("naive/branchy", snippet.code, Verdict.Clean)
+    check("naive/branchy", snippet, Verdict.Clean)
   }
 
   test("riscv cache branchy") {
     val snippet = new BranchyDriver with Cached {}
-    check("cache/branchy", snippet.code, Verdict.Clean)
+    check("cache/branchy", snippet, Verdict.Clean)
   }
 
   test("riscv spec branchy") {
     val snippet = new BranchyDriver with Speculative {}
-    check("speculative/branchy", snippet.code, Verdict.Clean)
+    check("speculative/branchy", snippet, Verdict.Clean)
   }
 
   test("riscv predictive branchy") {
     val snippet = new BranchyDriver with Predictive {}
-    check("predictive/branchy", snippet.code, Verdict.Clean)
+    check("predictive/branchy", snippet, Verdict.Clean)
   }
 }

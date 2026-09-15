@@ -3,6 +3,8 @@ package elms.koika.test
 import elms.prelude.*
 import elms.prelude.given
 
+import elms.koika.test.common.GenericKoikaDriver
+
 // What CBMC should say about a residue program.
 //
 // Stated where the test is and written into the snapshot, so `src/out/verify`
@@ -15,7 +17,8 @@ enum Verdict derives CanEqual {
   // The timing assertion is violated, and CBMC reports it.
   case Leak
 
-  // First line of every generated file, and the only part `verify` parses.
+  // First line of every generated file, along with the unwind bound
+  // [KoikaSuite.check] appends. Both are what `verify` parses.
   def marker: String = this match {
     case Clean => "// verify: clean (CBMC should report VERIFICATION SUCCESSFUL)"
     case Leak  => "// verify: leak (CBMC should report VERIFICATION FAILED)"
@@ -25,6 +28,9 @@ enum Verdict derives CanEqual {
 abstract class KoikaSuite extends SnapshotFunSuite {
   // Every snapshot in this project is a CBMC input, so [expect] is required
   // rather than defaulted. A demo nobody has made a claim about is not a test.
-  def check(label: String, actual: String, expect: Verdict): Unit =
-    snapshot(label, s"${expect.marker}\n$actual", "c")
+  //
+  // Takes the driver and not its [code], because the bound `verify` runs at
+  // comes off the same object as the program it runs on.
+  def check(label: String, snippet: GenericKoikaDriver[?, ?, ?], expect: Verdict): Unit =
+    snapshot(label, s"${expect.marker} [unwind ${snippet.unwind}]\n${snippet.code}", "c")
 }

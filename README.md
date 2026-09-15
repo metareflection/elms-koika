@@ -40,15 +40,30 @@ Snapshot files mostly follow the naming convention of `[testfile]/[suffix].check
 
 The examples are verified using [CBMC](#CBMC) as follows:
 
-`cbmc -DCBMC --verbosity 4 --slice-formula --unwind 1000 --refine --compact-trace --property main.assertion.1 <file.c>`
+`cbmc -DCBMC --verbosity 4 --slice-formula --unwind <N> --refine --compact-trace --no-standard-checks <file.c>`
 
-`main.assertion.1` is the timing leak. Naming it is what keeps CBMC off the
-automatic properties it generates for the residue, of which
-`fact/naive/salsa20.check.c` has 6536: pointer dereference checks, overflow,
-array bounds, undefined shift. Those ask about the generated C rather than about
-the program it models, and on anything past the twenty-instruction demos they
-are the entire cost. That file answers in five seconds with the flag and had not
-finished in seventy-two minutes without it. No verdict moves either way.
+`--no-standard-checks` leaves CBMC nothing to check but the residue's own
+assertions. Without it, it also checks every automatic property it generates,
+which on `fact/naive/salsa20.check.c` is 6536 of them: pointer dereference
+checks, overflow, array bounds, undefined shift. Those ask about the generated
+C rather than about the program it models, and on anything past the
+twenty-instruction demos they are the entire cost. That file answers in four and
+a half seconds with the flag and had not finished in seventy-two minutes
+without. No verdict moves either way.
+
+`<N>` comes out of the file. `GenericKoikaDriver.unwind` is
+`max(num_regs, mem_size, cache_size, secret_size) + 1`, which is every loop in
+the hand-written C around the residue plus the exit test, and a demo whose own
+recursion runs deeper than that overrides it. 33 for the RISC-V demos and 65 for
+the FaCT ports, where the tree used to run everything at 1000 and pay 172
+seconds for `compiled/naive` alone.
+
+Falling short does not make a leak disappear, it invents one. The initializer
+loops in `init` are the first thing a low bound cuts, and two states left
+half-written disagree on garbage, which is indistinguishable from a real finding
+by exit code. So `verify --certify` re-runs every file with
+`--unwinding-assertions` and fails on any bound that does not cover what it
+claims to.
 
 Most `.check.c` files are not expected to verify. They are demonstrations that
 CBMC can find a vulnerability, so the leak is the result and a clean run would
@@ -60,7 +75,7 @@ test("riscv naive spectre") {
   val snippet = new NaiveDriver {
     override val prog = demo("spectre")
   }
-  check("spectre", snippet.code, Verdict.Clean)
+  check("spectre", snippet, Verdict.Clean)
 }
 ```
 
@@ -69,13 +84,13 @@ has said what should happen to it. `check` writes the claim into the first line
 of the generated C, which makes it part of the snapshot `sbt test` pins, and
 [`verify`](src/out/verify) reads it back out and runs the checker:
 
-`./src/out/verify [file.c ...]`
+`./src/out/verify [--certify] [file.c ...]`
 
-With no arguments it takes every snapshot in the tree. It prints one line per
-file and exits non-zero if CBMC says anything other than what the file claims,
-so a model that stops detecting what it used to detect is a failing run rather
-than a stale comment. The claims themselves are greppable without running
-anything:
+With no arguments it takes every snapshot in the tree, 41 of them in 58 seconds.
+It prints one line per file and exits non-zero if CBMC says anything other than
+what the file claims, so a model that stops detecting what it used to detect is
+a failing run rather than a stale comment. The claims themselves are greppable
+without running anything:
 
 `head -qn1 src/out/**/*.check.c`
 
@@ -136,7 +151,7 @@ so in under twenty instructions; this is 277, and CBMC clears all four models:
 
 | naive | cache | speculative | predictive |
 |---|---|---|---|
-| 5.0s | 6.1s | 6.2s | 8.0s |
+| 4.6s | 5.2s | 5.2s | 6.5s |
 
 Two things it needs that the assembly demos do not. It is the first demo that
 spills, so `init` points `sp` at the top of `mem` rather than leaving it at 0,

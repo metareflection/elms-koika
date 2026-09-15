@@ -23,7 +23,7 @@ class FactNaiveTests extends KoikaSuite {
       val snippet = new FactDriver(p) {
         override val init = Init.naive(stateT)
       }
-      check(p.name, snippet.code, p.expect)
+      check(p.name, snippet, p.expect)
     }
   }
 }
@@ -37,7 +37,7 @@ class FactCacheTests extends KoikaSuite {
       val snippet = new FactDriver(p) with Cached {
         override val init = Init.cache(stateT)
       }
-      check(p.name, snippet.code, p.expect)
+      check(p.name, snippet, p.expect)
     }
   }
 }
@@ -51,7 +51,7 @@ class FactSpecTests extends KoikaSuite {
       val snippet = new FactDriver(p) with Speculative {
         override val init = Init.speculative(stateT)
       }
-      check(p.name, snippet.code, p.expect)
+      check(p.name, snippet, p.expect)
     }
   }
 }
@@ -65,7 +65,7 @@ class FactPredictiveTests extends KoikaSuite {
       val snippet = new FactDriver(p) with Predictive {
         override val init = Init.speculative(stateT)
       }
-      check(p.name, snippet.code, p.expect)
+      check(p.name, snippet, p.expect)
     }
   }
 }

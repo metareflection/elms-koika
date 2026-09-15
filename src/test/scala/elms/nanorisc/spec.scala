@@ -31,20 +31,20 @@ class SpecTests extends KoikaSuite {
     val snippet = new SpecDriver {
       override val prog = NanoRiscDemos.build_shortcircuit_demo(secret_offset, 4)
     }
-    check("shortcircuit", snippet.code, Verdict.Leak)
+    check("shortcircuit", snippet, Verdict.Leak)
   }
 
   test("nanorisc spec 2ctr") {
     val snippet = new SpecDriver {
       override val prog = NanoRiscDemos.spec_small
     }
-    check("2ctr", snippet.code, Verdict.Leak)
+    check("2ctr", snippet, Verdict.Leak)
   }
 
   test("nanorisc spec spectre") {
     val snippet = new SpecDriver {
       override val prog = NanoRiscDemos.build_spectre_demo(secret_offset)
     }
-    check("spectre", snippet.code, Verdict.Leak)
+    check("spectre", snippet, Verdict.Leak)
   }
 }

@@ -1,6 +1,6 @@
 #!/usr/bin/env zsh
 
-# usage: ./verify [files...]
+# usage: ./verify [--certify] [files...]
 #
 # Checks every residue against the verdict its test declared. With no arguments
 # that is every snapshot under this directory. Exits non-zero when any file
@@ -9,22 +9,38 @@
 # The claim lives in the file, on the `// verify:` line that `KoikaSuite.check`
 # writes at the top of it. So the thing this script compares against is the same
 # thing `sbt test` pins, and a demo cannot acquire a verdict by having someone
-# write one in a comment.
+# write one in a comment. That line carries the unwind bound too, out of
+# `GenericKoikaDriver.unwind`.
 #
-# `--property main.assertion.1` is the timing leak and nothing else.
+# `--no-standard-checks` leaves CBMC nothing to check but the residue's own
+# assertions.
 #
-# Without it CBMC also checks every automatic property it generates for the
-# residue, which on `fact/*/salsa20.check.c` is 6537 of them: 6048 pointer
-# dereference checks, 445 overflow, 11 array bounds, 32 undefined shift, and
-# then ours. Those are questions about the generated C rather than about the
-# program it models, and they are the entire cost. Naive Salsa20 answers in five
-# seconds this way and had not finished in seventy-two minutes without it.
+# Without it CBMC also checks every automatic property it generates, which on
+# `fact/*/salsa20.check.c` is 6536 of them: 6048 pointer dereference checks, 445
+# overflow, 11 array bounds and 32 undefined shift. Those are questions about
+# the generated C rather than about the program it models, and they are the
+# entire cost. Naive Salsa20 answers in four and a half seconds this way and had
+# not finished in seventy-two minutes without.
 #
-# Verdicts do not move. The demos that passed still pass and the ones that
-# detect a leak still fail; on a twenty-instruction demo the other 6536 checks
-# were just cheap enough not to notice.
+# Naming the one property instead, which is what this used to do, is a hair
+# slower and no longer correct: a `lockstep/` residue asserts once per slot, and
+# any of them is the leak.
+#
+# --certify re-runs each file with `--unwinding-assertions` and reports whether
+# its declared bound actually covers every loop and every recursion in it. A
+# bound that falls short does not make a leak disappear, it invents one: the
+# initializer loops in `init` are the first thing to get cut, and two states
+# left half-written disagree on garbage. Which also means a `clean` verdict at
+# an uncertified bound is a statement about a program CBMC never finished
+# looking at.
 
 here=${0:a:h}
+
+certify=0
+if [[ $1 == --certify ]]; then
+    certify=1
+    shift
+fi
 
 files=($@)
 (( $#files )) || files=(${here}/**/*.check.c(N))
@@ -41,8 +57,26 @@ for file in $files; do
         continue
     fi
 
-    cbmc -DCBMC --verbosity 4 --slice-formula --unwind 1000 --refine \
-         --compact-trace --property main.assertion.1 $file >$log 2>&1
+    # Absent for a snapshot written before the bound was part of the line.
+    unwind=$(sed -n '1s|.*\[unwind \([0-9]*\)\].*|\1|p' $file)
+    : ${unwind:=1000}
+
+    if (( certify )); then
+        cbmc -DCBMC --verbosity 4 --slice-formula --unwind $unwind \
+             --unwinding-assertions --no-standard-checks $file >$log 2>&1
+        # Not the exit code: a leak file exits 10 whether or not the bound holds.
+        short=$(grep -c 'unwinding assertion.*FAILURE' $log)
+        if (( short == 0 )); then
+            print -- "ok       $name (unwind $unwind covers it)"
+        else
+            print -- "SHORT    $name: unwind $unwind cuts $short loop(s) off"
+            (( failures++ ))
+        fi
+        continue
+    fi
+
+    cbmc -DCBMC --verbosity 4 --slice-formula --unwind $unwind --refine \
+         --compact-trace --no-standard-checks $file >$log 2>&1
     case $? in
         0)  actual=clean ;;
         10) actual=leak ;;

@@ -30,20 +30,20 @@ class CacheTests extends KoikaSuite {
     val snippet = new CacheDriver {
       override val prog = NanoRiscDemos.build_shortcircuit_demo(secret_offset, 4)
     }
-    check("shortcircuit", snippet.code, Verdict.Leak)
+    check("shortcircuit", snippet, Verdict.Leak)
   }
 
   test("nanorisc cache 2ctr") {
     val snippet = new CacheDriver {
       override val prog = NanoRiscDemos.spec_small
     }
-    check("2ctr", snippet.code, Verdict.Leak)
+    check("2ctr", snippet, Verdict.Leak)
   }
 
   test("nanorisc cache spectre") {
     val snippet = new CacheDriver {
       override val prog = NanoRiscDemos.build_spectre_demo(secret_offset)
     }
-    check("spectre", snippet.code, Verdict.Clean)
+    check("spectre", snippet, Verdict.Clean)
   }
 }

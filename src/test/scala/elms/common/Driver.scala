@@ -30,6 +30,15 @@ abstract class GenericKoikaDriver[R <: Int: ValueOf, M <: Int: ValueOf, C <: Int
 
   val stateT: String = "StateT"
 
+  // What `--unwind` has to clear before the residue's own recursion is even the
+  // question. Every loop in the hand-written C around the residue counts to one
+  // of these four, and CBMC wants the exit test as well as the body.
+  //
+  // Fall short and a `clean` verdict is a statement about a program CBMC never
+  // finished looking at, which is why `verify --certify` exists. A demo whose
+  // recursion runs deeper than its loops overrides this.
+  def unwind: Int = Seq(num_regs, mem_size, cache_size, secret_size).max + 1
+
   // The struct itself comes out of the generator, which reads the same three
   // lengths off [State]. These are for the hand-written C around it. A model
   // that needs state of its own appends here.
