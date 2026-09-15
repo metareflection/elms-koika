@@ -92,11 +92,22 @@ blank is `cmp` under cache, which is a suite nobody has written.
 | `constant_time` | clean | clean | clean | clean |
 | `cmp` | leak | | leak | leak |
 | `salsa20` | clean | clean | clean | clean |
+| `branchy` | clean | clean | clean | clean |
 
 Reading across a row is the tower. No model loses a leak the one to its left
 could see, and `2ctr` and `spectre` are where it starts seeing more: `2ctr`
 needs a cache before the second load's address can cost anything, and `spectre`
 needs speculation before that load happens at all.
+
+`branchy` is the odd one out and is RISC-V only, because it indexes `mem` with
+five bits and so wants an array of exactly 32 words where every other demo here
+runs on 30. It is a walk over twelve addresses nobody knows and everybody
+agrees on, which is the one shape in this tree whose cost is the solver rather
+than the elaborator: under `cache` it spends 5.8 of its 6.1 seconds in the
+solver, where `salsa20` spends 4.3 of its 4.8 in symbolic execution. Every other clean demo
+is cheap for the wrong reason, `constant_time` because it has three branches and
+`salsa20` because it has none, so neither says anything about a checker that has
+to rule out a path space rather than exhibit one member of it.
 
 ## The FaCT suite
 
