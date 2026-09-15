@@ -94,6 +94,19 @@ without running anything:
 
 `head -qn1 src/out/**/*.check.c`
 
+The tree under [`src/out/lockstep`](src/out/lockstep) is the same demos answered
+a different way. `Lockstep` rewrites a residue into a product of itself with
+itself, so one run of one copy of the control flow carries both states and the
+timers are compared on entry to every slot rather than once at the end. Every
+verdict there has to match its twin next door, because the two are answering the
+same question about the same program.
+
+What that buys depends on who is holding the bill. It is a rewrite of the
+formula's shape and not of its size, so on an elaborator-bound demo it comes out
+a little slower; where the solver is the cost it is worth a lot, and more as the
+path space grows. `branchy` at the twelve probes it ships with is 6.1s against
+6.7s, and at eighteen it is 30.1s against 149.9s.
+
 Here is what they currently say. The first three demos exist for both NanoRisc
 and RISC-V and answer the same on each, so the table does not split them;
 NanoRisc has no predictive model, and RISC-V is what fills that column. The one
