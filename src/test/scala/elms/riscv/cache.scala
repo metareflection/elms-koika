@@ -4,26 +4,14 @@ import elms.prelude.*
 import elms.prelude.given
 
 import elms.koika.test.{KoikaSuite, Verdict}
-import elms.koika.test.common.Cached
+import elms.koika.test.common.{Cached, Init}
 
 @virtualize
 class RiscVCacheTests extends KoikaSuite {
   val under = "riscv/cache/"
 
   trait CacheDriver extends RiscVDriver[30] with Cached {
-    override val init = s"""void init(struct $stateT *s) {
-         |  for (int i=0; i<NUM_REGS; i++) {
-         |    s->regs[i] = 0;
-         |  }
-         |  s->timer = 0;
-         |  for (int i=0; i<MEM_SIZE; i++) {
-         |    s->mem[i] = 0;
-         |  }
-         |  for (int i=0; i<CACHE_LRU_SIZE; i++) {
-         |    s->cache_keys[i] = -1;
-         |    s->cache_vals[i] = -1;
-         |  }
-         |}""".stripMargin
+    override val init = Init.cache(stateT)
   }
 
   test("riscv cache shortcircuit") {

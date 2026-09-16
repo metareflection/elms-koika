@@ -4,7 +4,7 @@ import elms.prelude.*
 import elms.prelude.given
 
 import elms.koika.test.KoikaSuite
-import elms.koika.test.common.{Cached, Forwarding, Predictive, Speculative}
+import elms.koika.test.common.{Cached, Forwarding, Init, Predictive, Speculative}
 
 // The FaCT ports against every model. Four programs, two that hold up and two
 // that say where FaCT's guarantee stops.
@@ -38,7 +38,7 @@ class FactNaiveTests extends KoikaSuite {
   for (p <- Program.all) {
     test(s"fact naive ${p.name}") {
       val snippet = new FactDriver(p) {
-        override val init = Init.naive(stateT)
+        override val init = Init.Spilling.naive(stateT)
       }
       check(p.name, snippet, p.expect.naive)
     }
@@ -52,7 +52,7 @@ class FactCacheTests extends KoikaSuite {
   for (p <- Program.all) {
     test(s"fact cache ${p.name}") {
       val snippet = new FactDriver(p) with Cached {
-        override val init = Init.cache(stateT)
+        override val init = Init.Spilling.cache(stateT)
       }
       check(p.name, snippet, p.expect.cache)
     }
@@ -66,7 +66,7 @@ class FactSpecTests extends KoikaSuite {
   for (p <- Program.all) {
     test(s"fact spec ${p.name}") {
       val snippet = new FactDriver(p) with Speculative {
-        override val init = Init.speculative(stateT)
+        override val init = Init.Spilling.speculative(stateT)
       }
       check(p.name, snippet, p.expect.speculative)
     }
@@ -80,7 +80,7 @@ class FactPredictiveTests extends KoikaSuite {
   for (p <- Program.all) {
     test(s"fact predictive ${p.name}") {
       val snippet = new FactDriver(p) with Predictive {
-        override val init = Init.speculative(stateT)
+        override val init = Init.Spilling.speculative(stateT)
       }
       check(p.name, snippet, p.expect.predictive)
     }
@@ -94,7 +94,7 @@ class FactForwardingTests extends KoikaSuite {
   for (p <- Program.all) {
     test(s"fact forwarding ${p.name}") {
       val snippet = new FactDriver(p) with Forwarding {
-        override val init = Init.forwarding(stateT)
+        override val init = Init.Spilling.forwarding(stateT)
       }
       check(p.name, snippet, p.expect.forwarding)
     }

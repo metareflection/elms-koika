@@ -5,7 +5,7 @@ import elms.prelude.given
 
 import elms.koika.test.{KoikaSuite, Verdict}
 import elms.koika.test.common.Reach
-import elms.koika.test.common.{Cached, Predictive, Speculative}
+import elms.koika.test.common.{Cached, Init, Predictive, Speculative}
 
 // `branchy.s`'s own driver. At file scope because it has its own memory: the
 // walk indexes `mem` with five bits, so the array has to be exactly 32 words
@@ -17,20 +17,7 @@ import elms.koika.test.common.{Cached, Predictive, Speculative}
 trait BranchyDriver extends RiscVDriver[32] {
   override val prog = demo("branchy")
 
-  override val init = s"""void init(struct $stateT *s) {
-       |  for (int i=0; i<NUM_REGS; i++) {
-       |    s->regs[i] = 0;
-       |    s->saved_regs[i] = 0;
-       |  }
-       |  s->timer = 0;
-       |  for (int i=0; i<MEM_SIZE; i++) {
-       |    s->mem[i] = 0;
-       |  }
-       |  for (int i=0; i<CACHE_LRU_SIZE; i++) {
-       |    s->cache_keys[i] = -1;
-       |    s->cache_vals[i] = -1;
-       |  }
-       |}""".stripMargin
+  override val init = Init.speculative(stateT)
 
   // The registers `branchy.s` shifts its indices out of, collected from the
   // program rather than written down a second time. Adding one to the walk is

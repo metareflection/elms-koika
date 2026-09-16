@@ -4,6 +4,7 @@ import elms.prelude.*
 import elms.prelude.given
 
 import elms.koika.test.{KoikaSuite, Verdict}
+import elms.koika.test.common.Init
 
 @virtualize
 class RiscVNaiveTests extends KoikaSuite {
@@ -12,15 +13,7 @@ class RiscVNaiveTests extends KoikaSuite {
   trait NaiveDriver extends RiscVDriver[30] {
     // In the naive driver, we don't use caching or speculation, so we don't
     // need to initialize everything except [regs], [timer] and [mem].
-    override val init = s"""void init(struct $stateT *s) {
-         |  for (int i=0; i<NUM_REGS; i++) {
-         |    s->regs[i] = 0;
-         |  }
-         |  s->timer = 0;
-         |  for (int i=0; i<MEM_SIZE; i++) {
-         |    s->mem[i] = 0;
-         |  }
-         |}""".stripMargin
+    override val init = Init.naive(stateT)
   }
 
   test("riscv naive shortcircuit") {

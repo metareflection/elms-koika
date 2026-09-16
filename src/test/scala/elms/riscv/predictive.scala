@@ -4,26 +4,13 @@ import elms.prelude.*
 import elms.prelude.given
 
 import elms.koika.test.{KoikaSuite, Verdict}
-import elms.koika.test.common.Predictive
+import elms.koika.test.common.{Init, Predictive}
 
 // Nothing here that [SpecDriver] does not also want. The predictor leaves no
 // trace in the struct, because its history is specialized away: what it
 // believes is which generated function the program is in.
 trait PredictiveDriver extends RiscVDriver[30] with Predictive {
-  override val init = s"""void init(struct $stateT *s) {
-       |  for (int i=0; i<NUM_REGS; i++) {
-       |    s->regs[i] = 0;
-       |    s->saved_regs[i] = 0;
-       |  }
-       |  s->timer = 0;
-       |  for (int i=0; i<MEM_SIZE; i++) {
-       |    s->mem[i] = 0;
-       |  }
-       |  for (int i=0; i<CACHE_LRU_SIZE; i++) {
-       |    s->cache_keys[i] = -1;
-       |    s->cache_vals[i] = -1;
-       |  }
-       |}""".stripMargin
+  override val init = Init.speculative(stateT)
 }
 
 @virtualize
