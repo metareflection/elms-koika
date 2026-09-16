@@ -18,6 +18,7 @@ case class StateT[R <: Int, M <: Int, C <: Int, T <: Int](
     regs: FixedArray[R, Int],
     mem: FixedArray[M, Int],
     saved_regs: FixedArray[R, Int],
+    reg_ready: FixedArray[R, Int],
     cache_tags: FixedArray[T, Int],
     cache_dirty: FixedArray[T, Int],
     cache_age: FixedArray[T, Int],
@@ -44,6 +45,11 @@ trait StateTOps extends DslOps {
     def regs: Rep[Array[Int]] = st.get("regs").asInstanceOf[Rep[Array[Int]]]
     def mem: Rep[Array[Int]] = st.get("mem").asInstanceOf[Rep[Array[Int]]]
     def saved_regs: Rep[Array[Int]] = st.get("saved_regs").asInstanceOf[Rep[Array[Int]]]
+
+    // The cycle each register's value lands, for [NonBlocking]. Indexed by the
+    // same static register number [regs] is, so the subscript is a constant and
+    // none of what a set-indexed cache costs a checker applies here.
+    def reg_ready: Rep[Array[Int]] = st.get("reg_ready").asInstanceOf[Rep[Array[Int]]]
 
     // One entry per line frame, in [Geometry.entries] order. The tag is the
     // whole line number rather than its high bits, which costs nothing in a

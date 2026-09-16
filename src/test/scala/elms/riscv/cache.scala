@@ -84,4 +84,13 @@ class RiscVCacheTests extends KoikaSuite {
     }
     check("evict", snippet, Verdict.Leak)
   }
+
+  // The same channel as `2ctr` with a loop after it long enough to hide the
+  // miss. `hidden.s` says which way each column is meant to answer and why.
+  test("riscv cache hidden") {
+    val snippet = new CacheDriver {
+      override val prog = demo("hidden")
+    }
+    check("hidden", snippet, Verdict.Leak)
+  }
 }

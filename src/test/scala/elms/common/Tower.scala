@@ -40,6 +40,17 @@ trait Common extends Isa {
 
   def tick(s: Rep[State]): Rep[Unit] = s.timer = s.timer + 1
 
+  // Cycles the clock pays for, now.
+  def spend(s: Rep[State], lat: Rep[Int]): Rep[Unit] = s.timer += lat
+
+  // What a load costs. The same thing, for every model that stalls on one, and
+  // that is every model up to here. It is a separate name because a load is the
+  // one access somebody is waiting on: a machine that lets the instructions
+  // behind it keep going charges this to the register that waits rather than to
+  // the clock, and a memory system that had already spent it would have nothing
+  // left to hand over.
+  def defer(s: Rep[State], lat: Rep[Int]): Rep[Unit] = spend(s, lat)
+
   // The indirection via `execute` is necessary to generate functions for
   // each instruction. [Speculative] is the only thing that overrides it, and
   // when it wants plain semantics it asks for [step] rather than [super]:
@@ -80,10 +91,14 @@ trait Common extends Isa {
       fun(slotName(at)) { (s: Rep[State]) => resume(at, s) }
     }
 
+  // What the model still owes when the program runs out of instructions.
+  // Nothing, for every model that has already spent every cycle it charged.
+  def finish(s: Rep[State]): Rep[State] = s
+
   def snippet(s: Rep[State]): Rep[State] = {
     val entry = call(0, s)
     drain()
-    entry
+    finish(entry)
   }
 }
 
@@ -341,15 +356,17 @@ trait Cached extends Direct {
     // want the state the access arrived in, and a symbolic tag read is the
     // most expensive thing in here: doing it twice was most of the formula.
     val ps = levels.indices.toVector.map(probe(s, _, line))
-    s.timer += latency(ps)
-
     val some = ps.map(Some(_))
     v match {
       case Some(x) => {
+        spend(s, latency(ps))
         store(s, 0, line, offset, x, some)
         x
       }
-      case None => s.cache_vals(word(bring(s, 0, line, some), offset))
+      case None => {
+        defer(s, latency(ps))
+        s.cache_vals(word(bring(s, 0, line, some), offset))
+      }
     }
   }
 

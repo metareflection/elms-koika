@@ -31,13 +31,22 @@ object Init {
   // never mattered to them; a hundred lines of Salsa20 is 32 live values on 32
   // registers and spills. [FactDriver.mem_size] is what keeps the two from
   // meeting.
-  private def body(stateT: String, saved: Boolean, cache: Boolean, stack: Boolean): String = {
+  private def body(
+      stateT: String,
+      saved: Boolean,
+      cache: Boolean,
+      stack: Boolean,
+      ready: Boolean = false
+  ): String = {
     val savedRegs = if (saved) { "\n    s->saved_regs[i] = 0;" } else { "" }
+    // Every register starts available. Zero is before the program begins, so
+    // nothing waits on a value it never read.
+    val regReady = if (ready) { "\n    s->reg_ready[i] = 0;" } else { "" }
     val sp = if (stack) { "\n  s->regs[2] = 4 * MEM_SIZE;" } else { "" }
     val lines = if (cache) { lru } else { "" }
     s"""void init(struct $stateT *s) {
        |  for (int i=0; i<NUM_REGS; i++) {
-       |    s->regs[i] = 0;$savedRegs
+       |    s->regs[i] = 0;$savedRegs$regReady
        |  }$sp
        |  s->timer = 0;
        |  for (int i=0; i<MEM_SIZE; i++) {
@@ -51,6 +60,8 @@ object Init {
   def speculative(stateT: String): String = body(stateT, saved = true, cache = true, stack = false)
   // The queue is staging-time, so this model's state is [Speculative]'s.
   def forwarding(stateT: String): String = speculative(stateT)
+  def nonblocking(stateT: String): String =
+    body(stateT, saved = false, cache = true, stack = false, ready = true)
 
   // The same four, for a program that spills.
   object Spilling {

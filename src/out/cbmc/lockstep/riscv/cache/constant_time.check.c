@@ -40,6 +40,7 @@ struct StateT {
   int regs[32];
   int mem[64];
   int saved_regs[32];
+  int reg_ready[32];
   int cache_tags[12];
   int cache_dirty[12];
   int cache_age[12];
