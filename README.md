@@ -89,7 +89,7 @@ of the generated C, which makes it part of the snapshot `sbt test` pins, and
 
 `./src/out/cbmc/verify [--certify] [file.c ...]`
 
-With no arguments it takes every snapshot in the tree, 53 of them in 53 seconds.
+With no arguments it takes every snapshot in the tree, 86 of them in 64 seconds.
 It prints one line per file and exits non-zero if CBMC says anything other than
 what the file claims, so a model that stops detecting what it used to detect is
 a failing run rather than a stale comment. The claims themselves are greppable
@@ -112,28 +112,40 @@ path space grows. `branchy` at the twelve probes it ships with is 6.1s against
 
 Here is what they currently say. The first three demos exist for both NanoRisc
 and RISC-V and answer the same on each, so the table does not split them;
-NanoRisc has no predictive model, and RISC-V is what fills that column. The one
-blank is `cmp` under cache, which is a suite nobody has written.
+NanoRisc has neither a predictive nor a forwarding model, and RISC-V is what
+fills those columns. The blanks are suites nobody has written: `cmp` under
+cache, and `cmp` and `branchy` under forwarding.
 
-| demo | naive | cache | speculative | predictive |
-|---|---|---|---|---|
-| `shortcircuit` | leak | leak | leak | leak |
-| `2ctr` | clean | leak | leak | leak |
-| `spectre` | clean | clean | leak | leak |
-| `constant_time` | clean | clean | clean | clean |
-| `cmp` | leak | | leak | leak |
-| `salsa20` | clean | clean | clean | clean |
-| `guarded` | clean | clean | leak | leak |
-| `choose` | clean | clean | clean | clean |
-| `folded` | leak | leak | leak | leak |
-| `branchy` | clean | clean | clean | clean |
+| demo | naive | cache | speculative | predictive | forwarding |
+|---|---|---|---|---|---|
+| `shortcircuit` | leak | leak | leak | leak | leak |
+| `2ctr` | clean | leak | leak | leak | leak |
+| `spectre` | clean | clean | leak | leak | leak |
+| `constant_time` | clean | clean | clean | clean | clean |
+| `cmp` | leak | | leak | leak | |
+| `salsa20` | clean | clean | clean | clean | clean |
+| `guarded` | clean | clean | leak | leak | leak |
+| `choose` | clean | clean | clean | clean | clean |
+| `folded` | leak | leak | leak | leak | leak |
+| `branchy` | clean | clean | clean | clean | |
+| `bypass` | clean | clean | clean | clean | leak |
+| `bypass_ct` | clean | clean | clean | clean | clean |
+| `bypass_late` | clean | clean | clean | clean | leak |
+| `dynstore` | clean | clean | clean | clean | clean |
+| `bypass_alias` | clean | clean | clean | clean | leak |
 
-Reading across a row is the tower. No model loses a leak the one to its left
-could see, and `2ctr` and `spectre` are where it starts seeing more: `2ctr`
-needs a cache before the second load's address can cost anything, and `spectre`
-needs speculation before that load happens at all. `guarded` is `spectre`'s row
-written again and `folded` is `shortcircuit`'s, and the FaCT section below is
-why either was worth a demo of its own.
+Reading across the first four columns is the tower. No model loses a leak the
+one to its left could see, and `2ctr` and `spectre` are where it starts seeing
+more: `2ctr` needs a cache before the second load's address can cost anything,
+and `spectre` needs speculation before that load happens at all. `guarded` is
+`spectre`'s row written again and `folded` is `shortcircuit`'s, and the FaCT
+section below is why either was worth a demo of its own.
+
+The fifth column is not the fifth step of that chain. `forwarding` extends
+`speculative` and so catches everything it does, but `predictive` catches
+`bypass` no better than `naive` does and `forwarding` has no branch predictor in
+it, so the two are unordered and the columns are a lattice rather than a line.
+The order is naive, then cache, then speculative, then either of the last two.
 
 `branchy` is the odd one out and is RISC-V only, because it indexes `mem` with
 five bits and so wants an array of exactly 32 words where every other demo here
@@ -145,14 +157,180 @@ is cheap for the wrong reason, `constant_time` because it has three branches and
 `salsa20` because it has none, so neither says anything about a checker that has
 to rule out a path space rather than exhibit one member of it.
 
+## Reading around a store
+
+`forwarding` is the fifth model and the only one with anything in flight. Every
+other model commits a store the instant it executes, which is what
+`Isa.speculable` demands: rollback restores registers and nothing else, so a
+store that ran speculatively could never be taken back. A queue removes the
+demand rather than working around it. The store waits, a squash discards it, and
+the write-back to memory that `runCache` carries a `CR-soon` about never happens.
+
+What that buys is a channel speculation alone does not have. A load issued
+before the queued store's address has resolved cannot know whether the two
+alias, so the disambiguation predictor guesses they do not and the load reads
+memory: the word the store was about to overwrite rather than the word it wrote.
+[`bypass.s`](src/test/asm/riscv/bypass.s) is seven instructions of that.
+
+```
+	andi	x6, x10, 28		# the attacker picks which word
+	addi	x6, x6, SECRET		# p = &secret[(a0 >> 2) & 7]
+	addi	x7, x0, 0		# the sanitizer
+	sw	x7, 0(x6)		# scrub it. queued, not committed.
+	lw	x11, 0(x6)		# read around the queue, so this is the secret
+	slli	x11, x11, 2		# mem is word-indexed, so scale
+	lw	x12, 0(x11)		# secret-dependent address, the channel
+```
+
+There is no branch in it, which is the point. `spectre.s` and `guarded` both
+fill their row by getting a bounds check wrong, and the four models to the left
+of this one see nothing here at all: they commit the store where it stands, the
+load reads the zero, and the channel address is 0 in both runs. Two knobs decide
+the rest, `storeLatency` and `storeWindow` on `Forwarding`, at two and four
+instructions.
+
+CBMC's counterexample is worth reading, because the residue has two channels in
+it and the witness picks the cheaper one. Both runs draw the attacker index 28,
+so both queue the same store address and both read around it at word 27. The
+secret sitting there is 0 in one run and 18 in the other, so the last load
+probes word 0 against word 18, the alias resolves, and both runs squash. The
+registers come back. The cache does not, so when the re-run probes word 0 the
+run that already touched it pays a cycle for the LRU's tail and the other pays a
+hundred for a miss. 227 cycles against 326, and 99 is the difference between
+those two.
+
+So this leaks the way `spectre` leaks, through a line the squash does not undo,
+with the bypass rather than a mispredicted branch as the thing that gets a
+secret into an address. The forwarding test itself is the second channel and the
+witness does not use it: it reads `FALSE` in both runs above, because it is only
+true when the secret equals the word index the attacker chose. It is a live fork
+either way, and the arm it guards charges 1 where a miss charges 100.
+
+[`bypass_ct.s`](src/test/asm/riscv/bypass_ct.s) is the control, and the two
+differ in one operand: the last load's base register is `x6` rather than `x11`.
+Everything about the queue still happens, the secret still comes back from a
+load that read around a store, and the forward still fires. What does not happen
+is the secret becoming an address, and no model reports anything. One leaking
+program says the channel exists; this one says the channel is the address rather
+than the queue.
+
+### Where the store is reached from
+
+[`bypass_late.s`](src/test/asm/riscv/bypass_late.s) is the same gadget behind a
+bounds check that always passes, and it is the one that says where a store gets
+noticed from. `Isa.speculable` refuses a store, so a store after a branch is the
+instruction that *closes* the speculation window, and `Speculative` runs that
+one through `step` rather than `call` because a window is inlined and `call`
+would emit a function call. `step` skips `execute`. So a subclass hears about
+every instruction except the one most likely to interest it, and a store in this
+position queued nothing: this program was clean under `forwarding` and its
+`speculative` twin to the byte. A guarded write is an ordinary shape, which made
+that most of the column going missing without a failing test.
+
+`Speculative.closing` is the hook, defaulting to `step` so nothing else moves,
+and `Forwarding` overrides it to open a window when the closing instruction is a
+store. What the override mostly does is hand over the saved registers.
+`savedRegisters` still holds what the branch speculated, and the arm that
+reaches the close is the one where the branch's guess held, so a store window
+that inherited that list would restore a correctly speculated register on its
+own squash.
+
+[`dynstore.s`](src/test/asm/riscv/dynstore.s) is what pins that down, and it is
+the other question a one-entry queue invites: a store through an index that
+moves, in a loop. Its `bge` speculates two instructions before the store closes
+the window, so the two lists are both non-empty and the residue shows them kept
+apart:
+
+```c
+int v121 = v120[8];  v122[8] = v121;   // the branch window's, x8 and x5
+int v125 = v124[5];  v126[5] = v125;
+...
+int v254 = v253[11]; v255[11] = v254;  // the store window's, x11 and x6
+int v258 = v257[6];  v259[6] = v258;
+struct StateT * v261 = slot_7(v41);    // then restarts just past the store
+```
+
+It also says the queue costs nothing structural. The window closes at the
+backward jump, because no control flow is `speculable`, so the loop is still one
+slot per pc and the residue does not grow with the trip count. A window that
+inlined past that jump would not terminate.
+
+### The forward that should not have happened
+
+Everything above is the bypass. The forwarding path is in the residue too, and
+until `bypass_alias.s` nothing in the tree leaked through it, for a reason worth
+writing down rather than treating as a gap in the demos.
+
+Forwarding out of a store to the same address is architecturally transparent.
+The load gets the word memory would have given it, so no value anywhere in the
+machine differs between an execution that forwards and one that probes, and the
+only thing left to observe is the timer. The arm is chosen by comparing two
+addresses, so for a secret to pick it one of those addresses has to be
+secret-derived, which is what `runCache` charges for and `cache` therefore sees.
+The one escape is an address that becomes secret-derived only on a path the
+other models do not take, and the bypass is the only such path.
+
+So forwarding can contribute to a gap, and in `bypass.s` it does, but never
+without a bypass in front of it to put a secret where the comparison can reach.
+It cannot be the whole story. There is a blunter version of the same point:
+`Forwarding.forwardCost` is 1 and `Cached`'s LRU tail hit is also 1, so those
+two arms are not even distinguishable in the timer.
+
+What is not transparent is a forward the queue should not have made.
+`forwardBits` low bits of the word index decide it, not the whole address, which
+is what hardware does and is where the channel comes from: a load whose tag
+matches a store to a *different* word takes that store's value, which is the
+wrong one. [`bypass_alias.s`](src/test/asm/riscv/bypass_alias.s) is nine
+instructions of that, with no branch and nothing bypassed.
+
+```
+	addi	x6, x0, SECRET		# word 20, where the secret lives
+	lw	x5, 0(x6)		# read it, which every model does
+	addi	x8, x0, 96		# word 24
+	addi	x9, x0, 0		# word 0, public, and 0 == 24 mod 4
+	sw	x5, 0(x8)		# the secret goes to word 24. queued.
+	addi	x7, x0, 0		# two instructions of address latency
+	addi	x7, x7, 1
+	lw	x11, 0(x9)		# asks for word 0, gets word 24's secret
+	lw	x12, 0(x11)		# secret-dependent address, the channel
+```
+
+Both addresses are `li` immediates, so the tag comparison folds and the load at
+word 0 always takes the secret. The channel load then has a tag of its own,
+`(secret >> 2) & 3`, and the witness is the two runs disagreeing about it: one
+probes the cache at the secret's word for a miss and the other falsely forwards
+again for a cycle. 429 against 330. The close catches both false forwards and
+squashes, and the cache keeps the line.
+
+Under every other model the load reads word 0 and gets the public zero, so the
+channel address is word 0 in both runs and there is nothing to report. This is
+the 4K-aliasing shape, scaled to thirty words the way the two-entry cache is
+scaled: a real queue compares a twelve-bit page offset, which over an address
+space is a curiosity and over `mem` would be exact.
+
+### Most of the column is a copy
+
+Only five programs in the tree put a store inside reach of a window. `2ctr`,
+`spectre`, `shortcircuit`, `constant_time`, `choose.o` and `folded.o` contain no
+store at all, and `guarded.o`'s is its last instruction, so
+
+`diff src/out/cbmc/riscv/{speculative,forwarding}/spectre.check.c`
+
+is empty, and so are thirteen other pairs. Fourteen of the twenty-six snapshots
+in this column are their speculative twin to the byte, which is worth
+generating: a model that only ever adds a channel has to leave a program with no
+store alone, and the snapshots are the proof rather than the claim. The twelve
+that differ are `salsa20`, `bypass`, `bypass_ct`, `bypass_late`, `dynstore` and
+`bypass_alias`, once per backend.
+
 ## Checking with KLEE
 
-`src/out/klee` is the same 53 residues checked by [KLEE](#KLEE) instead, and
+`src/out/klee` is the same 86 residues checked by [KLEE](#KLEE) instead, and
 [`src/out/klee/verify`](src/out/klee/verify) is its script:
 
 `./src/out/klee/verify [--slow | --only-slow] [file.c ...]`
 
-Both trees agree, 53 verdicts for 53, model sensitivity included. That agreement
+Both trees agree, 86 verdicts for 86, model sensitivity included. That agreement
 is the point of having two: a residue really is an ordinary C program, and
 nothing about the claim depends on which checker reads it.
 
@@ -160,7 +338,7 @@ Only the prelude differs between a pair of snapshots, so
 
 `diff src/out/{cbmc,klee}/riscv/cache/2ctr.check.c`
 
-changes thirteen lines, and so does every one of the other 52 pairs.
+changes thirteen lines, and so does every one of the other 85 pairs.
 `Prover.intrinsics` is that block. The residue, `init` and `main` are one text
 spelled in terms of `koika_assert`,
 `koika_assume` and `koika_draw`, which each backend defines its own way and a
@@ -216,7 +394,7 @@ KLEE walks one path and beats CBMC on a large one: `fact/naive/salsa20` is 0.68s
 against 4.53s, because CBMC's cost is a formula over 277 instructions and 6536
 generated properties while KLEE just runs it. Put a cache in front of a symbolic
 load and it reverses, from 4x behind on a five-path space to not answering at
-all. CBMC finishes every residue here; KLEE finishes 49 of 53.
+all. CBMC finishes every residue here; KLEE finishes 82 of 86.
 
 ## The FaCT suite
 
@@ -248,21 +426,26 @@ Salsa20 is the positive control, and what it controls for is size. It has no
 conditional anywhere in it: every index is a literal and the only loop runs ten
 times whatever the key is, so no model fails. Everything else in the tree that
 verifies clean does so in under twenty instructions; this is 277, and CBMC
-clears all four models:
+clears every model:
 
-| naive | cache | speculative | predictive |
-|---|---|---|---|
-| 4.6s | 5.3s | 5.4s | 6.6s |
+| naive | cache | speculative | predictive | forwarding |
+|---|---|---|---|---|
+| 4.7s | 5.4s | 5.4s | 6.6s | 5.4s |
 
 Two things it needs that the assembly demos do not. It is the first demo that
 spills, so `init` points `sp` at the top of `mem` rather than leaving it at 0,
 and `mem_size` is computed from the frame the object actually declares. And
-Speculative alone wants a bigger stack than the JVM's default 1MB, so
-`build.sbt` raises `-Xss` for the forked test JVM. It inlines a speculation
-window into the function that opened it, salsa20's longest runs 1696
-statements, and ELMS elaborates a function body by recursing once per
-statement. Nothing else here comes near that; naive, cache and predictive all
-stage salsa20 on the default stack.
+Speculative wants a bigger stack than the JVM's default 1MB, so `build.sbt`
+raises `-Xss` for the forked test JVM. It inlines a speculation window into the
+function that opened it, salsa20's longest runs 1696 statements, and ELMS
+elaborates a function body by recursing once per statement. Forwarding extends
+Speculative and inherits that window, 1676 statements of it, so it wants the
+same. Naive, cache and predictive emit nothing over 104 statements and stage
+salsa20 on the default stack.
+
+Thirty-eight of those 277 instructions are stores, which makes this the one file
+in the tree that really exercises `forwarding`, and it is the reason that model
+is a column rather than a rewrite: it stages, and it still verifies.
 
 It is also the only case study the tower can take. curve25519-donna, poly1305,
 both OpenSSL MEE versions and the Lucky13 fix in `openssl-ssl3/s3_cbc.fact` are
@@ -287,9 +470,9 @@ if (idx < 16) {
 out[idx & 7] = acc;
 ```
 
-| naive | cache | speculative | predictive |
-|---|---|---|---|
-| clean | clean | leak | leak |
+| naive | cache | speculative | predictive | forwarding |
+|---|---|---|---|---|
+| clean | clean | leak | leak | leak |
 
 Everything FaCT says about this is true. `idx` is public and so is `table`, the
 one secret the function reads reaches `acc` and then `out` without ever becoming
@@ -339,10 +522,10 @@ branch and the compiler takes it away, substituting
 `output ^ (mask & (b ^ output))`. That is five RV32I instructions with no branch
 among them. It is lowered twice.
 
-| object | passes | naive | cache | speculative | predictive |
-|---|---|---|---|---|---|
-| `choose.o` | `mem2reg` | clean | clean | clean | clean |
-| `folded.o` | `mem2reg,instcombine` | leak | leak | leak | leak |
+| object | passes | naive | cache | speculative | predictive | forwarding |
+|---|---|---|---|---|---|---|
+| `choose.o` | `mem2reg` | clean | clean | clean | clean | clean |
+| `folded.o` | `mem2reg,instcombine` | leak | leak | leak | leak | leak |
 
 One `.fact` file, one `factc` invocation, one `.ll` checked in, one extra
 optimizer pass, and two objects that disagree about whether the program is safe

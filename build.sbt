@@ -27,8 +27,10 @@ lazy val root = project
     // Speculative inlines a whole speculation window into the function it
     // opened in, and ELMS elaborates a function body by recursing once per
     // statement. `src/test/fact/salsa20.o` has a window 1696 statements long,
-    // which is more than the default 1MB stack holds. The other three models
-    // emit nothing longer than a hundred lines and want none of this.
+    // which is more than the default 1MB stack holds. Forwarding extends
+    // Speculative and inherits that window, so it wants this too; naive, cache
+    // and predictive emit nothing longer than a hundred lines and want none of
+    // it.
     Test / javaOptions += "-Xss16m",
 
     Test / javaOptions += {
