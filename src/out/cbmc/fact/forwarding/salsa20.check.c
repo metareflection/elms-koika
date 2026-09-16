@@ -8794,7 +8794,7 @@ struct StateT * slot_261(struct StateT * v10075) {
   v10075->timer = v10564;
   int * v10196 = v10075->regs;
   int v10197 = v10196[2];
-  bool v10566 = ((int)((unsigned int)(v10079 + 60) >> 2)) == ((int)((unsigned int)(v10197 + 84) >> 2));
+  bool v10566 = (((int)((unsigned int)(v10079 + 60) >> 2)) & 3) == (((int)((unsigned int)(v10197 + 84) >> 2)) & 3);
   int v10252;
   if (v10566) {
     int v10198 = v10075->timer;
@@ -8873,7 +8873,7 @@ struct StateT * slot_261(struct StateT * v10075) {
   v10075->timer = v10609;
   int * v10257 = v10075->regs;
   int v10258 = v10257[2];
-  bool v10611 = ((int)((unsigned int)(v10079 + 60) >> 2)) == ((int)((unsigned int)(v10258 + 80) >> 2));
+  bool v10611 = (((int)((unsigned int)(v10079 + 60) >> 2)) & 3) == (((int)((unsigned int)(v10258 + 80) >> 2)) & 3);
   int v10313;
   if (v10611) {
     int v10259 = v10075->timer;
@@ -9005,7 +9005,7 @@ struct StateT * slot_261(struct StateT * v10075) {
     }
     v10361 = v10359;
   }
-  bool v10688 = (((int)((unsigned int)(v10085 + 92) >> 2)) == ((int)((unsigned int)(v10079 + 60) >> 2))) | (((int)((unsigned int)(v10141 + 88) >> 2)) == ((int)((unsigned int)(v10079 + 60) >> 2)));
+  bool v10688 = (((((int)((unsigned int)(v10085 + 92) >> 2)) == ((int)((unsigned int)(v10079 + 60) >> 2))) | (((int)((unsigned int)(v10141 + 88) >> 2)) == ((int)((unsigned int)(v10079 + 60) >> 2)))) | (((((int)((unsigned int)(v10197 + 84) >> 2)) & 3) == (((int)((unsigned int)(v10079 + 60) >> 2)) & 3)) & (!(((int)((unsigned int)(v10197 + 84) >> 2)) == ((int)((unsigned int)(v10079 + 60) >> 2)))))) | (((((int)((unsigned int)(v10258 + 80) >> 2)) & 3) == (((int)((unsigned int)(v10079 + 60) >> 2)) & 3)) & (!(((int)((unsigned int)(v10258 + 80) >> 2)) == ((int)((unsigned int)(v10079 + 60) >> 2)))));
   struct StateT * v10472;
   if (v10688) {
     int v10362 = v10075->timer;
@@ -9867,7 +9867,7 @@ struct StateT * slot_13(struct StateT * v1193) {
   v1193->timer = v1530;
   int * v1274 = v1193->regs;
   int v1275 = v1274[12];
-  bool v1532 = ((int)((unsigned int)(v1197 + 44) >> 2)) == ((int)((unsigned int)(v1275 + 4) >> 2));
+  bool v1532 = (((int)((unsigned int)(v1197 + 44) >> 2)) & 3) == (((int)((unsigned int)(v1275 + 4) >> 2)) & 3);
   int v1330;
   if (v1532) {
     int v1276 = v1193->timer;
@@ -9950,7 +9950,7 @@ struct StateT * slot_13(struct StateT * v1193) {
   v1193->timer = v1579;
   int * v1339 = v1193->regs;
   int v1340 = v1339[12];
-  bool v1581 = ((int)((unsigned int)(v1197 + 44) >> 2)) == ((int)((unsigned int)(v1340 + 8) >> 2));
+  bool v1581 = (((int)((unsigned int)(v1197 + 44) >> 2)) & 3) == (((int)((unsigned int)(v1340 + 8) >> 2)) & 3);
   int v1395;
   if (v1581) {
     int v1341 = v1193->timer;
@@ -10082,7 +10082,7 @@ struct StateT * slot_13(struct StateT * v1193) {
     }
     v1443 = v1441;
   }
-  bool v1659 = ((int)((unsigned int)v1215 >> 2)) == ((int)((unsigned int)(v1197 + 44) >> 2));
+  bool v1659 = ((((int)((unsigned int)v1215 >> 2)) == ((int)((unsigned int)(v1197 + 44) >> 2))) | (((((int)((unsigned int)(v1275 + 4) >> 2)) & 3) == (((int)((unsigned int)(v1197 + 44) >> 2)) & 3)) & (!(((int)((unsigned int)(v1275 + 4) >> 2)) == ((int)((unsigned int)(v1197 + 44) >> 2)))))) | (((((int)((unsigned int)(v1340 + 8) >> 2)) & 3) == (((int)((unsigned int)(v1197 + 44) >> 2)) & 3)) & (!(((int)((unsigned int)(v1340 + 8) >> 2)) == ((int)((unsigned int)(v1197 + 44) >> 2)))));
   struct StateT * v1466;
   if (v1659) {
     int v1444 = v1193->timer;

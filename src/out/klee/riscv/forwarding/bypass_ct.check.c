@@ -334,7 +334,7 @@ struct StateT * slot_3(struct StateT * v48) {
   v48->timer = v306;
   int * v127 = v48->regs;
   int v128 = v127[6];
-  bool v308 = ((int)((unsigned int)v52 >> 2)) == ((int)((unsigned int)v128 >> 2));
+  bool v308 = (((int)((unsigned int)v52 >> 2)) & 3) == (((int)((unsigned int)v128 >> 2)) & 3);
   int v183;
   if (v308) {
     int v129 = v48->timer;
@@ -466,7 +466,7 @@ struct StateT * slot_3(struct StateT * v48) {
     }
     v231 = v229;
   }
-  bool v386 = ((int)((unsigned int)v62 >> 2)) == ((int)((unsigned int)v52 >> 2));
+  bool v386 = (((int)((unsigned int)v62 >> 2)) == ((int)((unsigned int)v52 >> 2))) | (((((int)((unsigned int)v128 >> 2)) & 3) == (((int)((unsigned int)v52 >> 2)) & 3)) & (!(((int)((unsigned int)v128 >> 2)) == ((int)((unsigned int)v52 >> 2)))));
   struct StateT * v245;
   if (v386) {
     int v232 = v48->timer;

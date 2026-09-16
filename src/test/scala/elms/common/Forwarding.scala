@@ -36,9 +36,25 @@ trait Forwarding extends Speculative {
   val storeWindow: Int = 4
   require(storeWindow >= storeLatency, s"storeWindow $storeWindow < storeLatency $storeLatency")
 
-  // What a forwarded load costs instead of a cache probe. Cheaper than the
-  // LRU's tail hit on purpose: the queue is in front of the cache.
+  // What a forwarded load costs instead of a cache probe.
+  //
+  // The same as [Cached]'s LRU tail hit, which is worth knowing when reading a
+  // counterexample: the forward arm and the tail-hit arm are indistinguishable
+  // in the timer, so a gap is never attributable to the forwarding decision
+  // alone.
   val forwardCost: Int = 1
+
+  // How many low bits of the word index the queue compares before deciding to
+  // forward. Fewer than the whole address, which is what real hardware does and
+  // is the only reason this model has a channel of its own: a partial match on
+  // a different full address forwards the wrong value.
+  //
+  // Two bits against thirty words of memory, scaled the way the cache is. A
+  // real queue compares the page offset, twelve bits, which over an address
+  // space is rare enough to be a curiosity and over `mem` would be exact.
+  val forwardBits: Int = 2
+
+  private def tag(a: Rep[Int]): Rep[Int] = a & unit((1 << forwardBits) - 1)
 
   // [at] is the store's pc, which is both where the window opened and where
   // control restarts if the guess was wrong. [entry] is empty between opening
@@ -49,9 +65,17 @@ trait Forwarding extends Speculative {
   private case class Queued(
       at: Int,
       entry: Option[(Rep[Int], Rep[Int])],
-      bypassed: Vector[Rep[Int]]
+      bypassed: Vector[Rep[Int]],
+      forwarded: Vector[Rep[Int]]
   )
   private var queued: Option[Queued] = None
+
+  // A load forwarded because its tag matched, and the queue was wrong to let it
+  // whenever the full addresses differ. Recomputed here rather than carried out
+  // of the arm that staged it, because a [Rep] built inside a virtualized `if`
+  // names a symbol declared in that block; CSE merges the two tag comparisons.
+  private def misforwarded(a: Rep[Int], addr: Rep[Int]): Rep[Boolean] =
+    (tag(a) === tag(addr)) & (a !== addr)
 
   // The pc the window is currently at. [get_mem] needs it in order to know
   // whether the store's address has resolved yet, and it is not one of its
@@ -89,16 +113,20 @@ trait Forwarding extends Speculative {
 
   override def get_mem(s: Rep[State], addr: Rep[Int]): Rep[Int] = queued match {
     case Some(q) => q.entry match {
-        case Some((qaddr, qval)) if resolved(q) =>
-          // The address has resolved, so the queue can answer. The arms have to
-          // be the value of the virtualized `if` rather than assignments to a
-          // `var`, for the reason [Speculative.execute] spells out: a `var`
-          // here is an ordinary Scala variable holding a [Rep], so it names
-          // whichever arm was staged last.
-          if (qaddr === addr) {
+        case Some((qaddr, qval)) if resolved(q) => {
+          // The address has resolved, so the queue answers on a tag match. It
+          // is on the list either way: whether the match was the real thing is
+          // [close]'s question, and this load took the value on trust.
+          queued = Some(q.copy(forwarded = q.forwarded :+ addr))
+          // The arms have to be the value of the virtualized `if` rather than
+          // assignments to a `var`, for the reason [Speculative.execute] spells
+          // out: a `var` here is an ordinary Scala variable holding a [Rep], so
+          // it names whichever arm was staged last.
+          if (tag(qaddr) === tag(addr)) {
             s.timer += forwardCost
             qval
           } else { super.get_mem(s, addr) }
+        }
 
         case Some(_) => {
           // Unresolved. The predictor guesses no-alias and this load reads
@@ -153,7 +181,7 @@ trait Forwarding extends Speculative {
   // [step]'s continuation, and the close is [inside]'s to do rather than this
   // method's.
   private def open(at: Int, s: Rep[State]): Rep[State] = {
-    queued = Some(Queued(at, None, Vector()))
+    queued = Some(Queued(at, None, Vector(), Vector()))
     current = at
     step(at, s)
   }
@@ -187,7 +215,7 @@ trait Forwarding extends Speculative {
     q.entry.foreach((addr, v) => super.set_mem(s, addr, v))
 
     val result = q.entry match {
-      case Some((addr, _)) if q.bypassed.nonEmpty =>
+      case Some((addr, _)) if q.bypassed.nonEmpty || q.forwarded.nonEmpty =>
         // [rollback] is [Speculative]'s, penalty included: a memory ordering
         // violation costs what a mispredicted branch costs, and both restore
         // every register the window saved. That is why control restarts at the
@@ -195,12 +223,19 @@ trait Forwarding extends Speculative {
         // from the window's open, so the offending load's pc is not a point the
         // register file was ever consistent at, and which load it was is a
         // runtime fact that a static program counter cannot be handed anyway.
-        if (q.bypassed.map(_ === addr).reduce(_ | _)) {
+        //
+        // Two ways to have been wrong, and they are opposites. A load that read
+        // around the store should not have aliased it; one that forwarded out
+        // of it should have, and only the tag said so. [StrictOr] and not `||`,
+        // which takes regions and would put each test in a block of its own.
+        val wrong = q.bypassed.map(_ === addr) ++ q.forwarded.map(misforwarded(_, addr))
+        if (wrong.reduce(_ | _)) {
           rollback(s)
           call(q.at + 1, s)
         } else { call(at, s) }
 
-      // Nothing read around the store, so there is nothing to have got wrong.
+      // Nothing read around the store and nothing forwarded out of it, so
+      // there is nothing to have got wrong.
       case _ => call(at, s)
     }
 

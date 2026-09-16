@@ -78,4 +78,11 @@ class RiscVNaiveTests extends KoikaSuite {
     }
     check("dynstore", snippet, Verdict.Clean)
   }
+
+  test("riscv naive bypass_alias") {
+    val snippet = new NaiveDriver {
+      override val prog = demo("bypass_alias")
+    }
+    check("bypass_alias", snippet, Verdict.Clean)
+  }
 }
