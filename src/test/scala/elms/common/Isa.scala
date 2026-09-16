@@ -35,10 +35,21 @@ trait Isa extends StateTOps {
   // effect that rollback would have to undo.
   //
   // Stores must answer [None]. [rollback] restores registers and nothing else,
-  // so a speculative store is never taken back. The cache side effect is the
-  // exception on purpose, since it is the channel the whole model exists to
-  // expose.
+  // so a store that ran inside a branch window would never be taken back, and
+  // answering [None] is what closes the window before one can. The cache side
+  // effect is the exception on purpose, since it is the channel the whole model
+  // exists to expose.
+  //
+  // [Forwarding] is where a store does run speculatively, and it gets there
+  // through [isStore] and a queue rather than through here.
   def speculable(i: Instr): Option[Reg]
+
+  // Whether [i] writes memory. [Forwarding] needs it in order to know where a
+  // store window opens, and nothing else asks.
+  //
+  // Abstract rather than defaulted to `false`, because the default is a model
+  // that stages, verifies, and silently never speculates about a store.
+  def isStore(i: Instr): Boolean
 
   // Every register [c] depends on. Over-approximating is safe; missing one
   // silently corrupts branch resolution, because [evalCond] runs against the

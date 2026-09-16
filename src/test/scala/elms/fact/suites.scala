@@ -4,10 +4,10 @@ import elms.prelude.*
 import elms.prelude.given
 
 import elms.koika.test.KoikaSuite
-import elms.koika.test.common.{Cached, Predictive, Speculative}
+import elms.koika.test.common.{Cached, Forwarding, Predictive, Speculative}
 
-// The FaCT ports against the four models. Four programs, two that hold up and
-// two that say where FaCT's guarantee stops.
+// The FaCT ports against every model. Four programs, two that hold up and two
+// that say where FaCT's guarantee stops.
 //
 // `salsa20` is the positive control, and what it controls for is size.
 // Everything else in the tree that verifies clean does so in under twenty
@@ -22,6 +22,12 @@ import elms.koika.test.common.{Cached, Predictive, Speculative}
 // `factc` emits for a secret conditional, and it is clean under every model.
 // `folded` is the same LLVM with `instcombine` after it, which puts the branch
 // back, and it leaks under every model. Nothing speculates in that one.
+//
+// `forwarding` is a fifth column and says nothing new about any of these four,
+// which is worth having anyway. Neither `choose.o` nor `folded.o` contains a
+// store, so their snapshots there are their `speculative` twins to the byte;
+// `guarded.o` has one and `salsa20.o` has thirty-eight, and neither turns a
+// verdict. The demos that exercise the queue are `riscv/bypass`.
 //
 // `src/test/fact/*.fact` has the rest of all of it.
 
@@ -77,6 +83,20 @@ class FactPredictiveTests extends KoikaSuite {
         override val init = Init.speculative(stateT)
       }
       check(p.name, snippet, p.expect.predictive)
+    }
+  }
+}
+
+@virtualize
+class FactForwardingTests extends KoikaSuite {
+  val under = "fact/forwarding/"
+
+  for (p <- Program.all) {
+    test(s"fact forwarding ${p.name}") {
+      val snippet = new FactDriver(p) with Forwarding {
+        override val init = Init.forwarding(stateT)
+      }
+      check(p.name, snippet, p.expect.forwarding)
     }
   }
 }

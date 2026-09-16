@@ -28,6 +28,11 @@ trait Exec extends Direct with NanoRisc.Ops {
     case _              => None
   }
 
+  override def isStore(i: Instr): Boolean = i match {
+    case Store(_, _, _) => true
+    case _              => false
+  }
+
   override def reads(c: Cond): Set[Reg] = c match {
     case (_, src1, src2) => Set(src1) ++ (src2 match {
         case r: NanoRisc.Reg => Set(r)

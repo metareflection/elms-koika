@@ -48,6 +48,11 @@ trait Exec extends Direct {
     case _                       => None
   }
 
+  override def isStore(i: Instr): Boolean = i match {
+    case Instr.Store(_, _, _, _) => true
+    case _                       => false
+  }
+
   override def reads(c: Cond): Set[Reg] = c match {
     case (_, rs1, rs2) => Set(rs1, rs2)
   }

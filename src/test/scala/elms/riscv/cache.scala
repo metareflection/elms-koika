@@ -53,4 +53,18 @@ class RiscVCacheTests extends KoikaSuite {
     }
     check("constant_time", snippet, Verdict.Clean)
   }
+
+  test("riscv cache bypass") {
+    val snippet = new CacheDriver {
+      override val prog = demo("bypass")
+    }
+    check("bypass", snippet, Verdict.Clean)
+  }
+
+  test("riscv cache bypass_ct") {
+    val snippet = new CacheDriver {
+      override val prog = demo("bypass_ct")
+    }
+    check("bypass_ct", snippet, Verdict.Clean)
+  }
 }

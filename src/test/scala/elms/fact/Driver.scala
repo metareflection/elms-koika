@@ -42,15 +42,24 @@ enum Param derives CanEqual {
 // What each model should say about a port, one field per column of the README's
 // table.
 //
-// Four verdicts and not one, because `guarded` answers differently on each.
-// FaCT's own claim is that the model does not matter, so a port that claim
-// covers says [uniform]; anything else is a statement about where the claim
-// stops.
-case class Expect(naive: Verdict, cache: Verdict, speculative: Verdict, predictive: Verdict)
-    derives CanEqual
+// A verdict per model and not one, because `guarded` answers differently on
+// each. FaCT's own claim is that the model does not matter, so a port that
+// claim covers says [uniform]; anything else is a statement about where the
+// claim stops.
+//
+// [forwarding] is last rather than next to [speculative], which it extends,
+// because the columns are no longer a chain: it sees a channel [predictive]
+// cannot and misses every one [predictive] has.
+case class Expect(
+    naive: Verdict,
+    cache: Verdict,
+    speculative: Verdict,
+    predictive: Verdict,
+    forwarding: Verdict
+) derives CanEqual
 
 object Expect {
-  def uniform(v: Verdict): Expect = Expect(v, v, v, v)
+  def uniform(v: Verdict): Expect = Expect(v, v, v, v, v)
 }
 
 // A ported function and what its arguments mean. [name] is both the object file
@@ -101,7 +110,8 @@ object Program {
         Param.Arr(8, Fill.Out)
       ),
       stack = 0,
-      expect = Expect(Verdict.Clean, Verdict.Clean, Verdict.Leak, Verdict.Leak)
+      expect =
+        Expect(Verdict.Clean, Verdict.Clean, Verdict.Leak, Verdict.Leak, Verdict.Leak)
     ),
     // The pair `src/test/fact/choose.fact` exists for. One source, lowered once
     // as FaCT compiled it and once with one more optimizer pass, and the branch
@@ -241,4 +251,6 @@ object Init {
   def naive(stateT: String): String = body(stateT, saved = false, cache = false)
   def cache(stateT: String): String = body(stateT, saved = false, cache = true)
   def speculative(stateT: String): String = body(stateT, saved = true, cache = true)
+  // The queue is staging-time, so this model's state is [Speculative]'s.
+  def forwarding(stateT: String): String = speculative(stateT)
 }
