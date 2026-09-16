@@ -39,14 +39,24 @@ enum Param derives CanEqual {
   case Arr(words: Int, fill: Fill)
 }
 
+// What each model should say about a port, one field per column of the README's
+// table.
+//
+// Four verdicts and not one, because `guarded` answers differently on each.
+// FaCT's own claim is that the model does not matter, so a port that claim
+// covers says [uniform]; anything else is a statement about where the claim
+// stops.
+case class Expect(naive: Verdict, cache: Verdict, speculative: Verdict, predictive: Verdict)
+    derives CanEqual
+
+object Expect {
+  def uniform(v: Verdict): Expect = Expect(v, v, v, v)
+}
+
 // A ported function and what its arguments mean. [name] is both the object file
 // under `src/test/fact` and the label on the snapshot. [stack] is how many bytes
 // of frame it spills, which the layout has to leave room for.
-//
-// [expect] is one verdict rather than four because FaCT's whole claim is that
-// the model does not matter. A port that needed a different answer per model
-// would be a finding about FaCT, so make it say so here first.
-case class Program(name: String, params: List[Param], stack: Int, expect: Verdict)
+case class Program(name: String, params: List[Param], stack: Int, expect: Expect)
     derives CanEqual
 
 object Program {
@@ -65,7 +75,23 @@ object Program {
         Param.Arr(8, Fill.Secret)
       ),
       stack = 96,
-      expect = Verdict.Clean
+      expect = Expect.uniform(Verdict.Clean)
+    ),
+    // The gadget FaCT accepts, whose story is in `src/test/fact/guarded.fact`.
+    // Words 0 to 15 are `table` and 16 to 23 are the key, and `idx` is drawn up
+    // to 23 so that an out-of-bounds `table[idx]` reaches the key and stops
+    // there. That is the bound `RiscVDriver.initialize_input` already draws
+    // `spectre`'s index against, spelled in elements rather than bytes.
+    Program(
+      "guarded",
+      List(
+        Param.Word(secret = false, bound = 23),
+        Param.Arr(16, Fill.Public),
+        Param.Arr(8, Fill.Secret),
+        Param.Arr(8, Fill.Out)
+      ),
+      stack = 0,
+      expect = Expect(Verdict.Clean, Verdict.Clean, Verdict.Leak, Verdict.Leak)
     )
   )
 }

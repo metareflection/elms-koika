@@ -49,10 +49,12 @@ retarget() {
 # back into a `select`, and RV32I has no conditional move, so llc lowers the
 # `select` as a branch and the secret is in the control flow again.
 #
-# Salsa20 has no conditional in it, so there is no cmov here to lose that way
-# and today only the first reason bites. The next FaCT program with an `if` in
-# it will want the second, and nothing in the tree checks for it: a branch back
-# on a secret would show up as a changed snapshot and nothing louder.
+# Neither program here has a secret conditional, so today only the first reason
+# bites. `guarded.fact` does have an `if`, but on a public condition, which FaCT
+# leaves as a branch on purpose, so there is still no cmov to lose. The first
+# secret one will want the second reason, and nothing in the tree checks for it:
+# a branch back on a secret would show up as a changed snapshot and nothing
+# louder.
 passes=mem2reg
 
 for src in $here/*.ll; do

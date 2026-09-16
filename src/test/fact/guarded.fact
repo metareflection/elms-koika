@@ -1,0 +1,44 @@
+// A Spectre v1 gadget that FaCT's type checker and its Z3 bounds checker both
+// accept without a word of complaint.
+//
+// Nothing here is secret-dependent architecturally. `idx` is public, `table` is
+// public, the guard proves `idx < 16` before the index is used, and the one
+// secret the function touches reaches `acc` and then `out` without ever
+// becoming an address or a condition. That is all of what FaCT promises, and it
+// is a promise about the architectural execution. `if (idx < 16)` is still a
+// branch, and called with `idx >= 16` it is a branch the predictor gets wrong.
+//
+// Two details are the models' rather than the program's, and changing either
+// quietly costs the leak.
+//
+// `table[3]` is read before the guard rather than inside it. `Cached` holds two
+// entries, so a probe is only timeable against an address the cache already
+// has, and the speculative load is no help there: it lands past the end of
+// `table`, where `t & 15` by construction cannot follow it. Word 3 is what
+// leaves the probe something to collide with.
+//
+// `out[idx & 7]` keeps `idx` live past the join. `Speculative` evaluates the
+// branch condition at the join point, so its window closes at the first
+// instruction whose destination that condition reads, and letting `idx` die at
+// the branch is enough for llc to put the address temporary in a0.
+//
+// The bound is the literal 16 for a reason of FaCT's. `if (idx < lim)` is
+// what the Spectre paper's victim function says, and FaCT rejects that: the
+// bounds checker wants `table[idx]` provable, `lim` is arbitrary, and `factc`
+// answers `value could be #x0000000080000000`. A statically sized table is the
+// only shape that gets through.
+
+export void guarded_lookup(
+    public uint32 idx,
+    public uint32[16] table,
+    secret uint32[8] key,
+    secret mut uint32[8] out) {
+  secret mut uint32 acc = key[0] ^ table[3];
+
+  if (idx < 16) {
+    public uint32 t = table[idx];
+    acc = acc + table[t & 15];
+  }
+
+  out[idx & 7] = acc;
+}

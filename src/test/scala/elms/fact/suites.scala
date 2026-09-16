@@ -6,13 +6,19 @@ import elms.prelude.given
 import elms.koika.test.KoikaSuite
 import elms.koika.test.common.{Cached, Predictive, Speculative}
 
-// The Salsa20 core against the four models. There is no leaky twin here and no
-// model is expected to fail: this is a positive control, and what it is control
-// for is size. Everything else in the tree that verifies clean does so in under
-// twenty instructions, which is not much of a claim. This one is 277.
+// The FaCT ports against the four models.
 //
-// `src/test/fact/salsa20.fact` has the provenance and says why it is the only
-// thing in `fact-eval` the tower can take.
+// `salsa20` is the positive control, and what it controls for is size.
+// Everything else in the tree that verifies clean does so in under twenty
+// instructions, which is not much of a claim; this one is 277, and no model
+// fails it.
+//
+// `guarded` is the negative one, and the only port whose verdict moves with the
+// model. FaCT typechecks it and FaCT's bounds checker proves every index in
+// range, and the residue still hands the key to anything that speculates.
+//
+// `src/test/fact/salsa20.fact` and `src/test/fact/guarded.fact` have the rest
+// of both stories.
 
 @virtualize
 class FactNaiveTests extends KoikaSuite {
@@ -23,7 +29,7 @@ class FactNaiveTests extends KoikaSuite {
       val snippet = new FactDriver(p) {
         override val init = Init.naive(stateT)
       }
-      check(p.name, snippet, p.expect)
+      check(p.name, snippet, p.expect.naive)
     }
   }
 }
@@ -37,7 +43,7 @@ class FactCacheTests extends KoikaSuite {
       val snippet = new FactDriver(p) with Cached {
         override val init = Init.cache(stateT)
       }
-      check(p.name, snippet, p.expect)
+      check(p.name, snippet, p.expect.cache)
     }
   }
 }
@@ -51,7 +57,7 @@ class FactSpecTests extends KoikaSuite {
       val snippet = new FactDriver(p) with Speculative {
         override val init = Init.speculative(stateT)
       }
-      check(p.name, snippet, p.expect)
+      check(p.name, snippet, p.expect.speculative)
     }
   }
 }
@@ -65,7 +71,7 @@ class FactPredictiveTests extends KoikaSuite {
       val snippet = new FactDriver(p) with Predictive {
         override val init = Init.speculative(stateT)
       }
-      check(p.name, snippet, p.expect)
+      check(p.name, snippet, p.expect.predictive)
     }
   }
 }

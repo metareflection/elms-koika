@@ -89,7 +89,7 @@ of the generated C, which makes it part of the snapshot `sbt test` pins, and
 
 `./src/out/cbmc/verify [--certify] [file.c ...]`
 
-With no arguments it takes every snapshot in the tree, 41 of them in 58 seconds.
+With no arguments it takes every snapshot in the tree, 45 of them in 53 seconds.
 It prints one line per file and exits non-zero if CBMC says anything other than
 what the file claims, so a model that stops detecting what it used to detect is
 a failing run rather than a stale comment. The claims themselves are greppable
@@ -123,12 +123,14 @@ blank is `cmp` under cache, which is a suite nobody has written.
 | `constant_time` | clean | clean | clean | clean |
 | `cmp` | leak | | leak | leak |
 | `salsa20` | clean | clean | clean | clean |
+| `guarded` | clean | clean | leak | leak |
 | `branchy` | clean | clean | clean | clean |
 
 Reading across a row is the tower. No model loses a leak the one to its left
 could see, and `2ctr` and `spectre` are where it starts seeing more: `2ctr`
 needs a cache before the second load's address can cost anything, and `spectre`
-needs speculation before that load happens at all.
+needs speculation before that load happens at all. `guarded` is `spectre`'s row
+written again, and the FaCT section below is why that was worth a second demo.
 
 `branchy` is the odd one out and is RISC-V only, because it indexes `mem` with
 five bits and so wants an array of exactly 32 words where every other demo here
@@ -142,12 +144,12 @@ to rule out a path space rather than exhibit one member of it.
 
 ## Checking with KLEE
 
-`src/out/klee` is the same 41 residues checked by [KLEE](#KLEE) instead, and
+`src/out/klee` is the same 45 residues checked by [KLEE](#KLEE) instead, and
 [`src/out/klee/verify`](src/out/klee/verify) is its script:
 
 `./src/out/klee/verify [--slow | --only-slow] [file.c ...]`
 
-Both trees agree, 41 verdicts for 41, model sensitivity included. That agreement
+Both trees agree, 45 verdicts for 45, model sensitivity included. That agreement
 is the point of having two: a residue really is an ordinary C program, and
 nothing about the claim depends on which checker reads it.
 
@@ -155,7 +157,7 @@ Only the prelude differs between a pair of snapshots, so
 
 `diff src/out/{cbmc,klee}/riscv/cache/2ctr.check.c`
 
-changes thirteen lines, and so does every one of the other 40 pairs.
+changes thirteen lines, and so does every one of the other 44 pairs.
 `Prover.intrinsics` is that block. The residue, `init` and `main` are one text
 spelled in terms of `koika_assert`,
 `koika_assume` and `koika_draw`, which each backend defines its own way and a
@@ -193,7 +195,7 @@ which it skipped:
 
 ```
 skip     src/out/klee/riscv/cache/branchy.check.c (likely-timeout; pass --slow to run it)
-all 37 agree (4 skipped)
+all 41 agree (4 skipped)
 ```
 
 `--slow` adds them back, and `--only-slow` runs nothing else, which is the one
@@ -211,16 +213,18 @@ KLEE walks one path and beats CBMC on a large one: `fact/naive/salsa20` is 0.68s
 against 4.53s, because CBMC's cost is a formula over 277 instructions and 6536
 generated properties while KLEE just runs it. Put a cache in front of a symbolic
 load and it reverses, from 4x behind on a five-path space to not answering at
-all. CBMC finishes every residue here; KLEE finishes 37 of 41.
+all. CBMC finishes every residue here; KLEE finishes 41 of 45.
 
 ## The FaCT suite
 
 [FaCT](https://github.com/PLSysSec/FaCT) is a DSL whose type system rejects
-programs that branch on a secret or index memory with one, and whose compiler
+programs that branch on a secret or index memory with one, whose Z3-backed
+checker rejects programs it cannot prove stay in bounds, and whose compiler
 emits a branchless selection in place of the branch you would have written.
-[`src/test/fact`](src/test/fact) ports the Salsa20 core from
-[fact-eval](https://github.com/PLSysSec/fact-eval), the case studies published
-alongside the FaCT paper.
+[`src/test/fact`](src/test/fact) holds two programs it accepts. One is the
+Salsa20 core from [fact-eval](https://github.com/PLSysSec/fact-eval), the case
+studies published alongside the FaCT paper. The other is written for this tree,
+and the four models disagree about it.
 
 We do not build the FaCT frontend to run it. What is checked in is the LLVM that
 `factc` emitted, and
@@ -232,15 +236,17 @@ lowers it to RV32I with stock `opt`, `llc` and `clang`.
 and is the only thing here that wants the FaCT compiler; it builds it under
 `podman` from the image its authors published, and no test run needs it.
 
-This is a positive control and there is no leaky twin. Salsa20 has no
+### Salsa20
+
+Salsa20 is the positive control, and what it controls for is size. It has no
 conditional anywhere in it: every index is a literal and the only loop runs ten
-times whatever the key is, so no model fails. What it adds over
-`constant_time.s` is size. Everything else in the tree that verifies clean does
-so in under twenty instructions; this is 277, and CBMC clears all four models:
+times whatever the key is, so no model fails. Everything else in the tree that
+verifies clean does so in under twenty instructions; this is 277, and CBMC
+clears all four models:
 
 | naive | cache | speculative | predictive |
 |---|---|---|---|
-| 4.6s | 5.2s | 5.2s | 6.5s |
+| 4.6s | 5.3s | 5.4s | 6.6s |
 
 Two things it needs that the assembly demos do not. It is the first demo that
 spills, so `init` points `sp` at the top of `mem` rather than leaving it at 0,
@@ -257,6 +263,64 @@ both OpenSSL MEE versions and the Lucky13 fix in `openssl-ssl3/s3_cbc.fact` are
 all multi-function, and `s3_cbc.fact` opens by declaring `extern void
 SHA1_Transform`. One function per object is the whole budget, because a dynamic
 jump cannot be staged against a static program counter.
+
+### `guarded`
+
+[`guarded.fact`](src/test/fact/guarded.fact) is a guarded table lookup that
+FaCT typechecks, that FaCT's bounds checker proves memory-safe, and that hands
+the key to any model with a branch predictor in it.
+
+```
+secret mut uint32 acc = key[0] ^ table[3];
+
+if (idx < 16) {
+  public uint32 t = table[idx];
+  acc = acc + table[t & 15];
+}
+
+out[idx & 7] = acc;
+```
+
+| naive | cache | speculative | predictive |
+|---|---|---|---|
+| clean | clean | leak | leak |
+
+Everything FaCT says about this is true. `idx` is public and so is `table`, the
+one secret the function reads reaches `acc` and then `out` without ever becoming
+an address or a condition, and `idx < 16` is what the bounds checker needs in
+order to admit `table[idx]` against a table of sixteen. `factc` compiles it
+without a word.
+
+All of that is about the architectural execution. Call it with `idx` past 16 and
+the guard is a branch the predictor gets wrong: `table[idx]` runs anyway, finds
+a word of the key sitting past the end of the table, and the load after it turns
+that word into an address. The rollback puts the registers back. The cache keeps
+what it learned, which is what `koika_assert(s1->timer == s2->timer, ...)` reads
+back out. No model spends more than 0.2s on it.
+
+Neither half of that is news. FaCT never claimed a speculative semantics, and a
+bounds check the predictor gets wrong is the original Spectre v1 gadget. What
+the demo is for is that the two halves land in one place: the program carrying
+FaCT's certificate and the residue carrying CBMC's counterexample are the same
+program, so the distance between the two threat models is a diff rather than an
+argument. `spectre.s` fills the same row of the table above with eight
+instructions written to leak. This one fills it with a program a published
+constant-time compiler signed off on.
+
+What FaCT refuses is worth naming too, since it is what the demo had to be
+shaped around. `if (idx < lim)` on a bound the caller passes is what the Spectre
+paper's victim function says, and the bounds checker will not have it: `lim` is
+arbitrary, `table[idx]` is not provable, and `factc` answers `value could be
+#x0000000080000000`. A statically sized table is the only shape that gets
+through. Two smaller details are the models' rather than FaCT's, and both are
+commented where they sit in the source.
+
+One gap in the other direction is still open. `build` runs `mem2reg` and nothing
+after it, because `instcombine` folds FaCT's `res ^ (mask & (v ^ res))`
+selection back into a `select`, and RV32I has no conditional move, so `llc`
+lowers that as a branch and a secret is in the control flow again. Neither
+program here has a secret conditional, so there is no cmov to lose and nothing
+in the tree would notice if there were.
 
 ## CBMC
 
