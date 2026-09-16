@@ -67,4 +67,18 @@ class RiscVCacheTests extends KoikaSuite {
     }
     check("bypass_ct", snippet, Verdict.Clean)
   }
+
+  test("riscv cache bypass_late") {
+    val snippet = new CacheDriver {
+      override val prog = demo("bypass_late")
+    }
+    check("bypass_late", snippet, Verdict.Clean)
+  }
+
+  test("riscv cache dynstore") {
+    val snippet = new CacheDriver {
+      override val prog = demo("dynstore")
+    }
+    check("dynstore", snippet, Verdict.Clean)
+  }
 }

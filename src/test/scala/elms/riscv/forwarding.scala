@@ -74,4 +74,18 @@ class RiscVForwardingTests extends KoikaSuite {
     }
     check("bypass_ct", snippet, Verdict.Clean)
   }
+
+  test("riscv forwarding bypass_late") {
+    val snippet = new FwdDriver {
+      override val prog = demo("bypass_late")
+    }
+    check("bypass_late", snippet, Verdict.Leak)
+  }
+
+  test("riscv forwarding dynstore") {
+    val snippet = new FwdDriver {
+      override val prog = demo("dynstore")
+    }
+    check("dynstore", snippet, Verdict.Clean)
+  }
 }

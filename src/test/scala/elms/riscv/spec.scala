@@ -68,4 +68,18 @@ class RiscVSpecTests extends KoikaSuite {
     }
     check("bypass_ct", snippet, Verdict.Clean)
   }
+
+  test("riscv spec bypass_late") {
+    val snippet = new SpecDriver {
+      override val prog = demo("bypass_late")
+    }
+    check("bypass_late", snippet, Verdict.Clean)
+  }
+
+  test("riscv spec dynstore") {
+    val snippet = new SpecDriver {
+      override val prog = demo("dynstore")
+    }
+    check("dynstore", snippet, Verdict.Clean)
+  }
 }

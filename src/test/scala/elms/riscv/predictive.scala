@@ -71,4 +71,18 @@ class RiscVPredictiveTests extends KoikaSuite {
     }
     check("bypass_ct", snippet, Verdict.Clean)
   }
+
+  test("riscv predictive bypass_late") {
+    val snippet = new PredictiveDriver {
+      override val prog = demo("bypass_late")
+    }
+    check("bypass_late", snippet, Verdict.Clean)
+  }
+
+  test("riscv predictive dynstore") {
+    val snippet = new PredictiveDriver {
+      override val prog = demo("dynstore")
+    }
+    check("dynstore", snippet, Verdict.Clean)
+  }
 }

@@ -126,6 +126,27 @@ trait Forwarding extends Speculative {
       else { super.execute(pc, s) }
   }
 
+  // A store that closed a branch window. [Speculative] has already cleared
+  // [inBranch] by the time this runs, so the no-nesting invariant holds and a
+  // window can open here the same way it does in [execute].
+  //
+  // [savedRegisters] is why this is not a one-liner. It still holds what the
+  // branch window saved, and the branch resolved to its guess on the arm that
+  // reaches here, so those saves are finished: a store window that inherited
+  // them would restore a correctly speculated register on its own squash. It
+  // gets an empty list and hands the old one back, which is [Predictive.under]'s
+  // idiom and, unlike clearing in place, does not care which arm of the
+  // virtualized `if` around this call was staged first.
+  override protected def closing(pc: Int, s: Rep[State]): Rep[State] =
+    if (queued.isEmpty && pc < prog.length && isStore(prog(pc))) {
+      val outer = savedRegisters.toVector
+      resetSaved()
+      val result = open(pc, s)
+      resetSaved()
+      savedRegisters ++= outer
+      result
+    } else { super.closing(pc, s) }
+
   // [step] runs the store, [set_mem] diverts it into the queue, and the
   // `call(pc + 1, s)` at the end of [step] finds [useCache] false and inlines
   // the rest of the window. So everything after this line happens inside

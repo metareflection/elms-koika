@@ -187,6 +187,15 @@ trait Speculative extends Cached {
 
   var inBranch: Option[(Cond, Int)] = None
 
+  // The instruction that closed a window, which has not run yet.
+  //
+  // [step] and not [call], because a window is inlined and [call] would emit a
+  // function call where every snapshot in the tree has straight-line code. The
+  // cost of that is [step] skips [execute], so a subclass never hears about the
+  // one instruction most likely to interest it: a store is not [speculable] and
+  // so is what closes a window most of the time. [Forwarding] overrides this.
+  protected def closing(pc: Int, s: Rep[State]): Rep[State] = step(pc, s)
+
   // [useCache] is `inBranch.isEmpty`, so a slot only ever reaches the worklist
   // with the window closed and there is nothing to remember about that. The
   // saved registers are another matter: the join-point arm of [execute] calls
@@ -245,7 +254,7 @@ trait Speculative extends Cached {
               if (evalCond(s, cnd)) {
                 rollback(s)
                 call(tgt, s)
-              } else { step(pc, s) }
+              } else { closing(pc, s) }
             resetSaved()
             result
           }
