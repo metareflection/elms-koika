@@ -9,7 +9,7 @@ import elms.koika.test.common.GenericKoikaDriver
 // What RISC-V needs from the driver that NanoRisc does not. [M] stays open
 // because the FaCT ports spill and the demos do not, so memory is the one
 // length these two do not agree on.
-trait RiscVDriver[M <: Int: ValueOf] extends GenericKoikaDriver[32, M, 10] with Exec {
+trait RiscVDriver[M <: Int: ValueOf] extends GenericKoikaDriver[32, M, 24, 12] with Exec {
   // `CCodegen` names generated C variables `x0`, `x1`, and so does RISC-V name
   // its registers. Nothing breaks, but anyone reading a snapshot would read
   // `x11[0] = 20` as a register write when it is an array of them.

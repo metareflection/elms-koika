@@ -21,17 +21,22 @@ import elms.core.tree.{E, Function, Let, Program, Term, V, View}
 // since the residue is now duplicated inline rather than called twice.
 //
 // It also has a precondition that is easy to lose: the two runs' addresses have
-// to be provably equal. `Cached` writes an evicted line back at an index nobody
+// to be provably equal. `Cached` writes a dirty line back at an index nobody
 // knows, so anything reached through `mem` is a word nothing can prove the two
 // runs still agree on, and an assumption about the timer buys nothing when the
 // next address might differ. `branchy.s` keeps its indices in registers for
 // exactly this reason, and an earlier draft that kept them in memory ran slower
 // under this pass than under self-composition.
 //
+// Two levels make that precondition strictly easier rather than harder, which
+// is worth knowing because the write is wider now: an eviction moves a whole
+// line, but most evictions stop at L2 and never reach `mem` at all.
+//
 // The other cost is that a drift which later cancels out is reported as a leak.
-// Every timer increment in a residue is `timer + <literal>`, so this is only
-// reachable by two runs charging different amounts between the same pair of
-// slots and arriving back level; nothing in `src/out` does it.
+// That used to be arithmetically out of reach, because every timer increment in
+// a residue was `timer + <literal>`. A hierarchy charges `timer + <expression>`,
+// since which level answered is a runtime fact, so cancellation is now a thing
+// the pass could in principle report. Nothing in `src/out` does it.
 object Lockstep {
   private val halves = Vector("a", "b")
 

@@ -16,7 +16,7 @@ import elms.koika.test.common.{Forwarding, Init}
 class RiscVForwardingTests extends KoikaSuite {
   val under = "riscv/forwarding/"
 
-  trait FwdDriver extends RiscVDriver[30] with Forwarding {
+  trait FwdDriver extends RiscVDriver[64] with Forwarding {
     override val init = Init.forwarding(stateT)
   }
 

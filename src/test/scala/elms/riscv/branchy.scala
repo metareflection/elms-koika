@@ -4,17 +4,16 @@ import elms.prelude.*
 import elms.prelude.given
 
 import elms.koika.test.{KoikaSuite, Verdict}
-import elms.koika.test.common.Reach
-import elms.koika.test.common.{Cached, Init, Predictive, Speculative}
+import elms.koika.test.common.{Cached, Init, Predictive, Reach, Speculative}
 
-// `branchy.s`'s own driver. At file scope because it has its own memory: the
-// walk indexes `mem` with five bits, so the array has to be exactly 32 words
-// and every other RISC-V demo runs on 30.
+// `branchy.s`'s own driver. At file scope for its `initialize_input`, which
+// seeds the walk's indices into registers rather than into `mem`; the memory
+// is the same 64 words everything else in the tree runs on.
 //
 // One `init` for all four models, rather than the three the other suites spell
 // out between them. This demo exists to be measured, and which fields a model
 // leaves untouched is not what is being measured.
-trait BranchyDriver extends RiscVDriver[32] {
+trait BranchyDriver extends RiscVDriver[64] {
   override val prog = demo("branchy")
 
   override val init = Init.speculative(stateT)
@@ -29,7 +28,8 @@ trait BranchyDriver extends RiscVDriver[32] {
   // Drawn once and written into both states. The addresses the walk visits are
   // unknown, which is what gives a checker something to do, and provably equal
   // between the runs, which is what makes the answer clean. `branchy.s` says
-  // why they cannot live in `mem`.
+  // why they cannot live in `mem`, and why there are four of them rather than
+  // the twelve this used to walk.
   override lazy val initialize_input: String = {
     require(indexRegs.nonEmpty, "branchy.s has no `srli`, so nothing would vary")
     val draws = indexRegs.map(r => s"""  int i$r = bounded(0, 1073741823);

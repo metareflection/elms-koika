@@ -10,7 +10,7 @@ import elms.koika.test.common.{Cached, Init}
 class RiscVCacheTests extends KoikaSuite {
   val under = "riscv/cache/"
 
-  trait CacheDriver extends RiscVDriver[30] with Cached {
+  trait CacheDriver extends RiscVDriver[64] with Cached {
     override val init = Init.cache(stateT)
   }
 

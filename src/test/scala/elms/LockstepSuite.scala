@@ -17,7 +17,7 @@ class LockstepSuite extends KoikaSuite {
   val under = "lockstep/riscv/"
 
   test("lockstep riscv cache 2ctr") {
-    val snippet = new RiscVDriver[30] with Cached with Lockstepped[32, 30, 10] {
+    val snippet = new RiscVDriver[64] with Cached with Lockstepped[32, 64, 24, 12] {
       override val init = Init.cache(stateT)
       override val prog = demo("2ctr")
     }
@@ -25,7 +25,7 @@ class LockstepSuite extends KoikaSuite {
   }
 
   test("lockstep riscv cache constant_time") {
-    val snippet = new RiscVDriver[30] with Cached with Lockstepped[32, 30, 10] {
+    val snippet = new RiscVDriver[64] with Cached with Lockstepped[32, 64, 24, 12] {
       override val init = Init.cache(stateT)
       override val prog = demo("constant_time")
     }
@@ -33,7 +33,7 @@ class LockstepSuite extends KoikaSuite {
   }
 
   test("lockstep riscv cache shortcircuit") {
-    val snippet = new RiscVDriver[30] with Cached with Lockstepped[32, 30, 10] {
+    val snippet = new RiscVDriver[64] with Cached with Lockstepped[32, 64, 24, 12] {
       override val init = Init.cache(stateT)
       override val prog = demo("shortcircuit")
     }
@@ -48,12 +48,12 @@ class LockstepSuite extends KoikaSuite {
   // prunes a solver's formula and KLEE has already paid for the fork by the
   // time it runs.
   test("lockstep riscv cache branchy") {
-    val snippet = new BranchyDriver with Cached with Lockstepped[32, 32, 10] {}
+    val snippet = new BranchyDriver with Cached with Lockstepped[32, 64, 24, 12] {}
     check("cache/branchy", snippet, Verdict.Clean, klee = Reach.LikelyTimeout)
   }
 
   test("lockstep riscv compiled naive") {
-    val snippet = new CompiledDriver with Lockstepped[32, 30, 10] {
+    val snippet = new CompiledDriver with Lockstepped[32, 64, 24, 12] {
       override val init = Init.naive(stateT)
     }
     check("compiled/naive", snippet, Verdict.Leak)

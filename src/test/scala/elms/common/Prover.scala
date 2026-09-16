@@ -83,13 +83,24 @@ enum Prover derives CanEqual {
 // Whether KLEE is expected to get through a residue's path space.
 //
 // [Verdict] is a claim about the program and every backend that finishes agrees
-// on it. This is a claim about the backend. `runCache` is a two-way LRU with
-// three arms, so it forks threefold per symbolic load, and `branchy`'s twelve
-// probes are (3^12 + 1) / 2 paths; CBMC answers the same file in eight seconds.
+// on it. This is a claim about the backend, and `branchy` under a cache is the
+// only demo that needs one.
 //
-// CBMC needs no equivalent today, since it finishes every residue in the tree
-// and `verify --certify` is what checks its bound. A second symbolic executor
-// is when this stops being a KLEE-shaped parameter.
+// Not because of its path space, which is small: `runCache` answers out of L1,
+// out of L2 or out of memory, so four probes are (3^4 + 1) / 2 paths and CBMC
+// is done in 1.4s. What KLEE cannot get through is a single one of them. A
+// set-indexed cache subscripts every array with an expression nobody knows, so
+// each step of each path is a query over a chain of updates at unknown indices,
+// and the count at the end of a two-minute run is 0 completed paths against 23
+// partially completed. Ten minutes does not change it, which is what separates
+// this from [budgetSeconds] and the leaks that were merely being cut off.
+//
+// `naive/branchy` walks the same four addresses with nothing in front of
+// memory and settles, which is the control for all of that.
+//
+// CBMC needs no equivalent, since it finishes every residue in the tree and
+// `verify --certify` is what checks its bound. A second symbolic executor is
+// when this stops being a KLEE-shaped parameter.
 enum Reach derives CanEqual {
   // KLEE walks the whole space, and what it finds has to be [Verdict].
   case Settles
@@ -106,7 +117,19 @@ enum Reach derives CanEqual {
 
 object Reach {
   // What `verify` gives KLEE per file, written onto the line so the script does
-  // not have to hold an opinion. Every residue KLEE finishes does so in under a
-  // second, so this is slack rather than a measurement.
-  val budgetSeconds: Int = 120
+  // not have to hold an opinion.
+  //
+  // This was 120 and the comment said slack rather than measurement, because
+  // every residue KLEE finished did so in under a second. A set-associative
+  // cache ended that. `fact/speculative/guarded` now takes 275s and
+  // `riscv/forwarding/bypass` 570s, both of them leaks KLEE does find and was
+  // simply being cut off before it could: a budget that small turned "not yet"
+  // into a failing test.
+  //
+  // A cap and not a cost, so the files that settled in under a second still do,
+  // and the only ones that spend it are the ones marked [LikelyTimeout] and
+  // skipped by default. The headroom over 570 is deliberate, since that number
+  // was measured on a loaded machine and a budget that a slower box fails is a
+  // flake rather than a claim.
+  val budgetSeconds: Int = 1200
 }

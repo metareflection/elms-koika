@@ -10,8 +10,8 @@ import elms.core.tree as ast
 // time through its own `init`, and the product is two pointers at them. Nothing
 // is copied and nothing here knows which fields a given model bothers to
 // initialize.
-trait Lockstepped[R <: Int: ValueOf, M <: Int: ValueOf, C <: Int: ValueOf]
-    extends GenericKoikaDriver[R, M, C] {
+trait Lockstepped[R <: Int: ValueOf, M <: Int: ValueOf, C <: Int: ValueOf, T <: Int: ValueOf]
+    extends GenericKoikaDriver[R, M, C, T] {
   private def state = stateManifest.repr
   private def paired = Lockstep.pair(state)
 

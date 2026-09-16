@@ -35,7 +35,7 @@ abstract class KoikaSuite extends SnapshotFunSuite {
   // object as the program it runs on.
   def check(
       label: String,
-      snippet: GenericKoikaDriver[?, ?, ?],
+      snippet: GenericKoikaDriver[?, ?, ?, ?],
       expect: Verdict,
       klee: Reach = Reach.Settles
   ): Unit =

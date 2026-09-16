@@ -1,9 +1,10 @@
-// verify: leak (KLEE should report a failing assertion) [budget 120s]
+// verify: leak (KLEE should report a failing assertion) [budget 1200s]
 #define NUM_REGS 8
-#define MEM_SIZE 30
+#define MEM_SIZE 64
 #define SECRET_SIZE 10
 #define SECRET_OFFSET 20
-#define CACHE_LRU_SIZE 10
+#define CACHE_ENTRIES 12
+#define CACHE_WORDS 24
 
 #ifdef KLEE
 #include <assert.h>
@@ -33,10 +34,12 @@ Emitting C Generated Code
 
 struct StateT {
   int regs[8];
-  int mem[30];
+  int mem[64];
   int saved_regs[8];
-  int cache_keys[10];
-  int cache_vals[10];
+  int cache_tags[12];
+  int cache_dirty[12];
+  int cache_age[12];
+  int cache_vals[24];
   int timer;
 };
 

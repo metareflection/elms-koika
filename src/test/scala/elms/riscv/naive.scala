@@ -10,7 +10,7 @@ import elms.koika.test.common.Init
 class RiscVNaiveTests extends KoikaSuite {
   val under = "riscv/naive/"
 
-  trait NaiveDriver extends RiscVDriver[30] {
+  trait NaiveDriver extends RiscVDriver[64] {
     // In the naive driver, we don't use caching or speculation, so we don't
     // need to initialize everything except [regs], [timer] and [mem].
     override val init = Init.naive(stateT)

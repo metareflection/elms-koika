@@ -14,9 +14,9 @@ trait Isa extends StateTOps {
   def get_reg(s: Rep[State], i: Rep[Int]): Rep[Int]
   def set_reg(s: Rep[State], i: Rep[Int], v: Rep[Int]): Rep[Unit]
 
-  // Word-indexed, not byte-addressed. [Cached] keys its LRU on whatever comes
-  // through here and writes back with `s.mem(key)`, so an ISA with byte
-  // addresses converts in [step] and one cache entry stays one word.
+  // Word-indexed, not byte-addressed. [Cached] splits whatever comes through
+  // here into a line and a word within it, so an ISA with byte addresses
+  // converts in [step] and the cache never sees a byte offset.
   def get_mem(s: Rep[State], i: Rep[Int]): Rep[Int]
   def set_mem(s: Rep[State], i: Rep[Int], v: Rep[Int]): Rep[Unit]
 

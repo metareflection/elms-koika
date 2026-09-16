@@ -9,8 +9,8 @@ import elms.prelude.given
 // which [Isa.speculable] writes down as a requirement: rollback restores
 // registers and nothing else, so a store that ran speculatively could never be
 // taken back. A queue removes the requirement rather than working around it.
-// The store sits in the queue for a while, a squash discards it, and the write
-// back to memory that [Cached.runCache] worries about never happens at all.
+// The store sits in the queue for a while, a squash discards it, and never
+// reaches [Cached] to dirty a line in the first place.
 //
 // What that buys is a channel [Speculative] cannot see. A load issued before
 // the queued store's address has resolved cannot know whether it aliases, so

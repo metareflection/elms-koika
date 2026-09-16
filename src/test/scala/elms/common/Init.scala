@@ -2,18 +2,28 @@ package elms.koika.test.common
 
 // Each model zeroes whatever it has.
 //
-// This lived in the FaCT driver, where it was written so that a model could be
-// a parameter rather than a copied string, while nine other suites went on
-// spelling the same three loops out apiece. Naming them once here is the same
-// idea applied to the rest of the tree: what a model initializes is a fact
-// about the model, and it should be written down once per model rather than
-// once per suite.
+// Lived in the FaCT driver, where it was written so that a model could be a
+// parameter instead of a copied string, while the eight other suites went on
+// spelling it out apiece. A cache with five arrays in it rather than two is
+// what finally made eight copies untenable.
 object Init {
+  // Every frame starts empty, and -1 is what says so: a line number no address
+  // can name, so the tag comparison never matches one.
+  //
+  // The old model spelled that `cache_keys[i] = -1` too, and then wrote an
+  // evicted line back without checking it, so a cold miss stored through
+  // `s->mem[-1]`, which given `int regs[NUM_REGS]; int mem[MEM_SIZE];` is the
+  // last register. Every CBMC run passes `--no-standard-checks`, which turns off
+  // exactly the array-bounds property that would have caught it.
   private val lru =
     """
-      |  for (int i=0; i<CACHE_LRU_SIZE; i++) {
-      |    s->cache_keys[i] = -1;
-      |    s->cache_vals[i] = -1;
+      |  for (int i=0; i<CACHE_ENTRIES; i++) {
+      |    s->cache_tags[i] = -1;
+      |    s->cache_dirty[i] = 0;
+      |    s->cache_age[i] = 0;
+      |  }
+      |  for (int i=0; i<CACHE_WORDS; i++) {
+      |    s->cache_vals[i] = 0;
       |  }""".stripMargin
 
   // [stack] points `sp` one past the top of `mem`, growing down toward the
@@ -38,8 +48,7 @@ object Init {
 
   def naive(stateT: String): String = body(stateT, saved = false, cache = false, stack = false)
   def cache(stateT: String): String = body(stateT, saved = false, cache = true, stack = false)
-  def speculative(stateT: String): String =
-    body(stateT, saved = true, cache = true, stack = false)
+  def speculative(stateT: String): String = body(stateT, saved = true, cache = true, stack = false)
   // The queue is staging-time, so this model's state is [Speculative]'s.
   def forwarding(stateT: String): String = speculative(stateT)
 

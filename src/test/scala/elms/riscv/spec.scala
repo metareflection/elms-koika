@@ -10,7 +10,7 @@ import elms.koika.test.common.{Init, Speculative}
 class RiscVSpecTests extends KoikaSuite {
   val under = "riscv/speculative/"
 
-  trait SpecDriver extends RiscVDriver[30] with Speculative {
+  trait SpecDriver extends RiscVDriver[64] with Speculative {
     override val init = Init.speculative(stateT)
   }
 

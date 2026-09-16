@@ -1,9 +1,10 @@
-// verify: leak (KLEE should report a failing assertion) [budget 120s]
+// verify: leak (KLEE should report a failing assertion) [budget 1200s]
 #define NUM_REGS 32
 #define MEM_SIZE 64
 #define SECRET_SIZE 10
 #define SECRET_OFFSET 20
-#define CACHE_LRU_SIZE 10
+#define CACHE_ENTRIES 12
+#define CACHE_WORDS 24
 
 #ifdef KLEE
 #include <assert.h>
@@ -35,8 +36,10 @@ struct StateT {
   int regs[32];
   int mem[64];
   int saved_regs[32];
-  int cache_keys[10];
-  int cache_vals[10];
+  int cache_tags[12];
+  int cache_dirty[12];
+  int cache_age[12];
+  int cache_vals[24];
   int timer;
 };
 
@@ -167,9 +170,13 @@ void init(struct StateT *s) {
   for (int i=0; i<MEM_SIZE; i++) {
     s->mem[i] = 0;
   }
-  for (int i=0; i<CACHE_LRU_SIZE; i++) {
-    s->cache_keys[i] = -1;
-    s->cache_vals[i] = -1;
+  for (int i=0; i<CACHE_ENTRIES; i++) {
+    s->cache_tags[i] = -1;
+    s->cache_dirty[i] = 0;
+    s->cache_age[i] = 0;
+  }
+  for (int i=0; i<CACHE_WORDS; i++) {
+    s->cache_vals[i] = 0;
   }
 }
 

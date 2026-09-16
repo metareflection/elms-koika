@@ -90,9 +90,10 @@ trait Exec extends Direct {
     case _            => set_reg(s, rd.i, v)
   }
 
-  // [get_mem] and [set_mem] are word-indexed, which is what keeps one cache
-  // entry equal to one word and leaves [Cached] untouched. RISC-V addresses are
-  // bytes, so they split into the word holding them and the byte within.
+  // [get_mem] and [set_mem] are word-indexed, and [Cached] splits a word index
+  // again into the line holding it and the word within. RISC-V addresses are
+  // bytes, so the first split happens here: the word holding one, and the byte
+  // within that.
   private def wordOf(addr: Rep[Int]): Rep[Int] = addr >>> unit(2)
   private def shiftOf(addr: Rep[Int]): Rep[Int] = (addr & unit(3)) << unit(3)
 

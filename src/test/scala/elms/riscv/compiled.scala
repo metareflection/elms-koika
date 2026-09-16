@@ -16,7 +16,7 @@ private val image = elf.Elf.load("src/test/asm/riscv/cmp.o")
 // At file scope rather than inside the suite, because it is the longest and
 // branchiest demo in the tree and so the one anything measuring a checker wants
 // to reach for.
-trait CompiledDriver extends RiscVDriver[30] {
+trait CompiledDriver extends RiscVDriver[64] {
   override val prog = image.prog
 
   private def base(d: Datum): Int = d.addr / 4

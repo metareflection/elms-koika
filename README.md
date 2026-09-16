@@ -55,11 +55,12 @@ a half seconds with the flag and had not finished in seventy-two minutes
 without. No verdict moves either way.
 
 `<N>` comes out of the file. `GenericKoikaDriver.unwind` is
-`max(num_regs, mem_size, cache_size, secret_size) + 1`, which is every loop in
-the hand-written C around the residue plus the exit test, and a demo whose own
-recursion runs deeper than that overrides it. 33 for the RISC-V demos and 65 for
-the FaCT ports, where the tree used to run everything at 1000 and pay 172
-seconds for `compiled/naive` alone.
+`max(num_regs, mem_size, cache_words, cache_entries, secret_size) + 1`, which is
+every loop in the hand-written C around the residue plus the exit test, and a
+demo whose own recursion runs deeper than that overrides it. 65 everywhere now
+that the demos and the FaCT ports run on the same 64 words of memory, where the
+tree used to run everything at 1000 and pay 172 seconds for `compiled/naive`
+alone.
 
 Falling short does not make a leak disappear, it invents one. The initializer
 loops in `init` are the first thing a low bound cuts, and two states left
@@ -89,7 +90,7 @@ of the generated C, which makes it part of the snapshot `sbt test` pins, and
 
 `./src/out/cbmc/verify [--certify] [file.c ...]`
 
-With no arguments it takes every snapshot in the tree, 86 of them in 64 seconds.
+With no arguments it takes every snapshot in the tree, 93 of them in 122 seconds.
 It prints one line per file and exits non-zero if CBMC says anything other than
 what the file claims, so a model that stops detecting what it used to detect is
 a failing run rather than a stale comment. The claims themselves are greppable
@@ -104,11 +105,24 @@ timers are compared on entry to every slot rather than once at the end. Every
 verdict there has to match its twin next door, because the two are answering the
 same question about the same program.
 
-What that buys depends on who is holding the bill. It is a rewrite of the
-formula's shape and not of its size, so on an elaborator-bound demo it comes out
-a little slower; where the solver is the cost it is worth a lot, and more as the
-path space grows. `branchy` at the twelve probes it ships with is 6.1s against
-6.7s, and at eighteen it is 30.1s against 149.9s.
+What that buys depends on who is holding the bill, and the bill changed hands
+when the cache did. Sharing the control flow makes every timer comparison an
+assumption as well as a question, so a pair that has already drifted leaves the
+search instead of being enumerated and rejected. That is a claim about a path
+space, and against the old two-entry cache it was worth five times: `branchy` at
+eighteen probes was 30.1s lockstepped against 149.9s self-composed.
+
+A set-associative cache moved the cost somewhere the pass does not reach. What
+is expensive now is array theory over subscripts nobody knows, and lockstepping
+doubles the updates in flight while pruning none of them. `branchy` at six
+probes is 41.2s against 40.4s, and at the four it ships with it is 1.63s against
+1.48s. Twice, no difference, and if anything the wrong way.
+
+So the pass currently earns nothing in time, and it is kept for the other thing
+it does: every verdict in that tree has to match its twin next door, which is a
+second opinion on the same program from a differently shaped formula. Its speed
+argument is waiting on a demo whose cost is a path space, and the tree does not
+have one at the moment.
 
 Here is what they currently say. The first three demos exist for both NanoRisc
 and RISC-V and answer the same on each, so the table does not split them;
@@ -147,15 +161,134 @@ The fifth column is not the fifth step of that chain. `forwarding` extends
 it, so the two are unordered and the columns are a lattice rather than a line.
 The order is naive, then cache, then speculative, then either of the last two.
 
-`branchy` is the odd one out and is RISC-V only, because it indexes `mem` with
-five bits and so wants an array of exactly 32 words where every other demo here
-runs on 30. It is a walk over twelve addresses nobody knows and everybody
-agrees on, which is the one shape in this tree whose cost is the solver rather
-than the elaborator: under `cache` it spends 5.8 of its 6.1 seconds in the
-solver, where `salsa20` spends 4.3 of its 4.8 in symbolic execution. Every other clean demo
-is cheap for the wrong reason, `constant_time` because it has three branches and
-`salsa20` because it has none, so neither says anything about a checker that has
-to rule out a path space rather than exhibit one member of it.
+`branchy` is RISC-V only, and it is a walk over four addresses nobody knows and
+everybody agrees on. That is the one shape in this tree whose cost is the
+solver rather than the elaborator. Every other clean demo is cheap for the wrong
+reason, `constant_time` because it has three branches and `salsa20` because it
+has none, so neither says anything about a checker that has to rule out a path
+space rather than exhibit one member of it.
+
+## What the cache is
+
+```
+L1   2 sets x 2 ways x 2 words   1 cycle
+L2   4 sets x 2 ways x 2 words   12 cycles
+mem  64 words                    100 cycles
+```
+
+Twelve line frames over thirty-two lines of memory, LRU within a set,
+write-allocate, write-through at L1 and write-back at L2. That is
+[`Geometry.default`](src/test/scala/elms/common/Geometry.scala), and everything
+in it is a knob.
+
+What it replaces was two entries of one word each, fully associative, with no
+valid bit and no dirty bit. That was enough to demonstrate a channel, which is
+what it was for. It could not state the argument real constant-time code makes,
+because every one of those is about lines and about sets.
+
+A lookup table is safe because it fits in a cache line. A model whose line is
+one word reports sixteen distinct probes where the hardware has one, so it
+cannot tell a table that fits from a table that does not, and the distinction is
+the entire claim. Prime+Probe works by filling a set. With two fully associative
+entries an attacker evicts the whole cache by touching two addresses, so the
+canonical cache attack was not expressible here at all.
+
+### Three knobs, and only one of them costs
+
+Sets are free. The set index is a `Rep`, so `cache_tags(base + set * ways + w)`
+is one symbolic subscript into inline storage however many sets there are, which
+is what `mem` already was.
+
+Ways are nearly free, and that takes doing. The obvious spelling of a W-way
+lookup is a chain of `if`s, which is W+1 arms in the residue and (W+1)^n paths
+over n probes. This one compares tags in arithmetic instead:
+
+```scala
+// -1 when the two are equal and 0 otherwise, out of a sign bit rather than out
+// of a comparison. `d | -d` has its top bit set for every d but zero.
+private def eqMask(a: Rep[Int], b: Rep[Int]): Rep[Int] = {
+  val d = a ^ b
+  ~((d | (unit(0) - d)) >> unit(31))
+}
+```
+
+At most one way can match, so the matching way number is the `or` of the masked
+way indices and whether there was one is the `or` of the masks. W ways is W
+expressions and still exactly two arms. The LRU ages and the victim choice go
+the same way, off the sign bit of a subtraction.
+
+Staging `2ctr` against a four-way L1 rather than the two-way one says how well
+that holds. Seven `else` branches in the residue either way, the same seven, and
+557 lines against 489. Double the associativity for fourteen percent of the
+width and none of the depth, which is the whole reason the geometry is a
+parameter rather than a rewrite.
+
+Levels are what costs, one arm apiece. So a probe forks threefold, into L1, L2
+and memory, which is exactly what the two-entry LRU did with head-hit, tail-hit
+and miss.
+
+The bill is width rather than depth. `riscv/cache/2ctr` is 489 lines of residue
+against 266, and `fact/cache/salsa20` is 19993 against 8410. That much a reader
+would predict, and it is not where the interesting cost turned out to be.
+
+### What it costs a checker, and where that cost actually is
+
+The path space did not move. Both models fork threefold per probe, so
+`branchy`'s walk is (3^n + 1) / 2 paths either way. What got expensive is each
+individual query, and the reason is one line of the old model:
+
+The old cache compared `cache_keys[0]` against `cache_keys[1]`. Constant
+subscripts, which a solver treats as two scalars. A set-indexed cache subscripts
+every one of its arrays with an expression nobody knows, so every read is a
+select over a chain of updates at unknown indices, and the run issues a hundred
+or so of those.
+
+Both backends pay it, and they show it differently. CBMC builds one formula and
+its cost lands there: `branchy` runs 1.4s at four probes against 38.5s at six,
+where the old model did twelve in 6.1s. KLEE pays per path and does not finish
+even one, 0 completed and 23 partially completed inside a two-minute budget,
+which is why those files carry `Reach.LikelyTimeout` again after a spell
+without it. Counting paths is what nobody should guess from: `2ctr` walks
+exactly 3 completed paths under both models, the old one and this one, and its
+KLEE verdict never moved.
+
+So `branchy` ships four probes where it used to ship twelve. The demo's job is
+to be the one file in the tree whose cost is the solver, and it still is; the
+count was always a dial and the dial moved.
+
+Nothing without a symbolic address in it noticed, which is the other half of the
+same sentence. `salsa20` is 277 instructions of literal indices, so every set
+index folds at staging time and no subscript is ever unknown. It went from 5.4s
+to 9.5s, a residue 2.4x wider and a solver doing the work it always did.
+
+### Where a store stops
+
+L1 is write-through and L2 is write-back, which is a real design and is also the
+only one that keeps the model honest about ordering. A dirty line has to be
+written back when it is evicted, and a write-back from level i mutates level i+1
+in the middle of an access that has already read level i+1's tags. Nothing above
+the bottom is ever dirty, so that never happens.
+
+The alternative worth naming is the one that looks cheapest and is wrong.
+Write-back at L1 with the eviction going straight to memory leaves L2 holding a
+stale copy of a line L1 has already superseded, and the next L1 miss reads it.
+
+Valid bits retire a bug the old model shipped. It keyed on the address and left
+`-1` in the key to mean nothing-here, so the first two misses wrote their
+evicted line back through `s->mem[-1]`, which given `int regs[32]; int mem[64];`
+is register x31. It was invisible because every CBMC run passes
+`--no-standard-checks`, which turns off exactly the array-bounds property that
+would have caught it. A masked tag comparison cannot match an invalid entry, so
+there is nothing to write back and nothing to get wrong.
+
+Dirty bits retire a question rather than a bug. The old `runCache` carried a
+`CR-soon` worrying that a speculative instruction which evicts an entry writes
+back too early. A clean line writes nothing, so there is nothing to undo, and a
+dirty line was dirtied by a committed store: `Isa.speculable` refuses a store
+outright and `Forwarding` holds one in its queue until `close`. So a write-back
+is always a write-back of committed data, and when it happens is not
+architecturally observable. The cache's own state is another matter, and
+deliberately so, since that is the channel.
 
 ## Reading around a store
 
@@ -195,9 +328,9 @@ so both queue the same store address and both read around it at word 27. The
 secret sitting there is 0 in one run and 18 in the other, so the last load
 probes word 0 against word 18, the alias resolves, and both runs squash. The
 registers come back. The cache does not, so when the re-run probes word 0 the
-run that already touched it pays a cycle for the LRU's tail and the other pays a
-hundred for a miss. 227 cycles against 326, and 99 is the difference between
-those two.
+run that already touched it pays a cycle for an L1 hit and the other pays a
+hundred for a trip to memory. 228 cycles against 327, and 99 is the difference
+between those two.
 
 So this leaks the way `spectre` leaks, through a line the squash does not undo,
 with the bypass rather than a mispredicted branch as the thing that gets a
@@ -273,8 +406,10 @@ other models do not take, and the bypass is the only such path.
 So forwarding can contribute to a gap, and in `bypass.s` it does, but never
 without a bypass in front of it to put a secret where the comparison can reach.
 It cannot be the whole story. There is a blunter version of the same point:
-`Forwarding.forwardCost` is 1 and `Cached`'s LRU tail hit is also 1, so those
-two arms are not even distinguishable in the timer.
+`Forwarding.forwardCost` is 1 and an L1 hit is also 1, so those two arms are not
+even distinguishable in the timer. A second level is what makes that a statement
+about L1 rather than about the whole cache, since a forward is now cheaper than
+an answer from L2 by eleven cycles.
 
 What is not transparent is a forward the queue should not have made.
 `forwardBits` low bits of the word index decide it, not the whole address, which
@@ -299,14 +434,14 @@ Both addresses are `li` immediates, so the tag comparison folds and the load at
 word 0 always takes the secret. The channel load then has a tag of its own,
 `(secret >> 2) & 3`, and the witness is the two runs disagreeing about it: one
 probes the cache at the secret's word for a miss and the other falsely forwards
-again for a cycle. 429 against 330. The close catches both false forwards and
+again for a cycle. 430 against 331. The close catches both false forwards and
 squashes, and the cache keeps the line.
 
 Under every other model the load reads word 0 and gets the public zero, so the
 channel address is word 0 in both runs and there is nothing to report. This is
-the 4K-aliasing shape, scaled to thirty words the way the two-entry cache is
-scaled: a real queue compares a twelve-bit page offset, which over an address
-space is a curiosity and over `mem` would be exact.
+the 4K-aliasing shape, scaled to sixty-four words the way the cache is scaled:
+a real queue compares a twelve-bit page offset, which over an address space is a
+curiosity and over `mem` would be exact.
 
 ### Most of the column is a copy
 
@@ -325,12 +460,12 @@ that differ are `salsa20`, `bypass`, `bypass_ct`, `bypass_late`, `dynstore` and
 
 ## Checking with KLEE
 
-`src/out/klee` is the same 86 residues checked by [KLEE](#KLEE) instead, and
+`src/out/klee` is the same 93 residues checked by [KLEE](#KLEE) instead, and
 [`src/out/klee/verify`](src/out/klee/verify) is its script:
 
 `./src/out/klee/verify [--slow | --only-slow] [file.c ...]`
 
-Both trees agree, 86 verdicts for 86, model sensitivity included. That agreement
+Both trees agree, 93 verdicts for 93, model sensitivity included. That agreement
 is the point of having two: a residue really is an ordinary C program, and
 nothing about the claim depends on which checker reads it.
 
@@ -338,7 +473,7 @@ Only the prelude differs between a pair of snapshots, so
 
 `diff src/out/{cbmc,klee}/riscv/cache/2ctr.check.c`
 
-changes thirteen lines, and so does every one of the other 85 pairs.
+changes thirteen lines, and so does every one of the other 92 pairs.
 `Prover.intrinsics` is that block. The residue, `init` and `main` are one text
 spelled in terms of `koika_assert`,
 `koika_assume` and `koika_draw`, which each backend defines its own way and a
@@ -354,10 +489,13 @@ No error file is only clean if the run also finished, which is
 `halting execution` on stderr. Drop the last two and an exploration that ran out
 of time reports exactly like a proof.
 
-That case is real and four files in the tree are it. `runCache` is a two-way LRU
-with three arms, so it forks threefold per symbolic load, and `branchy`'s twelve
-probes are (3^12 + 1) / 2 paths. CBMC answers each in under eight seconds and
-KLEE does not arrive, so those tests say so where they call `check`:
+That case is real and four files in the tree are it, every one of them `branchy`
+with a cache in front of the walk. Not for want of a budget and not for the size
+of its path space, which is small: `runCache` answers out of L1, out of L2 or
+out of memory, so four probes are (3^4 + 1) / 2 paths and CBMC is done in 1.4s.
+What KLEE cannot get through is a single one of them. Two minutes ends with 0
+completed paths against 23 partially completed, and ten minutes ends the same
+way, so those tests say so where they call `check`:
 
 ```scala
 check("cache/branchy", snippet, Verdict.Clean, klee = Reach.LikelyTimeout)
@@ -368,15 +506,24 @@ program's, and a run that somehow finishes has to produce it; what
 `LikelyTimeout` adds is that running out of budget is also a pass. Demanding the
 timeout would turn a faster solver into a failing test, and demanding the
 verdict asks KLEE for something it cannot give here, so either outcome is
-accepted and a wrong one still is not. `naive/branchy` has no cache in front of
-those probes, walks one path, and verifies.
+accepted and a wrong one still is not. `naive/branchy` walks the same four
+addresses with nothing in front of memory and verifies, which is the control
+that makes this a statement about the cache rather than about the walk.
+
+The other half of that distinction is what `Reach.budgetSeconds` is for, and it
+had to grow from 120 to 1200 with the cache. Five residues started reporting
+`unknown` that had been settling in under a second, and none of them was this
+case: `fact/speculative/guarded` finds its leak in 275s and
+`riscv/forwarding/bypass` in 570s, so the old budget was turning "not yet" into
+a failing test. A budget is a cap and not a cost, so the files that settled
+quickly still do, and the only ones that spend it are the four above.
 
 Each of those four costs a full budget, so a default run skips them and says
 which it skipped:
 
 ```
 skip     src/out/klee/riscv/cache/branchy.check.c (likely-timeout; pass --slow to run it)
-all 49 agree (4 skipped)
+all 89 agree (4 skipped)
 ```
 
 `--slow` adds them back, and `--only-slow` runs nothing else, which is the one
@@ -394,7 +541,7 @@ KLEE walks one path and beats CBMC on a large one: `fact/naive/salsa20` is 0.68s
 against 4.53s, because CBMC's cost is a formula over 277 instructions and 6536
 generated properties while KLEE just runs it. Put a cache in front of a symbolic
 load and it reverses, from 4x behind on a five-path space to not answering at
-all. CBMC finishes every residue here; KLEE finishes 82 of 86.
+all. CBMC finishes every residue here; KLEE finishes 89 of 93.
 
 ## The FaCT suite
 

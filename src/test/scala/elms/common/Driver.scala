@@ -9,13 +9,18 @@ import elms.pipeline.eqsat.Ruleset
 abstract class DslDriver[A: Typable, B: Typable]
     extends OptimizingSnippetDriver[A, B](Ruleset(Seq())) with DslOps
 
-// [R] registers, [M] words of memory and [C] cache lines, fixed here because
-// this is the last place that can see all three at once: the struct members get
-// them from [State], and the `#define`s the hand-written C reads get them from
-// `valueOf`. One literal each, so the two cannot drift.
-abstract class GenericKoikaDriver[R <: Int: ValueOf, M <: Int: ValueOf, C <: Int: ValueOf]
-    extends DslDriver[StateT[R, M, C], StateT[R, M, C]] with StateTOps {
-  override type State = StateT[R, M, C]
+// [R] registers, [M] words of memory, [C] words of cache data and [T] cache
+// entries, fixed here because this is the last place that can see all four at
+// once: the struct members get them from [State], and the `#define`s the
+// hand-written C reads get them from `valueOf`. One literal each, so the two
+// cannot drift.
+abstract class GenericKoikaDriver[
+    R <: Int: ValueOf,
+    M <: Int: ValueOf,
+    C <: Int: ValueOf,
+    T <: Int: ValueOf
+] extends DslDriver[StateT[R, M, C, T], StateT[R, M, C, T]] with StateTOps {
+  override type State = StateT[R, M, C, T]
   override given stateManifest: StructManifest[State] = StateT.manifest
 
   override val codegen = CCodegen()
@@ -24,9 +29,37 @@ abstract class GenericKoikaDriver[R <: Int: ValueOf, M <: Int: ValueOf, C <: Int
   // and an override would only desync the `#define`s from them.
   final val num_regs: Int = valueOf[R]
   final val mem_size: Int = valueOf[M]
-  final val cache_size: Int = valueOf[C]
+  final val cache_words: Int = valueOf[C]
+  final val cache_entries: Int = valueOf[T]
   val secret_size: Int = 10
   val secret_offset: Int = 20
+
+  // The shape [Cached] reads, declared here because this is where the lengths
+  // it has to agree with are. A model with no cache in it still has one, which
+  // costs nothing: [Direct] never asks.
+  def geometry: Geometry = Geometry.default
+
+  // Two lengths in the type and two in the geometry, and nothing else would
+  // notice them disagreeing. The struct would be laid out at one size and
+  // indexed at another, which in C is a read of the member after it rather
+  // than a failure.
+  //
+  // Lazy and forced from [defines] rather than run in the constructor, because
+  // [geometry] is overridable and a subclass's override is not initialized
+  // while this class's body is still running.
+  private lazy val checked: Unit = {
+    require(
+      geometry.words == cache_words && geometry.entries == cache_entries,
+      s"${geometry.describe} wants ${geometry.entries} entries of ${geometry.words}" +
+        s" words, and the state has $cache_entries of $cache_words"
+    )
+    // A secret that straddles a line boundary is a demo whose verdict is about
+    // where it happened to land, so the offset is line-aligned and says so.
+    require(
+      secret_offset % geometry.lineWords == 0,
+      s"secret_offset $secret_offset is not a multiple of ${geometry.lineWords} words"
+    )
+  }
 
   val stateT: String = "StateT"
 
@@ -37,18 +70,23 @@ abstract class GenericKoikaDriver[R <: Int: ValueOf, M <: Int: ValueOf, C <: Int
   // Fall short and a `clean` verdict is a statement about a program CBMC never
   // finished looking at, which is why `verify --certify` exists. A demo whose
   // recursion runs deeper than its loops overrides this.
-  def unwind: Int = Seq(num_regs, mem_size, cache_size, secret_size).max + 1
+  def unwind: Int =
+    Seq(num_regs, mem_size, cache_words, cache_entries, secret_size).max + 1
 
-  // The struct itself comes out of the generator, which reads the same three
+  // The struct itself comes out of the generator, which reads the same four
   // lengths off [State]. These are for the hand-written C around it. A model
   // that needs state of its own appends here.
-  def defines: Seq[(String, Int)] = Seq(
-    "NUM_REGS" -> num_regs,
-    "MEM_SIZE" -> mem_size,
-    "SECRET_SIZE" -> secret_size,
-    "SECRET_OFFSET" -> secret_offset,
-    "CACHE_LRU_SIZE" -> cache_size
-  )
+  def defines: Seq[(String, Int)] = {
+    checked
+    Seq(
+      "NUM_REGS" -> num_regs,
+      "MEM_SIZE" -> mem_size,
+      "SECRET_SIZE" -> secret_size,
+      "SECRET_OFFSET" -> secret_offset,
+      "CACHE_ENTRIES" -> cache_entries,
+      "CACHE_WORDS" -> cache_words
+    )
+  }
 
   def header(prover: Prover): String =
     s"""${defines.map((k, v) => s"#define $k $v").mkString("\n")}

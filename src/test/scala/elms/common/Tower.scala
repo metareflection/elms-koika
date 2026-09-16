@@ -101,57 +101,259 @@ trait Direct extends Common {
     s.mem(i) = v
 }
 
+// A set-associative, LRU, line-granular cache hierarchy in front of memory.
+//
+// Three knobs decide how much of this reaches the residue and they do not cost
+// the same. Sets are free: the set index is a [Rep], so
+// `cache_tags(base + set * ways + w)` is one symbolic subscript into inline
+// storage however many sets there are, which is what `mem` already was. Ways
+// are nearly free, because the tag comparison is arithmetic rather than a
+// chain of `if`s: [eqMask] turns equality into a bit mask and the matching way
+// number falls out of an `or`, so W ways is W expressions and still exactly
+// two arms. Levels are what costs, one arm apiece.
+//
+// That is the whole reason the shape below is worth the trouble. Two levels
+// fork threefold per access, which is exactly what the two-entry LRU this
+// replaces already did, so `branchy`'s path space is the one it was written
+// for and the way count can grow without touching it.
+//
+// [Isa.get_mem] is word-indexed, so what arrives is a word address and its
+// line is `addr >>> lineBits`. An entry holds a line rather than a word, which
+// is the point of the exercise: a lookup table that fits inside one line is
+// one probe, and "the table fits in a line" is the argument real constant-time
+// code actually makes.
+//
+// A dirty bit also answers a worry the old model carried in a `CR-soon`, about
+// writing an evicted line back too early when a speculative instruction is what
+// displaced it. A clean line writes nothing, so there is nothing to undo, and a
+// dirty line was dirtied by a committed store: [Isa.speculable] refuses a store
+// outright and [Forwarding] holds one in its queue until `close`. So a
+// write-back is always a write-back of committed data, and when it happens is
+// not architecturally observable. The cache's own state is another matter, and
+// deliberately so, since that is the channel.
 @virtualize
 trait Cached extends Direct {
-  def pushLRU(s: Rep[State], addr: Rep[Int], v: Rep[Int]): Rep[Unit] = {
-    s.cache_keys(1) = s.cache_keys(0)
-    s.cache_vals(1) = s.cache_vals(0)
+  // Supplied by [GenericKoikaDriver], which is where the state lengths this
+  // has to agree with are fixed.
+  def geometry: Geometry
 
-    s.cache_keys(0) = addr
-    s.cache_vals(0) = v
+  // What a line costs when no level has it.
+  def memCost: Int = 100
+
+  private def lineWords: Int = geometry.lineWords
+  private def levels: Vector[Level] = geometry.levels
+
+  // -1 when the two are equal and 0 otherwise, out of a sign bit rather than
+  // out of a comparison. `d | -d` has its top bit set for every d but zero, so
+  // this is equality with no branch in it, which is what lets a way count grow
+  // without the residue forking per way.
+  private def eqMask(a: Rep[Int], b: Rep[Int]): Rep[Int] = {
+    val d = a ^ b
+    ~((d | (unit(0) - d)) >> unit(31))
   }
 
-  def runCache(s: Rep[State], addr: Rep[Int], v: Option[Rep[Int]]): Rep[Int] = {
-    if (s.cache_keys(0) === addr) {
-      // address is in cache, return value
-      v match {
-        case Some(x) => {
-          s.cache_vals(0) = x
-          x
-        }
-        case None => s.cache_vals(0)
-      }
-    } else if (s.cache_keys(1) === addr) {
-      // key is at tail of LRU queue, so set addr as head
-      val result = v match {
-        case Some(x) => x
-        case None    => s.cache_vals(1)
-      }
+  // [t] where [m] is all ones, [f] where it is zero.
+  private def pick(m: Rep[Int], t: Rep[Int], f: Rep[Int]): Rep[Int] = f ^ (m & (t ^ f))
 
-      pushLRU(s, addr, result)
+  // Where [line] would live at [level], and whether it is there.
+  //
+  // [hit] is a mask and not a [Rep[Boolean]] on purpose: the caller both tests
+  // it and selects a latency with it, and a mask does the second without a
+  // second comparison.
+  private case class Probe(level: Int, set: Rep[Int], hit: Rep[Int], entry: Rep[Int])
 
-      s.timer += 1
-      result
+  // One symbolic array read per way, which is the whole budget. The tag stored
+  // is the line number itself, so an empty frame's -1 fails the comparison on
+  // its own and there is no valid bit to read alongside it.
+  private def probe(s: Rep[State], level: Int, line: Rep[Int]): Probe = {
+    val g = levels(level)
+    val set = line & unit(g.sets - 1)
+    val base = unit(geometry.base(level)) + set * unit(g.ways)
+
+    // Accumulated in ordinary Scala vars, which is safe here and nowhere near
+    // a virtualized `if`: these are straight-line expressions, so what the var
+    // names at the end is the whole chain rather than whichever arm was staged
+    // last.
+    var hit: Rep[Int] = unit(0)
+    var way: Rep[Int] = unit(0)
+    for (w <- 0 until g.ways) {
+      val m = eqMask(s.cache_tags(base + unit(w)), line)
+      hit = hit | m
+      way = way | (m & unit(w))
+    }
+    Probe(level, set, hit, base + way)
+  }
+
+  // Exact LRU. Age 0 is the most recent, and everything younger than the entry
+  // just touched ages by one, which over [ways] entries keeps the ages a
+  // permutation of `0 until ways`. The comparison is the sign bit of a
+  // subtraction rather than an `if`, for the reason [eqMask] is.
+  private def touch(s: Rep[State], level: Int, set: Rep[Int], entry: Rep[Int]): Rep[Unit] = {
+    val g = levels(level)
+    val base = unit(geometry.base(level)) + set * unit(g.ways)
+    val was = s.cache_age(entry)
+    for (w <- 0 until g.ways) {
+      val e = base + unit(w)
+      val a = s.cache_age(e)
+      s.cache_age(e) = a + ((a - was) >>> unit(31))
+    }
+    s.cache_age(entry) = unit(0)
+  }
+
+  // The entry a fill would take: the oldest, and an invalid one ahead of any
+  // valid one. An invalid entry is given an age of [ways], which is one past
+  // anything a valid entry can hold, so "prefer invalid" needs no test of its
+  // own.
+  private def victim(s: Rep[State], level: Int, set: Rep[Int]): Rep[Int] = {
+    val g = levels(level)
+    val base = unit(geometry.base(level)) + set * unit(g.ways)
+    // `-1 & ways` is `ways`, so an empty frame reads one older than the oldest
+    // live one without a test of its own.
+    def age(e: Rep[Int]): Rep[Int] =
+      s.cache_age(e) + (eqMask(s.cache_tags(e), unit(-1)) & unit(g.ways))
+
+    var bestWay: Rep[Int] = unit(0)
+    var bestAge: Rep[Int] = age(base)
+    for (w <- 1 until g.ways) {
+      val a = age(base + unit(w))
+      val older = (bestAge - a) >> unit(31)
+      bestWay = pick(older, unit(w), bestWay)
+      bestAge = pick(older, a, bestAge)
+    }
+    base + bestWay
+  }
+
+  private def word(entry: Rep[Int], offset: Rep[Int]): Rep[Int] =
+    entry * unit(lineWords) + offset
+
+  private def readEntry(s: Rep[State], entry: Rep[Int]): Vector[Rep[Int]] =
+    (0 until lineWords).toVector.map(i => s.cache_vals(word(entry, unit(i))))
+
+  private def writeEntry(s: Rep[State], entry: Rep[Int], ws: Vector[Rep[Int]]): Rep[Unit] = {
+    ws.zipWithIndex.foreach((x, i) => s.cache_vals(word(entry, unit(i))) = x)
+    unit(())
+  }
+
+  private def readMemLine(s: Rep[State], line: Rep[Int]): Vector[Rep[Int]] =
+    (0 until lineWords).toVector.map(i => s.mem(line * unit(lineWords) + unit(i)))
+
+  private def writeMemLine(s: Rep[State], line: Rep[Int], ws: Vector[Rep[Int]]): Rep[Unit] = {
+    ws.zipWithIndex.foreach((x, i) => s.mem(line * unit(lineWords) + unit(i)) = x)
+    unit(())
+  }
+
+  // [line] present at [level], and its entry.
+  //
+  // [ps] is the probe each level was seen in before anything moved. A level
+  // whose entry is [None] is probed again here, which is what a second visit to
+  // a level in one access needs: the first visit may have installed the line,
+  // and a mask read before that would describe the wrong state.
+  private def bring(
+      s: Rep[State],
+      level: Int,
+      line: Rep[Int],
+      ps: Vector[Option[Probe]]
+  ): Rep[Int] = {
+    val p = ps(level).getOrElse(probe(s, level, line))
+    if (p.hit !== unit(0)) {
+      touch(s, level, p.set, p.entry)
+      p.entry
     } else {
-      // address not in cache
-      val result = v match {
-        case Some(x) => x
-        case None    => s.mem(addr)
+      val e = victim(s, level, p.set)
+
+      // Only the bottom level is ever dirty, so this is one `if` in one place
+      // rather than one per level. See [Geometry.writeBack]: a level that can
+      // be dirty is a level whose eviction mutates the one below it, in the
+      // middle of an access that has already read that level's tags.
+      //
+      // Dirty implies live, so there is no emptiness test here either: a frame
+      // is only ever dirtied by a store to a line it is holding, and a fill
+      // clears the bit before anything can write to that frame again. The tag
+      // is the line, so the write-back needs no arithmetic to find its address.
+      if (geometry.writeBack(level)) {
+        if (s.cache_dirty(e) !== unit(0)) {
+          writeMemLine(s, s.cache_tags(e), readEntry(s, e))
+        }
       }
 
-      // evict LRU and write back to memory
-      // CR-soon cwong: Triple-check that this is correct -- I think we might
-      // accidentally write back to memory too soon if a speculative
-      // instruction evicts an entry.
-      s.mem(s.cache_keys(1)) = s.cache_vals(1)
+      writeEntry(s, e, fill(s, level + 1, line, ps))
+      s.cache_tags(e) = line
+      s.cache_dirty(e) = unit(0)
 
-      pushLRU(s, addr, result)
-
-      s.timer += 100
-
-      result
+      // Oldest first, and only then touched. [touch] ages what is younger than
+      // the entry it is given, so handing it one that still reads 0 from a
+      // cold start would age nothing and leave two frames tied at 0 with no
+      // way to tell which to evict next. In the steady state the victim is
+      // already the oldest and this writes what was there.
+      s.cache_age(e) = unit(levels(level).ways - 1)
+      touch(s, level, p.set, e)
+      e
     }
   }
+
+  // A whole line out of [level], which is memory once the hierarchy runs out.
+  // Line-granular and not word-granular, which is what real hardware does and
+  // is also what keeps a fill from forking once per word.
+  private def fill(
+      s: Rep[State],
+      level: Int,
+      line: Rep[Int],
+      ps: Vector[Option[Probe]]
+  ): Vector[Rep[Int]] =
+    if (level == levels.length) { readMemLine(s, line) }
+    else { readEntry(s, bring(s, level, line, ps)) }
+
+  // One word, written at [level] and at every level below it. The bottom takes
+  // the write and marks the line dirty; everything above takes it and passes
+  // it on, which is what [Geometry.writeBack] means by write-through.
+  private def store(
+      s: Rep[State],
+      level: Int,
+      line: Rep[Int],
+      offset: Rep[Int],
+      v: Rep[Int],
+      ps: Vector[Option[Probe]]
+  ): Rep[Unit] =
+    if (level == levels.length) { s.mem(line * unit(lineWords) + offset) = v }
+    else {
+      val e = bring(s, level, line, ps)
+      s.cache_vals(word(e, offset)) = v
+      if (geometry.writeBack(level)) { s.cache_dirty(e) = unit(1) }
+      // Everything below has been visited already: this level's fill went
+      // through all of them. So the write down re-probes rather than trusting
+      // a mask that predates its own fill.
+      else { store(s, level + 1, line, offset, v, ps.map(_ => None)) }
+    }
+
+  // What the access costs, read off the state it arrived in and before any of
+  // it moves. Selected arithmetically rather than charged inside the arms, so
+  // that the number exists as a [Rep] in its own right: a non-blocking load
+  // charges this to whoever waits for the value rather than to the clock, and
+  // a cache that had already spent it would have nothing to hand over.
+  private def latency(ps: Vector[Probe]): Rep[Int] =
+    ps.foldRight(unit(memCost))((p, below) => pick(p.hit, unit(levels(p.level).hitCost), below))
+
+  def runCache(s: Rep[State], addr: Rep[Int], v: Option[Rep[Int]]): Rep[Int] = {
+    val offset = addr & unit(lineWords - 1)
+    val line = addr >>> unit(lineBits)
+
+    // One probe per level, shared by the latency and by the data path. Both
+    // want the state the access arrived in, and a symbolic tag read is the
+    // most expensive thing in here: doing it twice was most of the formula.
+    val ps = levels.indices.toVector.map(probe(s, _, line))
+    s.timer += latency(ps)
+
+    val some = ps.map(Some(_))
+    v match {
+      case Some(x) => {
+        store(s, 0, line, offset, x, some)
+        x
+      }
+      case None => s.cache_vals(word(bring(s, 0, line, some), offset))
+    }
+  }
+
+  private def lineBits: Int = geometry.lineBits
 
   override def get_mem(s: Rep[State], addr: Rep[Int]): Rep[Int] =
     runCache(s, addr, None)
