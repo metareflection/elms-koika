@@ -6,19 +6,24 @@ import elms.prelude.given
 import elms.koika.test.KoikaSuite
 import elms.koika.test.common.{Cached, Predictive, Speculative}
 
-// The FaCT ports against the four models.
+// The FaCT ports against the four models. Four programs, two that hold up and
+// two that say where FaCT's guarantee stops.
 //
 // `salsa20` is the positive control, and what it controls for is size.
 // Everything else in the tree that verifies clean does so in under twenty
 // instructions, which is not much of a claim; this one is 277, and no model
 // fails it.
 //
-// `guarded` is the negative one, and the only port whose verdict moves with the
-// model. FaCT typechecks it and FaCT's bounds checker proves every index in
-// range, and the residue still hands the key to anything that speculates.
+// `guarded` is the only port whose verdict moves with the model. FaCT
+// typechecks it and FaCT's bounds checker proves every index in range, and the
+// residue still hands the key to anything that speculates.
 //
-// `src/test/fact/salsa20.fact` and `src/test/fact/guarded.fact` have the rest
-// of both stories.
+// `choose` and `folded` are one source lowered two ways. `choose` is what
+// `factc` emits for a secret conditional, and it is clean under every model.
+// `folded` is the same LLVM with `instcombine` after it, which puts the branch
+// back, and it leaks under every model. Nothing speculates in that one.
+//
+// `src/test/fact/*.fact` has the rest of all of it.
 
 @virtualize
 class FactNaiveTests extends KoikaSuite {

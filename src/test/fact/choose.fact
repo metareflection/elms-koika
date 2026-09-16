@@ -1,0 +1,37 @@
+// FaCT's own example program, `example/example.fact` in PLSysSec/FaCT,
+// unchanged. It is lowered twice. `choose.o` is what `factc` and `mem2reg`
+// produce, and `folded.o` is the same LLVM with `instcombine` after it. The two
+// objects disagree about whether this program is safe to run.
+//
+// `choose.o` is constant time and all four models say so. FaCT compiles a
+// secret conditional to `output ^ (mask & (b ^ output))`, five instructions of
+// arithmetic with no branch among them, and that substitution is the whole of
+// what FaCT promises here.
+//
+// `folded.o` leaks and all four models say that. `instcombine` recognises the
+// idiom and folds it back into an LLVM `select`. RV32I has no conditional move,
+// so llc lowers that `select` as a branch, one arm carries a `mv` the other
+// does not, and the instruction count becomes a function of `cond`. `naive` is
+// enough to catch it: no cache, no speculation, a timer that counts
+// instructions.
+//
+// Worth being exact about the scope. FaCT's default selection primitive is an
+// x86 `cmovnz` written as inline assembly, which `instcombine` cannot see into,
+// and the XOR-and-mask form above only appears because `factc` is run with
+// `-no-inline-asm`. That flag is the only way to compile FaCT for a target that
+// is not x86, since nothing portable keeps the cmov. So the finding is about
+// FaCT away from x86. `src/test/fact/build` is where the pass gets named, and
+// `-O2` is where it normally arrives.
+
+export secret uint32 choose(
+    secret bool cond,
+    public uint32 a,
+    public uint32 b) {
+
+  secret mut uint32 output = a;
+  if (cond) {
+    output = b;
+  }
+
+  return output;
+}

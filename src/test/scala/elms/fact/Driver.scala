@@ -60,6 +60,16 @@ case class Program(name: String, params: List[Param], stack: Int, expect: Expect
     derives CanEqual
 
 object Program {
+  // FaCT's `choose(secret bool cond, public uint32 a, public uint32 b)`, shared
+  // because `choose.o` and `folded.o` are one source lowered two ways and so
+  // take the same arguments. Only `cond` can move the timer, and only an object
+  // that branches on it does.
+  private val choose: List[Param] = List(
+    Param.Word(secret = true, bound = 1),
+    Param.Word(secret = false, bound = 20),
+    Param.Word(secret = false, bound = 20)
+  )
+
   // Sizes are FaCT's, in words: `uint8[64]`, `uint8[16]`, `uint8[32]`.
   //
   // `input` is the nonce and counter, which the secretbox protocol around this
@@ -92,7 +102,13 @@ object Program {
       ),
       stack = 0,
       expect = Expect(Verdict.Clean, Verdict.Clean, Verdict.Leak, Verdict.Leak)
-    )
+    ),
+    // The pair `src/test/fact/choose.fact` exists for. One source, lowered once
+    // as FaCT compiled it and once with one more optimizer pass, and the branch
+    // that pass puts back is on a secret, so nothing has to speculate for the
+    // timer to notice.
+    Program("choose", choose, stack = 0, expect = Expect.uniform(Verdict.Clean)),
+    Program("folded", choose, stack = 0, expect = Expect.uniform(Verdict.Leak))
   )
 }
 

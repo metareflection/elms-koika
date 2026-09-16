@@ -49,18 +49,29 @@ retarget() {
 # back into a `select`, and RV32I has no conditional move, so llc lowers the
 # `select` as a branch and the secret is in the control flow again.
 #
-# Neither program here has a secret conditional, so today only the first reason
-# bites. `guarded.fact` does have an `if`, but on a public condition, which FaCT
-# leaves as a branch on purpose, so there is still no cmov to lose. The first
-# secret one will want the second reason, and nothing in the tree checks for it:
-# a branch back on a secret would show up as a changed snapshot and nothing
-# louder.
+# So `mem2reg` is what every module gets by default, and the one module built a
+# second way is built that way on purpose.
 passes=mem2reg
 
+lower() {
+    local out=$1 module=$2 with=$3
+    echo "Lowering $module.ll -> $out.o"
+    retarget $here/$module.ll \
+        | opt -passes=$with -S \
+        | llc -mtriple=riscv32 -O2 --relocation-model=static -o $here/$out.s || exit 1
+    $cc -c $here/$out.s -o $here/$out.o || exit 1
+}
+
 for src in $here/*.ll; do
-    echo "Lowering ${src:t}"
-    retarget $src \
-        | opt -passes=$passes -S \
-        | llc -mtriple=riscv32 -O2 --relocation-model=static -o ${src:r}.s || exit 1
-    $cc -c ${src:r}.s -o ${src:r}.o || exit 1
+    lower ${src:t:r} ${src:t:r} $passes
 done
+
+# `choose.ll` again, through the pass that undoes it. The pair is the finding:
+# one `.fact`, one `factc` invocation, one extra pass, and two objects that
+# disagree about whether the program leaks. `src/test/fact/choose.fact` is the
+# rest of it.
+#
+# `mem2reg,instcombine` and `default<O2>` emit a byte-identical object here, so
+# the short list is not a cherry-picked one. It is spelled out because it names
+# the pass that does the folding.
+lower folded choose mem2reg,instcombine

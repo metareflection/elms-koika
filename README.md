@@ -89,7 +89,7 @@ of the generated C, which makes it part of the snapshot `sbt test` pins, and
 
 `./src/out/cbmc/verify [--certify] [file.c ...]`
 
-With no arguments it takes every snapshot in the tree, 45 of them in 53 seconds.
+With no arguments it takes every snapshot in the tree, 53 of them in 53 seconds.
 It prints one line per file and exits non-zero if CBMC says anything other than
 what the file claims, so a model that stops detecting what it used to detect is
 a failing run rather than a stale comment. The claims themselves are greppable
@@ -124,13 +124,16 @@ blank is `cmp` under cache, which is a suite nobody has written.
 | `cmp` | leak | | leak | leak |
 | `salsa20` | clean | clean | clean | clean |
 | `guarded` | clean | clean | leak | leak |
+| `choose` | clean | clean | clean | clean |
+| `folded` | leak | leak | leak | leak |
 | `branchy` | clean | clean | clean | clean |
 
 Reading across a row is the tower. No model loses a leak the one to its left
 could see, and `2ctr` and `spectre` are where it starts seeing more: `2ctr`
 needs a cache before the second load's address can cost anything, and `spectre`
 needs speculation before that load happens at all. `guarded` is `spectre`'s row
-written again, and the FaCT section below is why that was worth a second demo.
+written again and `folded` is `shortcircuit`'s, and the FaCT section below is
+why either was worth a demo of its own.
 
 `branchy` is the odd one out and is RISC-V only, because it indexes `mem` with
 five bits and so wants an array of exactly 32 words where every other demo here
@@ -144,12 +147,12 @@ to rule out a path space rather than exhibit one member of it.
 
 ## Checking with KLEE
 
-`src/out/klee` is the same 45 residues checked by [KLEE](#KLEE) instead, and
+`src/out/klee` is the same 53 residues checked by [KLEE](#KLEE) instead, and
 [`src/out/klee/verify`](src/out/klee/verify) is its script:
 
 `./src/out/klee/verify [--slow | --only-slow] [file.c ...]`
 
-Both trees agree, 45 verdicts for 45, model sensitivity included. That agreement
+Both trees agree, 53 verdicts for 53, model sensitivity included. That agreement
 is the point of having two: a residue really is an ordinary C program, and
 nothing about the claim depends on which checker reads it.
 
@@ -157,7 +160,7 @@ Only the prelude differs between a pair of snapshots, so
 
 `diff src/out/{cbmc,klee}/riscv/cache/2ctr.check.c`
 
-changes thirteen lines, and so does every one of the other 44 pairs.
+changes thirteen lines, and so does every one of the other 52 pairs.
 `Prover.intrinsics` is that block. The residue, `init` and `main` are one text
 spelled in terms of `koika_assert`,
 `koika_assume` and `koika_draw`, which each backend defines its own way and a
@@ -195,7 +198,7 @@ which it skipped:
 
 ```
 skip     src/out/klee/riscv/cache/branchy.check.c (likely-timeout; pass --slow to run it)
-all 41 agree (4 skipped)
+all 49 agree (4 skipped)
 ```
 
 `--slow` adds them back, and `--only-slow` runs nothing else, which is the one
@@ -213,7 +216,7 @@ KLEE walks one path and beats CBMC on a large one: `fact/naive/salsa20` is 0.68s
 against 4.53s, because CBMC's cost is a formula over 277 instructions and 6536
 generated properties while KLEE just runs it. Put a cache in front of a symbolic
 load and it reverses, from 4x behind on a five-path space to not answering at
-all. CBMC finishes every residue here; KLEE finishes 41 of 45.
+all. CBMC finishes every residue here; KLEE finishes 49 of 53.
 
 ## The FaCT suite
 
@@ -221,10 +224,13 @@ all. CBMC finishes every residue here; KLEE finishes 41 of 45.
 programs that branch on a secret or index memory with one, whose Z3-backed
 checker rejects programs it cannot prove stay in bounds, and whose compiler
 emits a branchless selection in place of the branch you would have written.
-[`src/test/fact`](src/test/fact) holds two programs it accepts. One is the
-Salsa20 core from [fact-eval](https://github.com/PLSysSec/fact-eval), the case
-studies published alongside the FaCT paper. The other is written for this tree,
-and the four models disagree about it.
+[`src/test/fact`](src/test/fact) holds three programs it accepts, lowered into
+four objects. Two of the programs come from FaCT's own repositories: the Salsa20
+core from [fact-eval](https://github.com/PLSysSec/fact-eval), the case studies
+published alongside the paper, and `example.fact`, which is what the compiler
+ships to show what it does. The third is written here. Two of the four objects
+verify clean under every model and two do not, and which is which is not a
+property of FaCT's type system.
 
 We do not build the FaCT frontend to run it. What is checked in is the LLVM that
 `factc` emitted, and
@@ -315,12 +321,49 @@ arbitrary, `table[idx]` is not provable, and `factc` answers `value could be
 through. Two smaller details are the models' rather than FaCT's, and both are
 commented where they sit in the source.
 
-One gap in the other direction is still open. `build` runs `mem2reg` and nothing
-after it, because `instcombine` folds FaCT's `res ^ (mask & (v ^ res))`
-selection back into a `select`, and RV32I has no conditional move, so `llc`
-lowers that as a branch and a secret is in the control flow again. Neither
-program here has a secret conditional, so there is no cmov to lose and nothing
-in the tree would notice if there were.
+### `choose` and `folded`
+
+[`choose.fact`](src/test/fact/choose.fact) is FaCT's own example program,
+`example/example.fact` in its repository, unchanged:
+
+```
+secret mut uint32 output = a;
+if (cond) {
+  output = b;
+}
+return output;
+```
+
+`cond` is secret, which is the case FaCT exists for: the type system permits the
+branch and the compiler takes it away, substituting
+`output ^ (mask & (b ^ output))`. That is five RV32I instructions with no branch
+among them. It is lowered twice.
+
+| object | passes | naive | cache | speculative | predictive |
+|---|---|---|---|---|---|
+| `choose.o` | `mem2reg` | clean | clean | clean | clean |
+| `folded.o` | `mem2reg,instcombine` | leak | leak | leak | leak |
+
+One `.fact` file, one `factc` invocation, one `.ll` checked in, one extra
+optimizer pass, and two objects that disagree about whether the program is safe
+to run. `instcombine` recognises the selection idiom and folds it back into an
+LLVM `select`, RV32I has no conditional move, so `llc` lowers that `select` as a
+branch, one arm carries a `mv` the other does not, and the instruction count
+becomes a function of `cond`. `naive` catches it, which is to say no cache and
+no speculation were needed. A timer that counts instructions is enough.
+
+`mem2reg,instcombine` and `default<O2>` emit a byte-identical object here, so
+the short pass list is not a cherry-picked one. It is written out because it
+names the pass that does the folding.
+
+The scope is narrower than "FaCT is broken" and worth stating exactly. FaCT's
+default selection primitive is an x86 `cmovnz` written as inline assembly, which
+`instcombine` cannot see into, and the arithmetic form above only appears
+because `factc` runs with `-no-inline-asm`. That flag is the only way to compile
+FaCT for a target that is not x86, since nothing portable keeps the cmov. So
+this is a statement about FaCT away from x86, and it is why
+[`build`](src/test/fact/build) stops at `mem2reg` for everything else in the
+directory.
 
 ## CBMC
 
