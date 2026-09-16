@@ -76,4 +76,12 @@ class RiscVCacheTests extends KoikaSuite {
     }
     check("bypass_alias", snippet, Verdict.Clean)
   }
+
+  // The eviction set, which is the demo the geometry exists for.
+  test("riscv cache evict") {
+    val snippet = new CacheDriver {
+      override val prog = demo("evict")
+    }
+    check("evict", snippet, Verdict.Leak)
+  }
 }

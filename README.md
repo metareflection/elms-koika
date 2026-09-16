@@ -134,6 +134,7 @@ cache, and `cmp` and `branchy` under forwarding.
 |---|---|---|---|---|---|
 | `shortcircuit` | leak | leak | leak | leak | leak |
 | `2ctr` | clean | leak | leak | leak | leak |
+| `evict` | clean | leak | leak | leak | leak |
 | `spectre` | clean | clean | leak | leak | leak |
 | `constant_time` | clean | clean | clean | clean | clean |
 | `cmp` | leak | | leak | leak | |
@@ -147,6 +148,20 @@ cache, and `cmp` and `branchy` under forwarding.
 | `bypass_late` | clean | clean | clean | clean | leak |
 | `dynstore` | clean | clean | clean | clean | clean |
 | `bypass_alias` | clean | clean | clean | clean | leak |
+
+`evict` is the row the geometry was for, and it is a stronger statement than
+`2ctr` next to it. `2ctr` needs a cache of some kind. `evict` needs a cache with
+*sets* in it: the secret picks which set gets a line installed, so the channel
+is a conflict rather than an address. The program has no branch in it and reads
+around no store, which is why the four columns to the right are copies.
+
+That a cache without sets answers clean here is a claim about what a model
+cannot see, so it is a test rather than a sentence.
+[`RiscVFlatTests`](src/test/scala/elms/riscv/flat.scala) is the same `Cached`
+at one set of two ways over one-word lines, which is the shape this tower
+carried before, and `src/out/*/riscv/flat` is two files: `evict` clean, and
+`2ctr` still leaking so that the control is not merely a model too weak to
+report anything.
 
 Reading across the first four columns is the tower. No model loses a leak the
 one to its left could see, and `2ctr` and `spectre` are where it starts seeing
@@ -180,6 +195,13 @@ Twelve line frames over thirty-two lines of memory, LRU within a set,
 write-allocate, write-through at L1 and write-back at L2. That is
 [`Geometry.default`](src/test/scala/elms/common/Geometry.scala), and everything
 in it is a knob.
+
+Three tiers rather than two is what `evict` reads. Its counterexample is 420
+cycles against 409, and the eleven between them is exactly
+`L2.hitCost - L1.hitCost`: one run answers its last probe out of L1 and the
+other has to go a level down for it. Under one level that same gap would have
+been ninety-nine, indistinguishable from any other miss, and
+`Forwarding.forwardCost` would still be colliding with it.
 
 What it replaces was two entries of one word each, fully associative, with no
 valid bit and no dirty bit. That was enough to demonstrate a channel, which is
@@ -446,12 +468,12 @@ curiosity and over `mem` would be exact.
 ### Most of the column is a copy
 
 Only five programs in the tree put a store inside reach of a window. `2ctr`,
-`spectre`, `shortcircuit`, `constant_time`, `choose.o` and `folded.o` contain no
-store at all, and `guarded.o`'s is its last instruction, so
+`spectre`, `shortcircuit`, `constant_time`, `evict`, `choose.o` and `folded.o`
+contain no store at all, and `guarded.o`'s is its last instruction, so
 
 `diff src/out/cbmc/riscv/{speculative,forwarding}/spectre.check.c`
 
-is empty, and so are thirteen other pairs. Fourteen of the twenty-six snapshots
+is empty, and so are fifteen other pairs. Sixteen of the twenty-eight snapshots
 in this column are their speculative twin to the byte, which is worth
 generating: a model that only ever adds a channel has to leave a program with no
 store alone, and the snapshots are the proof rather than the claim. The twelve

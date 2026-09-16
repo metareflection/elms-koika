@@ -82,4 +82,13 @@ class RiscVForwardingTests extends KoikaSuite {
     }
     check("bypass_alias", snippet, Verdict.Leak)
   }
+
+  // The eviction set. Inherited from [Cached] rather than added by this model,
+  // the way most of this column is.
+  test("riscv forwarding evict") {
+    val snippet = new FwdDriver {
+      override val prog = demo("evict")
+    }
+    check("evict", snippet, Verdict.Leak)
+  }
 }

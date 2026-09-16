@@ -78,4 +78,13 @@ class RiscVNaiveTests extends KoikaSuite {
     }
     check("bypass_alias", snippet, Verdict.Clean)
   }
+
+  // The eviction set. `evict.s` says what it needs from the geometry; nothing
+  // here has a cache in front of it, so nothing here can see it.
+  test("riscv naive evict") {
+    val snippet = new NaiveDriver {
+      override val prog = demo("evict")
+    }
+    check("evict", snippet, Verdict.Clean)
+  }
 }
