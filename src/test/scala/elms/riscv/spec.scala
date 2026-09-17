@@ -85,4 +85,22 @@ class RiscVSpecTests extends KoikaSuite {
     }
     check("evict", snippet, Verdict.Leak)
   }
+
+  // The same channel as `2ctr` with a loop after it long enough to hide the
+  // miss. `hidden.s` says which way each column is meant to answer and why.
+  test("riscv spec hidden") {
+    val snippet = new SpecDriver {
+      override val prog = demo("hidden")
+    }
+    check("hidden", snippet, Verdict.Leak)
+  }
+
+  // `spectre.s` with the reload step. `reload.s` says why that is a different
+  // claim from the one `spectre` makes, and this column answers both the same.
+  test("riscv spec reload") {
+    val snippet = new SpecDriver {
+      override val prog = demo("reload")
+    }
+    check("reload", snippet, Verdict.Leak)
+  }
 }

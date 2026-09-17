@@ -4,19 +4,27 @@ import elms.prelude.*
 import elms.prelude.given
 
 import elms.koika.test.{KoikaSuite, Verdict}
-import elms.koika.test.common.{Cached, Init, Predictive, Reach, Speculative}
+import elms.koika.test.common.{
+  Cached,
+  Init,
+  NonBlocking,
+  Predictive,
+  PredictiveNonBlocking,
+  Reach,
+  Speculative
+}
 
 // `branchy.s`'s own driver. At file scope for its `initialize_input`, which
 // seeds the walk's indices into registers rather than into `mem`; the memory
 // is the same 64 words everything else in the tree runs on.
 //
-// One `init` for all four models, rather than the three the other suites spell
+// One `init` for all six models, rather than the four the other suites spell
 // out between them. This demo exists to be measured, and which fields a model
 // leaves untouched is not what is being measured.
 trait BranchyDriver extends RiscVDriver[64] {
   override val prog = demo("branchy")
 
-  override val init = Init.speculative(stateT)
+  override val init = Init.all(stateT)
 
   // The registers `branchy.s` shifts its indices out of, collected from the
   // program rather than written down a second time. Adding one to the walk is
@@ -50,7 +58,7 @@ class RiscVBranchyTests extends KoikaSuite {
 
   // Every model but [naive] puts a cache in front of the twelve probes, and
   // `runCache` forks three ways per load, so KLEE walks (3^12 + 1) / 2 paths
-  // and does not arrive. CBMC answers all four in under eight seconds.
+  // and does not arrive. CBMC answers all six in under two seconds each.
   test("riscv naive branchy") {
     val snippet = new BranchyDriver {}
     check("naive/branchy", snippet, Verdict.Clean)
@@ -69,5 +77,15 @@ class RiscVBranchyTests extends KoikaSuite {
   test("riscv predictive branchy") {
     val snippet = new BranchyDriver with Predictive {}
     check("predictive/branchy", snippet, Verdict.Clean, klee = Reach.LikelyTimeout)
+  }
+
+  test("riscv nonblocking branchy") {
+    val snippet = new BranchyDriver with NonBlocking {}
+    check("nonblocking/branchy", snippet, Verdict.Clean, klee = Reach.LikelyTimeout)
+  }
+
+  test("riscv predictive_nb branchy") {
+    val snippet = new BranchyDriver with PredictiveNonBlocking {}
+    check("predictive_nb/branchy", snippet, Verdict.Clean, klee = Reach.LikelyTimeout)
   }
 }

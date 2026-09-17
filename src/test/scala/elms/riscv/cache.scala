@@ -93,4 +93,14 @@ class RiscVCacheTests extends KoikaSuite {
     }
     check("hidden", snippet, Verdict.Leak)
   }
+
+  // `spectre.s` with the reload step. The gadget is behind a branch this model
+  // never guesses past, so the only load it runs is the probe and both runs
+  // miss on it.
+  test("riscv cache reload") {
+    val snippet = new CacheDriver {
+      override val prog = demo("reload")
+    }
+    check("reload", snippet, Verdict.Clean)
+  }
 }

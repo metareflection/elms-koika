@@ -113,7 +113,10 @@ trait Predictive extends Cached {
         case Some(rd) =>
           if (saved.contains(rd)) { step(pc, s) }
           else {
-            s.saved_regs(regIndex(rd)) = get_reg(s, regIndex(rd))
+            // The copy is the tower's, not the program's: no instruction waits
+            // on it, and this read happens before [step] has ticked for the one
+            // that is about to run.
+            s.saved_regs(regIndex(rd)) = untimed { get_reg(s, regIndex(rd)) }
             under(Some(Window(p, saved :+ rd)), learned) { step(pc, s) }
           }
         case None => resolve(pc, p, saved, s)
@@ -126,7 +129,11 @@ trait Predictive extends Cached {
   // `pc + 1`, since [speculable] admits no control flow, so its walk is a
   // straight line that ends here or at [prog]'s end.
   private def resolve(pc: Int, p: Pending, saved: Vector[Reg], s: Rep[State]): Rep[State] = {
-    val taken = evalCond(s, p.cond)
+    // The branch ticked where it was staged, several instructions back. This is
+    // that same read moved to where the answer is wanted, and [run] excludes
+    // [reads] from the window so that it is the same read; a model that times
+    // register accesses must not charge it twice, or to whatever is staging now.
+    val taken = untimed { evalCond(s, p.cond) }
     if (taken) { settle(pc, p, saved, taken = true, s) }
     else { settle(pc, p, saved, taken = false, s) }
   }
@@ -147,7 +154,11 @@ trait Predictive extends Cached {
     if (taken == p.guess) { goto(None, next, pc, s) }
     else {
       s.timer += mispredictPenalty
-      for (rd <- saved) { set_reg(s, regIndex(rd), s.saved_regs(regIndex(rd))) }
+      untimed { for (rd <- saved) { set_reg(s, regIndex(rd), s.saved_regs(regIndex(rd))) } }
+      // Whatever the window had in flight goes with it, after the penalty,
+      // because a machine that has just thrown its work away is waiting on
+      // none of it. Nothing, for a model that stalls on its loads.
+      squash(s)
       // Cache effects are deliberately not undone. They are the channel the
       // whole model exists to expose.
       goto(None, next, p.recovery, s)

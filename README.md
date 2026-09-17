@@ -90,7 +90,8 @@ of the generated C, which makes it part of the snapshot `sbt test` pins, and
 
 `./src/out/cbmc/verify [--certify] [file.c ...]`
 
-With no arguments it takes every snapshot in the tree, 93 of them in 122 seconds.
+With no arguments it takes every snapshot in the tree, 129 of them in 126
+seconds.
 It prints one line per file and exits non-zero if CBMC says anything other than
 what the file claims, so a model that stops detecting what it used to detect is
 a failing run rather than a stale comment. The claims themselves are greppable
@@ -126,34 +127,39 @@ have one at the moment.
 
 Here is what they currently say. The first three demos exist for both NanoRisc
 and RISC-V and answer the same on each, so the table does not split them;
-NanoRisc has neither a predictive nor a forwarding model, and RISC-V is what
-fills those columns. The blanks are suites nobody has written: `cmp` under
-cache, and `cmp` and `branchy` under forwarding.
+NanoRisc has only the first three models, and RISC-V is what fills the rest.
+The blanks are suites nobody has written: `cmp` under cache, `cmp` and
+`branchy` under forwarding, and the FaCT and NanoRisc programs under the last
+two columns, which are RISC-V only so far.
 
-| demo | naive | cache | speculative | predictive | forwarding |
-|---|---|---|---|---|---|
-| `shortcircuit` | leak | leak | leak | leak | leak |
-| `2ctr` | clean | leak | leak | leak | leak |
-| `evict` | clean | leak | leak | leak | leak |
-| `spectre` | clean | clean | leak | leak | leak |
-| `constant_time` | clean | clean | clean | clean | clean |
-| `cmp` | leak | | leak | leak | |
-| `salsa20` | clean | clean | clean | clean | clean |
-| `guarded` | clean | clean | leak | leak | leak |
-| `choose` | clean | clean | clean | clean | clean |
-| `folded` | leak | leak | leak | leak | leak |
-| `branchy` | clean | clean | clean | clean | |
-| `bypass` | clean | clean | clean | clean | leak |
-| `bypass_ct` | clean | clean | clean | clean | clean |
-| `bypass_late` | clean | clean | clean | clean | leak |
-| `dynstore` | clean | clean | clean | clean | clean |
-| `bypass_alias` | clean | clean | clean | clean | leak |
+| demo | naive | cache | speculative | predictive | forwarding | nonblocking | predictive_nb |
+|---|---|---|---|---|---|---|---|
+| `shortcircuit` | leak | leak | leak | leak | leak | leak | leak |
+| `2ctr` | clean | leak | leak | leak | leak | leak | leak |
+| `evict` | clean | leak | leak | leak | leak | clean | clean |
+| `hidden` | clean | leak | leak | leak | leak | clean | clean |
+| `spectre` | clean | clean | leak | leak | leak | clean | clean |
+| `reload` | clean | clean | leak | leak | leak | clean | leak |
+| `constant_time` | clean | clean | clean | clean | clean | clean | clean |
+| `cmp` | leak | | leak | leak | | | |
+| `salsa20` | clean | clean | clean | clean | clean | | |
+| `guarded` | clean | clean | leak | leak | leak | | |
+| `choose` | clean | clean | clean | clean | clean | | |
+| `folded` | leak | leak | leak | leak | leak | | |
+| `branchy` | clean | clean | clean | clean | | clean | clean |
+| `bypass` | clean | clean | clean | clean | leak | clean | clean |
+| `bypass_ct` | clean | clean | clean | clean | clean | clean | clean |
+| `bypass_late` | clean | clean | clean | clean | leak | clean | clean |
+| `dynstore` | clean | clean | clean | clean | clean | clean | clean |
+| `bypass_alias` | clean | clean | clean | clean | leak | clean | clean |
 
 `evict` is the row the geometry was for, and it is a stronger statement than
 `2ctr` next to it. `2ctr` needs a cache of some kind. `evict` needs a cache with
 *sets* in it: the secret picks which set gets a line installed, so the channel
 is a conflict rather than an address. The program has no branch in it and reads
-around no store, which is why the four columns to the right are copies.
+around no store, which is why `speculative`, `predictive` and `forwarding` are
+copies of the `cache` answer. The last two columns are not, and the section on
+running through a miss is about why.
 
 That a cache without sets answers clean here is a claim about what a model
 cannot see, so it is a test rather than a sentence.
@@ -163,18 +169,41 @@ carried before, and `src/out/*/riscv/flat` is two files: `evict` clean, and
 `2ctr` still leaking so that the control is not merely a model too weak to
 report anything.
 
-Reading across the first four columns is the tower. No model loses a leak the
-one to its left could see, and `2ctr` and `spectre` are where it starts seeing
-more: `2ctr` needs a cache before the second load's address can cost anything,
-and `spectre` needs speculation before that load happens at all. `guarded` is
-`spectre`'s row written again and `folded` is `shortcircuit`'s, and the FaCT
-section below is why either was worth a demo of its own.
+Reading across the first four columns is the tower. No model there loses a leak
+the one to its left could see, and `2ctr` and `spectre` are where it starts
+seeing more: `2ctr` needs a cache before the second load's address can cost
+anything, and `spectre` needs speculation before that load happens at all.
+`guarded` is `spectre`'s row written again and `folded` is `shortcircuit`'s, and
+the FaCT section below is why either was worth a demo of its own.
 
-The fifth column is not the fifth step of that chain. `forwarding` extends
-`speculative` and so catches everything it does, but `predictive` catches
-`bypass` no better than `naive` does and `forwarding` has no branch predictor in
-it, so the two are unordered and the columns are a lattice rather than a line.
-The order is naive, then cache, then speculative, then either of the last two.
+That sentence stops at the fourth column, and the three after it are each a
+different reason why. `forwarding` is merely unordered against `predictive`: it
+extends `speculative` and so catches everything that does, but it has no branch
+predictor in it and `predictive` catches `bypass` no better than `naive` does.
+
+`nonblocking` is the one that breaks the shape. It takes rows away. `evict`,
+`hidden` and `spectre` all read leak under `cache` or under `speculative` and
+clean under a model that does not stop the world for a miss, and in every one of
+them the column to the left is what is wrong: the gap it reports is a stall the
+program could have run through.
+
+That is a different kind of column and it should be read as one. A model that
+only ever adds channels can only ever be too careful, so its clean verdicts are
+cheap to trust. This one can be too permissive, so a clean answer here is a
+claim about the machine as well as about the program. What keeps each of those
+rows honest is its twin next door. `cache/hidden` still leaks, so
+`nonblocking/hidden` going clean cannot be somebody having flattened the
+gadget.
+
+`predictive_nb` is the join of the two either side of it, and it exists because
+neither alone settles what speculation leaks. It agrees with `nonblocking` on
+every row but `reload`, which is `spectre` with the probe an attacker would
+actually perform, and that row is the one that says the speculative channel is
+the cache line rather than the stall.
+
+So the traits are a lattice rather than a line: naive, then cache, then
+speculative or nonblocking on top of that, with `forwarding` and `predictive_nb`
+as joins. Only the first four columns are also ordered by what they report.
 
 `branchy` is RISC-V only, and it is a walk over four addresses nobody knows and
 everybody agrees on. That is the one shape in this tree whose cost is the
@@ -267,10 +296,11 @@ or so of those.
 
 Both backends pay it, and they show it differently. CBMC builds one formula and
 its cost lands there: `branchy` runs 1.4s at four probes against 38.5s at six,
-where the old model did twelve in 6.1s. KLEE pays per path and does not finish
-even one, 0 completed and 23 partially completed inside a two-minute budget,
-which is why those files carry `Reach.LikelyTimeout` again after a spell
-without it. Counting paths is what nobody should guess from: `2ctr` walks
+where the old model did twelve in 6.1s. KLEE pays per path, and inside a
+two-minute budget it does not finish even one: 0 completed against 23 partially
+completed, which is why those files carry `Reach.LikelyTimeout` again after a
+spell without it. Give it the 1200 the budget has since grown to and it does
+finish, in 814s. Counting paths is what nobody should guess from: `2ctr` walks
 exactly 3 completed paths under both models, the old one and this one, and its
 KLEE verdict never moved.
 
@@ -338,9 +368,9 @@ memory: the word the store was about to overwrite rather than the word it wrote.
 ```
 
 There is no branch in it, which is the point. `spectre.s` and `guarded` both
-fill their row by getting a bounds check wrong, and the four models to the left
-of this one see nothing here at all: they commit the store where it stands, the
-load reads the zero, and the channel address is 0 in both runs. Two knobs decide
+fill their row by getting a bounds check wrong, and every other model in the
+tree sees nothing here at all: they commit the store where it stands, the load
+reads the zero, and the channel address is 0 in both runs. Two knobs decide
 the rest, `storeLatency` and `storeWindow` on `Forwarding`, at two and four
 instructions.
 
@@ -468,34 +498,218 @@ curiosity and over `mem` would be exact.
 ### Most of the column is a copy
 
 Only five programs in the tree put a store inside reach of a window. `2ctr`,
-`spectre`, `shortcircuit`, `constant_time`, `evict`, `choose.o` and `folded.o`
-contain no store at all, and `guarded.o`'s is its last instruction, so
+`spectre`, `reload`, `shortcircuit`, `constant_time`, `evict`, `hidden`,
+`choose.o` and `folded.o` contain no store at all, and `guarded.o`'s is its last
+instruction, so
 
 `diff src/out/cbmc/riscv/{speculative,forwarding}/spectre.check.c`
 
-is empty, and so are fifteen other pairs. Sixteen of the twenty-eight snapshots
-in this column are their speculative twin to the byte, which is worth
-generating: a model that only ever adds a channel has to leave a program with no
-store alone, and the snapshots are the proof rather than the claim. The twelve
-that differ are `salsa20`, `bypass`, `bypass_ct`, `bypass_late`, `dynstore` and
+is empty, and so are nineteen other pairs. Twenty of the thirty-two snapshots in
+this column are their speculative twin to the byte, which is worth generating: a
+model that only ever adds a channel has to leave a program with no store alone,
+and the snapshots are the proof rather than the claim. The twelve that differ
+are `salsa20`, `bypass`, `bypass_ct`, `bypass_late`, `dynstore` and
 `bypass_alias`, once per backend.
+
+## Running through a miss
+
+```
+	lw	x7, 0(x6)		# the probe. nothing below reads x7.
+	addi	x8, x0, 0		# work that does not wait on any of it
+	.rept	220
+	addi	x8, x8, 1
+	.endr
+```
+
+That is the bottom of [`hidden.s`](src/test/asm/riscv/hidden.s). The top is
+`2ctr`'s channel unchanged: prime a line, derive an address from the secret,
+probe it, and the two runs disagree about whether that probe hits. Measured
+natively across every secret the harness can draw:
+
+| model | cycles |
+|---|---|
+| `cache` | 427 or 526 |
+| `nonblocking` | 226, every time |
+
+Every model to the left of `nonblocking` spends a miss the moment it happens, so
+a hundred cycles of memory latency is a hundred cycles in which nothing else
+runs. Hardware does not stop there. The load's destination is marked not-ready,
+everything behind it issues anyway, and only the instruction that reads the
+value waits. Ninety-nine cycles of that probe's miss fit inside the two hundred
+and twenty instructions after it, so a machine able to run them has finished
+paying for the miss before it runs out of work.
+
+What that buys a side-channel model is that a miss stops being worth a fixed
+hundred cycles. It is worth however much of it the program could not fill, which
+is a property of the code around the load rather than of the load. So a secret
+that moves a consumer nearer to or further from its producer is a channel with
+no secret-dependent address anywhere in it, and a secret that only picks which
+line gets installed may be no channel at all.
+
+### What the model is
+
+[`NonBlocking.scala`](src/test/scala/elms/common/NonBlocking.scala) is sixty
+lines of code under eighty of comment, and it is that short because `get_reg`
+and `set_reg` are the single funnels for every register access in both ISAs.
+The clock counts issues, one per instruction, and `reg_ready[i]` carries the
+cycle register `i`'s value lands on. So:
+
+- `get_reg` folds `max(issueAt, reg_ready[i])` into whatever is being staged,
+  which is the same as asking when its last operand arrives;
+- `set_reg` lands `reg_ready[rd] = issueAt + 1 + waiting`, after all of that
+  instruction's reads have happened;
+- `defer`, which is what a load calls and a store does not, records the latency
+  instead of spending it;
+- `finish`, at the end of `snippet`, folds `max(timer, reg_ready[i])` over every
+  register.
+
+`Isa` gained no method and neither `Exec` changed at all. No interpreter case
+had to declare what it reads or what it writes, because going through the two
+funnels is already that declaration.
+
+That last hook is in-order retirement, and it is what keeps a load nobody waited
+for from being free, which is the one thing a machine with a reorder buffer does
+not do. What the program cost is then the later of the clock and the last value
+to land, which is the critical path through the dependences rather than the sum
+of the latencies.
+
+`issueAt` starts at the clock rather than at the operands' arrival, and that is
+not a rounding-up. Issue is in program order even when completion is not, so an
+instruction cannot start before the machine has reached it however early its
+inputs landed. An earlier version left that out and `2ctr` came out at 203
+cycles with 204 instructions to issue.
+
+### Two rows nobody wrote a demo for
+
+`hidden.s` was written to go clean. `evict` and `spectre` were not.
+
+`evict`'s gap is the eleven cycles between answering the probe out of L1 and out
+of L2, and the load that carried the secret into a set is still outstanding when
+that probe issues. The eleven land inside a hundred somebody is already paying
+for, so they are not observable: 420 or 409 under `cache`, and 205 flat under
+`nonblocking`.
+
+`spectre`'s is the bigger one, and what it is about is the demo rather than the
+cache. [`spectre.s`](src/test/asm/riscv/spectre.s) never asks the cache anything
+after the squash. Its gap is the *speculated* load's own latency, 124 cycles
+against 223 under `predictive` depending on whether the line the secret picked
+was already resident, and a machine that does not stall on a load never charges
+a squashed one to anybody. `predictive_nb` answers 23 whatever the secret is,
+which is eight instructions and a fifteen-cycle mispredict penalty.
+
+That is the model being right and the demo being incomplete. Spectre is a
+Flush+Reload attack and `spectre.s` has no reload in it.
+
+### The reload
+
+[`reload.s`](src/test/asm/riscv/reload.s) is `spectre.s` with the probe put
+back:
+
+```
+	bge	x10, x15, done		# taken, and the predictor says otherwise
+	add	x5, x13, x10
+	lw	x11, 0(x5)		# speculative secret load
+	slli	x11, x11, 2		# mem is word-indexed, so scale
+	lw	x12, 0(x11)		# secret-dependent address, installs the line
+done:
+	j	probe			# ends the window before the probe runs
+probe:
+	lw	x14, 0(x0)		# the reload, after the registers came back
+```
+
+| model | cycles |
+|---|---|
+| `cache` | 106, every time |
+| `speculative` | 225 or 324 |
+| `predictive` | 226 or 325 |
+| `predictive_nb` | 26 or 125 |
+
+The last row is the point. The registers came back and the line did not, so a
+model that throws away everything the window had in flight still reports
+ninety-nine cycles, and they are the cache's rather than the stall's. `spectre`
+and `reload` next to each other are what separate those two, and neither row
+means much on its own.
+
+The `j` is load-bearing, and it is about the model rather than about the
+machine. `Predictive` resolves a window at the first instruction it cannot
+speculate and has no join-point test of the kind `Speculative` carries, so a
+window walks straight past the branch's own target and keeps going. Put the
+probe directly at `done` and it runs inside the window, installs line 0
+whatever the secret was, and the re-executed probe after the squash hits every
+time. That was the first draft of this demo, and it read clean for a reason that
+had nothing to do with the claim.
+
+### What a squash does to what is in flight
+
+`Predictive.settle` charges the mispredict penalty and puts the saved registers
+back. What it says about in-flight ready times it now says through two hooks on
+`Common`, both of which are nothing for every model that stalls:
+
+`untimed` marks the register traffic that is the tower's rather than the
+program's. Saving a register against a rollback, putting one back, and reading a
+branch's operands at the join point where the answer is wanted are all
+bookkeeping, and a model that times register accesses has to be told so. Without
+it, a saved copy's arrival folds into whatever instruction happens to be
+staging, which is both wrong and quiet: the accumulators are `Rep`s belonging to
+one generated function, so a save at a slot boundary mixes in a symbol from
+another one.
+
+`squash` is what a flush does. `NonBlocking` answers `reg_ready[i] = timer` for
+every `i`, because a machine that has just thrown its work away is waiting on
+none of it. That is the one place this model asserts something a real machine
+only approximately does: a discarded miss still occupies the memory system, so a
+later miss queues behind it, and modelling that means modelling how many can be
+outstanding at once. Nothing else in this tower has a structural hazard in it.
+
+The other answer is to let the window's outstanding misses land at retirement
+anyway, which is what happens with no hook at all, and it is not obviously
+wrong. It reports `spectre` at 208 cycles against 109 and `reload` at 208
+against 125. So the two readings of a squash disagree on exactly the demo with
+no probe in it, and agree that the one with a probe leaks.
+
+What `squash` must not undo is the cache, and that is the other half of what
+`reload` tests.
+
+### What it costs a checker, which the cache taught the hard way
+
+Nothing here costs what the set-associative cache cost. A set-indexed cache
+subscripts every array with an expression nobody knows and array theory is what
+a bounded model checker charges for; `branchy` went from 6.1s to over 600s and
+had to drop from twelve probes to four.
+
+Register numbers are static in this staging model, so `reg_ready` subscripts are
+*constants* in the residue: `reg_ready[11]`, never `reg_ready[i]`. The bill is
+width only, and `max` is branchless, `b + max(a-b, 0)` off the sign bit, so it
+adds no arms. Same trick the tag comparison uses.
+
+| file | lines | CBMC |
+|---|---|---|
+| `riscv/cache/2ctr` | 490 | 0.35s |
+| `riscv/nonblocking/2ctr` | 666 | 0.44s |
+| `riscv/predictive/2ctr` | 516 | 0.37s |
+| `riscv/predictive_nb/2ctr` | 786 | 0.53s |
+
+Most of each difference is the thirty-two unrolled `max`es in the drain, which
+is emitted whether or not the program ever wrote the register. Folding over only
+the registers a program touches is a staging-time question and would cut most of
+it.
 
 ## Checking with KLEE
 
-`src/out/klee` is the same 93 residues checked by [KLEE](#KLEE) instead, and
+`src/out/klee` is the same 129 residues checked by [KLEE](#KLEE) instead, and
 [`src/out/klee/verify`](src/out/klee/verify) is its script:
 
 `./src/out/klee/verify [--slow | --only-slow] [file.c ...]`
 
-Both trees agree, 93 verdicts for 93, model sensitivity included. That agreement
-is the point of having two: a residue really is an ordinary C program, and
-nothing about the claim depends on which checker reads it.
+Both trees agree, 129 verdicts for 129, model sensitivity included. That
+agreement is the point of having two: a residue really is an ordinary C program,
+and nothing about the claim depends on which checker reads it.
 
 Only the prelude differs between a pair of snapshots, so
 
 `diff src/out/{cbmc,klee}/riscv/cache/2ctr.check.c`
 
-changes thirteen lines, and so does every one of the other 92 pairs.
+changes thirteen lines, and so does every one of the other 128 pairs.
 `Prover.intrinsics` is that block. The residue, `init` and `main` are one text
 spelled in terms of `koika_assert`,
 `koika_assume` and `koika_draw`, which each backend defines its own way and a
@@ -511,26 +725,37 @@ No error file is only clean if the run also finished, which is
 `halting execution` on stderr. Drop the last two and an exploration that ran out
 of time reports exactly like a proof.
 
-That case is real and four files in the tree are it, every one of them `branchy`
-with a cache in front of the walk. Not for want of a budget and not for the size
-of its path space, which is small: `runCache` answers out of L1, out of L2 or
-out of memory, so four probes are (3^4 + 1) / 2 paths and CBMC is done in 1.4s.
-What KLEE cannot get through is a single one of them. Two minutes ends with 0
-completed paths against 23 partially completed, and ten minutes ends the same
-way, so those tests say so where they call `check`:
+Six files in the tree are marked for that case, every one of them `branchy`
+with a cache in front of the walk, and they say so where they call `check`:
 
 ```scala
 check("cache/branchy", snippet, Verdict.Clean, klee = Reach.LikelyTimeout)
 ```
 
 which writes `clean likely-timeout` onto the line. The verdict is still the
-program's, and a run that somehow finishes has to produce it; what
-`LikelyTimeout` adds is that running out of budget is also a pass. Demanding the
-timeout would turn a faster solver into a failing test, and demanding the
-verdict asks KLEE for something it cannot give here, so either outcome is
-accepted and a wrong one still is not. `naive/branchy` walks the same four
-addresses with nothing in front of memory and verifies, which is the control
-that makes this a statement about the cache rather than about the walk.
+program's, and a run that finishes has to produce it; what `LikelyTimeout` adds
+is that running out of budget is also a pass. Demanding the timeout would turn a
+faster solver into a failing test, and demanding the verdict asks KLEE for
+something it could not give when the label went on, so either outcome is
+accepted and a wrong one still is not.
+
+The name overstates it now, and the measurement is worth writing down rather
+than leaving as a label nobody re-ran. At 120 seconds `cache/branchy` ends with
+0 completed paths against 23 partially completed, and at ten minutes it ends the
+same way, which is where the label came from. At the 1200 the budget has since
+grown to, it finishes: 814 seconds, every path completed, clean. All six do. So
+`LikelyTimeout` currently means expensive rather than unreachable, and it is
+kept because fourteen minutes apiece is still not something a default run should
+spend. What would retire it is a demo whose path space KLEE genuinely cannot
+walk, and `branchy` at twelve probes was that demo before the cache made it too
+slow for CBMC.
+
+None of this is for want of a path space. `runCache` answers out of L1, out of
+L2 or out of memory, so four probes are (3^4 + 1) / 2 paths and CBMC is done in
+1.4s. What KLEE spends its fourteen minutes on is each individual path, and
+`naive/branchy` walks the same four addresses with nothing in front of memory
+and verifies in under a second, which is the control that makes this a statement
+about the cache rather than about the walk.
 
 The other half of that distinction is what `Reach.budgetSeconds` is for, and it
 had to grow from 120 to 1200 with the cache. Five residues started reporting
@@ -538,14 +763,14 @@ had to grow from 120 to 1200 with the cache. Five residues started reporting
 case: `fact/speculative/guarded` finds its leak in 275s and
 `riscv/forwarding/bypass` in 570s, so the old budget was turning "not yet" into
 a failing test. A budget is a cap and not a cost, so the files that settled
-quickly still do, and the only ones that spend it are the four above.
+quickly still do, and the only ones that spend most of one are the six above.
 
-Each of those four costs a full budget, so a default run skips them and says
-which it skipped:
+Each of those six costs about fourteen minutes, so a default run skips them and
+says which it skipped:
 
 ```
 skip     src/out/klee/riscv/cache/branchy.check.c (likely-timeout; pass --slow to run it)
-all 89 agree (4 skipped)
+all 123 agree (6 skipped)
 ```
 
 `--slow` adds them back, and `--only-slow` runs nothing else, which is the one
@@ -562,8 +787,9 @@ and the two do not overlap much. A `naive` residue never branches on a load, so
 KLEE walks one path and beats CBMC on a large one: `fact/naive/salsa20` is 0.68s
 against 4.53s, because CBMC's cost is a formula over 277 instructions and 6536
 generated properties while KLEE just runs it. Put a cache in front of a symbolic
-load and it reverses, from 4x behind on a five-path space to not answering at
-all. CBMC finishes every residue here; KLEE finishes 89 of 93.
+load and it reverses, from 4x behind on a five-path space to 814s against 1.4s
+on `riscv/cache/branchy`. Both backends finish every residue in the tree; six of
+them need KLEE to be given twenty minutes.
 
 ## The FaCT suite
 
@@ -595,7 +821,7 @@ Salsa20 is the positive control, and what it controls for is size. It has no
 conditional anywhere in it: every index is a literal and the only loop runs ten
 times whatever the key is, so no model fails. Everything else in the tree that
 verifies clean does so in under twenty instructions; this is 277, and CBMC
-clears every model:
+clears every model the FaCT suites cover:
 
 | naive | cache | speculative | predictive | forwarding |
 |---|---|---|---|---|

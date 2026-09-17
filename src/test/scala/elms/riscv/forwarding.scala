@@ -91,4 +91,22 @@ class RiscVForwardingTests extends KoikaSuite {
     }
     check("evict", snippet, Verdict.Leak)
   }
+
+  // The same channel as `2ctr` with a loop after it long enough to hide the
+  // miss. `hidden.s` says which way each column is meant to answer and why.
+  test("riscv forwarding hidden") {
+    val snippet = new FwdDriver {
+      override val prog = demo("hidden")
+    }
+    check("hidden", snippet, Verdict.Leak)
+  }
+
+  // `spectre.s` with the reload step. Inherited from [Speculative]: there is no
+  // store in it, so this snapshot is its speculative twin to the byte.
+  test("riscv forwarding reload") {
+    val snippet = new FwdDriver {
+      override val prog = demo("reload")
+    }
+    check("reload", snippet, Verdict.Leak)
+  }
 }

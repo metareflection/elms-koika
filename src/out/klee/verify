@@ -9,7 +9,7 @@
 # A file whose line says `likely-timeout` is one the tree expects KLEE not to
 # finish, and those are skipped unless you pass --slow, or --only-slow to run
 # nothing else. Skipped files are printed, so a default run still says what it
-# did not look at. Four files are in that state and each costs a full budget,
+# did not look at. Six files are in that state and each costs a full budget,
 # which is the whole reason for the flag.
 #
 # The claim lives in the file, on the `// verify:` line that `KoikaSuite.check`

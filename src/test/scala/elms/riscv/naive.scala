@@ -87,4 +87,23 @@ class RiscVNaiveTests extends KoikaSuite {
     }
     check("evict", snippet, Verdict.Clean)
   }
+
+  // The same channel as `2ctr` with a loop after it long enough to hide the
+  // miss. Nothing here has a cache in front of it, so there was never a miss
+  // to hide and the instruction count is the same either way.
+  test("riscv naive hidden") {
+    val snippet = new NaiveDriver {
+      override val prog = demo("hidden")
+    }
+    check("hidden", snippet, Verdict.Clean)
+  }
+
+  // `spectre.s` with the reload step, which is the demo that says the channel
+  // is the cache line rather than the stall. Nothing here has either.
+  test("riscv naive reload") {
+    val snippet = new NaiveDriver {
+      override val prog = demo("reload")
+    }
+    check("reload", snippet, Verdict.Clean)
+  }
 }

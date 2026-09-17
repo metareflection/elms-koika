@@ -51,6 +51,23 @@ trait Common extends Isa {
   // left to hand over.
   def defer(s: Rep[State], lat: Rep[Int]): Rep[Unit] = spend(s, lat)
 
+  // Register traffic that is the tower's rather than the program's: copying a
+  // register somewhere a rollback can find it, putting one back, and reading a
+  // branch's operands at the join point where the answer is wanted rather than
+  // at the branch that wanted it. A model that times register accesses has to
+  // be told which ones a machine would actually have performed, and this is
+  // where it is told. Nothing, for a model that times none of them.
+  def untimed[A](body: => A): A = body
+
+  // A squash, after the penalty has been charged. A machine that has just
+  // thrown away everything it was working on has nothing in flight, so a model
+  // carrying in-flight state clears it here.
+  //
+  // What this must not undo is the cache. A load that missed has already moved
+  // the line, a re-executed load to that address hits, and that is the channel
+  // every model from [Speculative] rightward exists to expose.
+  def squash(s: Rep[State]): Rep[Unit] = unit(())
+
   // The indirection via `execute` is necessary to generate functions for
   // each instruction. [Speculative] is the only thing that overrides it, and
   // when it wants plain semantics it asks for [step] rather than [super]:

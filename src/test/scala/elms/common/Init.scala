@@ -63,6 +63,13 @@ object Init {
   def nonblocking(stateT: String): String =
     body(stateT, saved = false, cache = true, stack = false, ready = true)
 
+  // Every field there is, for a suite that runs one program against several
+  // models. Which fields a model leaves untouched is not what [RiscVBranchyTests]
+  // is measuring, and a per-model initializer there would only make its six
+  // residues differ in a line none of them reads.
+  def all(stateT: String): String =
+    body(stateT, saved = true, cache = true, stack = false, ready = true)
+
   // The same four, for a program that spills.
   object Spilling {
     def naive(stateT: String): String = body(stateT, saved = false, cache = false, stack = true)

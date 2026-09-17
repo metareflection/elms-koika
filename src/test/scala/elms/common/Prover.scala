@@ -112,6 +112,12 @@ enum Reach derives CanEqual {
   // with [Verdict]. What this says is that not finishing is not a failure, so a
   // faster solver or a smaller demo turns one of these green rather than
   // breaking it.
+  //
+  // Which is what happened. Every file carrying this now finishes at
+  // [budgetSeconds], `riscv/cache/branchy` in 814s of the 1200, and the label
+  // was measured at 120 and 600. So it currently means expensive rather than
+  // unreachable, and it is kept for what `verify` does with it: fourteen
+  // minutes apiece is not something a default run should spend.
   case LikelyTimeout
 }
 
@@ -127,8 +133,8 @@ object Reach {
   // into a failing test.
   //
   // A cap and not a cost, so the files that settled in under a second still do,
-  // and the only ones that spend it are the ones marked [LikelyTimeout] and
-  // skipped by default. The headroom over 570 is deliberate, since that number
+  // and the only ones that spend most of it are the ones marked [LikelyTimeout]
+  // and skipped by default. The headroom over 570 is deliberate, since that number
   // was measured on a loaded machine and a budget that a slower box fails is a
   // flake rather than a claim.
   val budgetSeconds: Int = 1200

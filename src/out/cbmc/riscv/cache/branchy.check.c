@@ -1219,6 +1219,7 @@ void init(struct StateT *s) {
   for (int i=0; i<NUM_REGS; i++) {
     s->regs[i] = 0;
     s->saved_regs[i] = 0;
+    s->reg_ready[i] = 0;
   }
   s->timer = 0;
   for (int i=0; i<MEM_SIZE; i++) {
