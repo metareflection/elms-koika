@@ -90,7 +90,7 @@ of the generated C, which makes it part of the snapshot `sbt test` pins, and
 
 `./src/out/cbmc/verify [--certify] [--full] [file.c ...]`
 
-With no arguments it takes the main suite, 129 snapshots in 126 seconds. The
+With no arguments it takes the main suite, 129 snapshots in 130 seconds. The
 five it holds back are `lockstep/`, which answers the same demos as `squared/`
 by the construction `squared/` replaced; `sbt test` regenerates them either
 way, so what `--full` buys is the check rather than the C. Naming files runs
@@ -167,7 +167,7 @@ The blanks are suites nobody has written: `cmp` under cache, `cmp` and
 `branchy` under forwarding, and the FaCT and NanoRisc programs under the last
 two columns, which are RISC-V only so far.
 
-| demo | naive | cache | speculative | predictive | forwarding | nonblocking | predictive_nb |
+| demo | naive | cache | static | predictive | forwarding | nonblocking | predictive_nb |
 |---|---|---|---|---|---|---|---|
 | `shortcircuit` | leak | leak | leak | leak | leak | leak | leak |
 | `2ctr` | clean | leak | leak | leak | leak | leak | leak |
@@ -192,7 +192,7 @@ two columns, which are RISC-V only so far.
 `2ctr` next to it. `2ctr` needs a cache of some kind. `evict` needs a cache with
 *sets* in it: the secret picks which set gets a line installed, so the channel
 is a conflict rather than an address. The program has no branch in it and reads
-around no store, which is why `speculative`, `predictive` and `forwarding` are
+around no store, which is why `static`, `predictive` and `forwarding` are
 copies of the `cache` answer. The last two columns are not, and the section on
 running through a miss is about why.
 
@@ -204,22 +204,32 @@ carried before, and `src/out/*/riscv/flat` is two files: `evict` clean, and
 `2ctr` still leaking so that the control is not merely a model too weak to
 report anything.
 
-Reading across the first four columns is the tower. No model there loses a leak
+Reading across the first five columns is the tower. No model there loses a leak
 the one to its left could see, and `2ctr` and `spectre` are where it starts
 seeing more: `2ctr` needs a cache before the second load's address can cost
 anything, and `spectre` needs speculation before that load happens at all.
 `guarded` is `spectre`'s row written again and `folded` is `shortcircuit`'s, and
 the FaCT section below is why either was worth a demo of its own.
 
-That sentence stops at the fourth column, and the three after it are each a
-different reason why. `forwarding` is merely unordered against `predictive`: it
-extends `speculative` and so catches everything that does, but it has no branch
-predictor in it and `predictive` catches `bypass` no better than `naive` does.
+`static` is the one place in that chain where inheritance runs against
+capability. It is `Predictive` with the history taken away, overriding `learn`
+to record nothing, so every branch gets the cold-start guess of not-taken and
+goes on getting it. That is what a machine with no history bits does, and it is
+why the column is worth keeping next to `predictive`: a leak in it did not need
+a predictor to be trained, which is a claim about the threat model rather than
+about the predictor. No demo tells the two apart by verdict. Eight of them do
+stage differently, `shortcircuit`, `constant_time`, `reload`, `dynstore`, `cmp`,
+`folded`, `guarded` and `salsa20`, because a branch that resolves taken leaves
+`predictive` holding a history `static` never records, and the two then number
+the instructions after it into different slots.
+
+That sentence stops at the fifth column, and the two after it are each a
+different reason why.
 
 `nonblocking` is the one that breaks the shape. It takes rows away. `evict`,
-`hidden` and `spectre` all read leak under `cache` or under `speculative` and
-clean under a model that does not stop the world for a miss, and in every one of
-them the column to the left is what is wrong: the gap it reports is a stall the
+`hidden` and `spectre` all read leak under `cache` or under `static` and clean
+under a model that does not stop the world for a miss, and in every one of them
+the column to the left is what is wrong: the gap it reports is a stall the
 program could have run through.
 
 That is a different kind of column and it should be read as one. A model that
@@ -237,8 +247,9 @@ actually perform, and that row is the one that says the speculative channel is
 the cache line rather than the stall.
 
 So the traits are a lattice rather than a line: naive, then cache, then
-speculative or nonblocking on top of that, with `forwarding` and `predictive_nb`
-as joins. Only the first four columns are also ordered by what they report.
+`static`, `predictive` and `forwarding` in a chain on top of it, with
+`nonblocking` a second branch off cache and `predictive_nb` the join. Only the
+first five columns are also ordered by what they report.
 
 `branchy` is RISC-V only, and it is a walk over four addresses nobody knows and
 everybody agrees on. That is the one shape in this tree whose cost is the
@@ -346,7 +357,7 @@ count was always a dial and the dial moved.
 Nothing without a symbolic address in it noticed, which is the other half of the
 same sentence. `salsa20` is 277 instructions of literal indices, so every set
 index folds at staging time and no subscript is ever unknown. It went from 5.4s
-to 9.5s, a residue 2.4x wider and a solver doing the work it always did.
+to 9.0s, a residue 2.4x wider and a solver doing the work it always did.
 
 ### Where a store stops
 
@@ -439,41 +450,49 @@ than the queue.
 [`bypass_late.s`](src/test/asm/riscv/bypass_late.s) is the same gadget behind a
 bounds check that always passes, and it is the one that says where a store gets
 noticed from. `Isa.speculable` refuses a store, so a store after a branch is the
-instruction that *closes* the speculation window, and `Speculative` runs that
-one through `step` rather than `call` because a window is inlined and `call`
-would emit a function call. `step` skips `execute`. So a subclass hears about
-every instruction except the one most likely to interest it, and a store in this
-position queued nothing: this program was clean under `forwarding` and its
-`speculative` twin to the byte. A guarded write is an ordinary shape, which made
-that most of the column going missing without a failing test.
+instruction that *closes* the speculation window. The model this column used to
+extend inlined its window, so it ran that closing instruction through `step`
+rather than `call`, because `call` would have emitted a function call where the
+rest of the window was straight-line code. `step` skips `execute`. So the
+subclass heard about every instruction except the one most likely to interest
+it, a store in this position queued nothing, and this program was clean under
+`forwarding` and its speculating twin to the byte. A guarded write is an
+ordinary shape, which made that most of the column going missing without a
+failing test. The fix at the time was a hook in the base model, `closing`,
+defaulting to `step` so nothing else moved.
 
-`Speculative.closing` is the hook, defaulting to `step` so nothing else moves,
-and `Forwarding` overrides it to open a window when the closing instruction is a
-store. What the override mostly does is hand over the saved registers.
-`savedRegisters` still holds what the branch speculated, and the arm that
-reaches the close is the one where the branch's guess held, so a store window
-that inherited that list would restore a correctly speculated register on its
-own squash.
+The hook is gone and nothing replaced it. `Predictive` does not inline a window.
+It resolves one by going back around through `Common.call`, so the instruction
+that closed it reaches `run` the way every other instruction does and opens its
+own window there with no special case. The saved registers sort themselves out
+for the same reason: the branch's list rides in the slot key and is spent
+resolving the branch, and `Forwarding.Queued` opens an empty one. Before, that
+took an explicit save-clear-restore, so that a store window would not squash a
+register the branch had got right.
 
 [`dynstore.s`](src/test/asm/riscv/dynstore.s) is what pins that down, and it is
 the other question a one-entry queue invites: a store through an index that
 moves, in a loop. Its `bge` speculates two instructions before the store closes
-the window, so the two lists are both non-empty and the residue shows them kept
-apart:
+the window, so both lists are non-empty, and they now land in functions of their
+own:
 
 ```c
-int v121 = v120[8];  v122[8] = v121;   // the branch window's, x8 and x5
-int v125 = v124[5];  v126[5] = v125;
-...
-int v254 = v253[11]; v255[11] = v254;  // the store window's, x11 and x6
-int v258 = v257[6];  v259[6] = v258;
-struct StateT * v261 = slot_7(v41);    // then restarts just past the store
+struct StateT * slot_6(struct StateT * v334) {   // resolving the branch
+  int v359 = v339 + 15;   v334->timer = v359;
+  int v342 = v341[8];     v343[8] = v342;        // x8 and x5, the branch's
+  int v346 = v345[5];     v347[5] = v346;
+
+struct StateT * slot_8(struct StateT * v371) {   // inside the store window
+  int v1037 = v720 + 15;  v371->timer = v1037;
+  int v723 = v722[11];    v724[11] = v723;       // x11 and x6, the store's
+  int v727 = v726[6];     v728[6] = v727;
+  struct StateT * v730 = slot_9(v371);           // restart just past the store
 ```
 
-It also says the queue costs nothing structural. The window closes at the
-backward jump, because no control flow is `speculable`, so the loop is still one
-slot per pc and the residue does not grow with the trip count. A window that
-inlined past that jump would not terminate.
+It also says the queue costs nothing structural. The store window closes at the
+backward jump, because no control flow is `speculable`, so the loop's slots are
+the ones `predictive` would have emitted anyway and the residue does not grow
+with the trip count. A window that inlined past that jump would not terminate.
 
 ### The forward that should not have happened
 
@@ -537,10 +556,10 @@ Only five programs in the tree put a store inside reach of a window. `2ctr`,
 `choose.o` and `folded.o` contain no store at all, and `guarded.o`'s is its last
 instruction, so
 
-`diff src/out/cbmc/riscv/{speculative,forwarding}/spectre.check.c`
+`diff src/out/cbmc/riscv/{predictive,forwarding}/spectre.check.c`
 
 is empty, and so are nineteen other pairs. Twenty of the thirty-two snapshots in
-this column are their speculative twin to the byte, which is worth generating: a
+this column are their predictive twin to the byte, which is worth generating: a
 model that only ever adds a channel has to leave a program with no store alone,
 and the snapshots are the proof rather than the claim. The twelve that differ
 are `salsa20`, `bypass`, `bypass_ct`, `bypass_late`, `dynstore` and
@@ -655,9 +674,12 @@ probe:
 | model | cycles |
 |---|---|
 | `cache` | 106, every time |
-| `speculative` | 225 or 324 |
+| `static` | 226 or 325 |
 | `predictive` | 226 or 325 |
 | `predictive_nb` | 26 or 125 |
+
+The middle two rows agree because the branch runs once, so there is no history
+for `predictive` to hold that `static` does not.
 
 The last row is the point. The registers came back and the line did not, so a
 model that throws away everything the window had in flight still reports
@@ -667,12 +689,12 @@ means much on its own.
 
 The `j` is load-bearing, and it is about the model rather than about the
 machine. `Predictive` resolves a window at the first instruction it cannot
-speculate and has no join-point test of the kind `Speculative` carries, so a
-window walks straight past the branch's own target and keeps going. Put the
-probe directly at `done` and it runs inside the window, installs line 0
-whatever the secret was, and the re-executed probe after the squash hits every
-time. That was the first draft of this demo, and it read clean for a reason that
-had nothing to do with the claim.
+speculate and tests nothing at the branch's own target, so a window walks
+straight past that target and keeps going. Put the probe directly at `done` and
+it runs inside the window, installs line 0 whatever the secret was, and the
+re-executed probe after the squash hits every time. That was the first draft of
+this demo, and it read clean for a reason that had nothing to do with the
+claim.
 
 ### What a squash does to what is in flight
 
@@ -799,8 +821,8 @@ about the cache rather than about the walk.
 The other half of that distinction is what `Reach.budgetSeconds` is for, and it
 had to grow from 120 to 1200 with the cache. Five residues started reporting
 `unknown` that had been settling in under a second, and none of them was this
-case: `fact/speculative/guarded` finds its leak in 275s and
-`riscv/forwarding/bypass` in 570s, so the old budget was turning "not yet" into
+case: `fact/static/guarded` finds its leak in 326s and
+`riscv/forwarding/bypass` in 485s, so the old budget was turning "not yet" into
 a failing test. A budget is a cap and not a cost, so the files that settled
 quickly still do, and the only ones that spend most of one are the six above.
 
@@ -862,20 +884,21 @@ times whatever the key is, so no model fails. Everything else in the tree that
 verifies clean does so in under twenty instructions; this is 277, and CBMC
 clears every model the FaCT suites cover:
 
-| naive | cache | speculative | predictive | forwarding |
+| naive | cache | static | predictive | forwarding |
 |---|---|---|---|---|
-| 4.7s | 5.4s | 5.4s | 6.6s | 5.4s |
+| 5.7s | 9.0s | 10.7s | 11.1s | 11.3s |
 
 Two things it needs that the assembly demos do not. It is the first demo that
 spills, so `init` points `sp` at the top of `mem` rather than leaving it at 0,
 and `mem_size` is computed from the frame the object actually declares. And
-Speculative wants a bigger stack than the JVM's default 1MB, so `build.sbt`
-raises `-Xss` for the forked test JVM. It inlines a speculation window into the
-function that opened it, salsa20's longest runs 1696 statements, and ELMS
-elaborates a function body by recursing once per statement. Forwarding extends
-Speculative and inherits that window, 1676 statements of it, so it wants the
-same. Naive, cache and predictive emit nothing over 104 statements and stage
-salsa20 on the default stack.
+`build.sbt` raises `-Xss` for the forked test JVM, because ELMS elaborates a
+function body by recursing once per statement and `forwarding` inlines a store
+window into the function that opened it. Thirty-eight stores make salsa20's
+longest slot 986 statements of that, against 260 for every model that inlines
+nothing. It fits the default 1MB stack now, where the 1696-statement branch
+window this model used to inherit did not, so the flag is margin rather than a
+requirement. Kept as margin: the number is a property of one demo, and the next
+demo is free to be longer.
 
 Thirty-eight of those 277 instructions are stores, which makes this the one file
 in the tree that really exercises `forwarding`, and it is the reason that model
@@ -904,7 +927,7 @@ if (idx < 16) {
 out[idx & 7] = acc;
 ```
 
-| naive | cache | speculative | predictive | forwarding |
+| naive | cache | static | predictive | forwarding |
 |---|---|---|---|---|
 | clean | clean | leak | leak | leak |
 
@@ -956,7 +979,7 @@ branch and the compiler takes it away, substituting
 `output ^ (mask & (b ^ output))`. That is five RV32I instructions with no branch
 among them. It is lowered twice.
 
-| object | passes | naive | cache | speculative | predictive | forwarding |
+| object | passes | naive | cache | static | predictive | forwarding |
 |---|---|---|---|---|---|---|
 | `choose.o` | `mem2reg` | clean | clean | clean | clean | clean |
 | `folded.o` | `mem2reg,instcombine` | leak | leak | leak | leak | leak |

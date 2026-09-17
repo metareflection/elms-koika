@@ -127,8 +127,8 @@ object Reach {
   //
   // This was 120 and the comment said slack rather than measurement, because
   // every residue KLEE finished did so in under a second. A set-associative
-  // cache ended that. `fact/speculative/guarded` now takes 275s and
-  // `riscv/forwarding/bypass` 570s, both of them leaks KLEE does find and was
+  // cache ended that. `fact/static/guarded` now takes 326s and
+  // `riscv/forwarding/bypass` 485s, both of them leaks KLEE does find and was
   // simply being cut off before it could: a budget that small turned "not yet"
   // into a failing test.
   //
