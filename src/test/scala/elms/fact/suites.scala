@@ -25,7 +25,7 @@ import elms.koika.test.common.{Cached, Forwarding, Init, Predictive, Speculative
 //
 // `forwarding` is a fifth column and says nothing new about any of these four,
 // which is worth having anyway. Neither `choose.o` nor `folded.o` contains a
-// store, so their snapshots there are their `speculative` twins to the byte;
+// store, so their snapshots there are their `predictive` twins to the byte;
 // `guarded.o` has one and `salsa20.o` has thirty-eight, and neither turns a
 // verdict. The demos that exercise the queue are `riscv/bypass`.
 //

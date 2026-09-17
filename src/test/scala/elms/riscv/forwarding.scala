@@ -6,12 +6,16 @@ import elms.prelude.given
 import elms.koika.test.{KoikaSuite, Verdict}
 import elms.koika.test.common.{Forwarding, Init}
 
-// The four demos [RiscVSpecTests] runs, against a model with a store queue in
-// it. None of them contains a store, so every snapshot here is its twin under
-// `speculative` to the byte, and that is what the suite is for: a model that
-// only ever adds a channel has to leave a program with no store alone.
+// Every demo the rest of the tower runs, against a model with a store queue in
+// front of the cache.
 //
-// `bypass.s` and `bypass_ct.s` are where this column says something of its own.
+// A program with no store in it is as much the point as one with. A model that
+// only ever adds a channel has to leave such a program alone, and every
+// storeless demo here is its `predictive` twin to the byte.
+//
+// `bypass.s` and `bypass_ct.s` are where this column says something of its own,
+// and `bypass_late.s` is where the store window opens on a branch window's way
+// out.
 @virtualize
 class RiscVForwardingTests extends KoikaSuite {
   val under = "riscv/forwarding/"

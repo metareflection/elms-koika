@@ -87,7 +87,11 @@ trait Predictive extends Cached {
   private def opening(at: Int, cond: Cond, recovery: Int, guess: Boolean): Option[Window] =
     Some(Window(Pending(at, cond, recovery, guess), Vector()))
 
-  private def run(pc: Int, w: Option[Window], s: Rep[State]): Rep[State] = w match {
+  // Where a subclass gets at an instruction. [Predictive] intercepts at
+  // [resume], so nothing below here goes through [Common.execute] and an
+  // override of that would never fire. [w] is handed over rather than read back
+  // out of the ambient, so that an override can dispatch on it.
+  protected def run(pc: Int, w: Option[Window], s: Rep[State]): Rep[State] = w match {
     // [live] has already ruled out `pc == prog.length` on this arm.
     case None => branch(pc, prog(pc)) match {
         case Some((cnd, tgt)) => {
@@ -110,15 +114,7 @@ trait Predictive extends Cached {
       // evaluated. [evalCond] runs against the live register file at resolution
       // rather than at the branch, which is what makes that last case matter.
       prog.lift(pc).flatMap(speculable).filter(rd => !reads(p.cond).contains(rd)) match {
-        case Some(rd) =>
-          if (saved.contains(rd)) { step(pc, s) }
-          else {
-            // The copy is the tower's, not the program's: no instruction waits
-            // on it, and this read happens before [step] has ticked for the one
-            // that is about to run.
-            s.saved_regs(regIndex(rd)) = untimed { get_reg(s, regIndex(rd)) }
-            under(Some(Window(p, saved :+ rd)), learned) { step(pc, s) }
-          }
+        case Some(rd) => under(Some(Window(p, save(s, saved, rd))), learned) { step(pc, s) }
         case None => resolve(pc, p, saved, s)
       }
   }
@@ -153,16 +149,36 @@ trait Predictive extends Cached {
     // [pc] has not run yet, whether or not the guess held.
     if (taken == p.guess) { goto(None, next, pc, s) }
     else {
-      s.timer += mispredictPenalty
-      untimed { for (rd <- saved) { set_reg(s, regIndex(rd), s.saved_regs(regIndex(rd))) } }
-      // Whatever the window had in flight goes with it, after the penalty,
-      // because a machine that has just thrown its work away is waiting on
-      // none of it. Nothing, for a model that stalls on its loads.
-      squash(s)
-      // Cache effects are deliberately not undone. They are the channel the
-      // whole model exists to expose.
+      rollback(s, saved)
       goto(None, next, p.recovery, s)
     }
+  }
+
+  // [rd]'s value on the way into the window, recorded once. Saving it a second
+  // time would overwrite the architectural value with a speculative one, and
+  // the rollback would then put the wrong number back.
+  //
+  // The copy is the tower's rather than the program's: no instruction waits on
+  // it, and this read happens before [step] has ticked for the one that is
+  // about to run.
+  protected def save(s: Rep[State], saved: Vector[Reg], rd: Reg): Vector[Reg] =
+    if (saved.contains(rd)) { saved }
+    else {
+      s.saved_regs(regIndex(rd)) = untimed { get_reg(s, regIndex(rd)) }
+      saved :+ rd
+    }
+
+  // Throw a window away, at the price of one. A method rather than a line in
+  // [settle] because [Forwarding] rolls back for a reason of its own and wants
+  // the same deal.
+  //
+  // Cache effects are deliberately not undone. They are the channel the whole
+  // model exists to expose, and [Common.squash] is about what was still in
+  // flight rather than about what already landed.
+  protected def rollback(s: Rep[State], saved: Vector[Reg]): Rep[Unit] = {
+    s.timer += mispredictPenalty
+    untimed { for (rd <- saved) { set_reg(s, regIndex(rd), s.saved_regs(regIndex(rd))) } }
+    squash(s)
   }
 
   // One bit of history per branch, its last outcome, and no aliasing between

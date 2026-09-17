@@ -5,11 +5,12 @@
 # it and comes back with the secret rather than the zero, and the load after
 # that turns the secret into an address. What is new is how the store is
 # reached. `bge` opens a speculation window, `Isa.speculable` refuses a store,
-# and so the store is the instruction that closes the window. [Speculative] runs
-# that instruction through `step` rather than `call`, which skips `execute`, so
-# for a while `Forwarding` never saw a store in this position and this program
-# was its `speculative` twin to the byte. `Speculative.closing` is the hook that
-# fixed it.
+# and so the store is the instruction that closes the window. A model that runs
+# the closing instruction somewhere other than where it runs every other one
+# never sees a store in this position, and for a while `Forwarding` did not:
+# this program was its speculating twin to the byte. `Predictive` resolves a
+# window by going back around through `Common.call`, so the store arrives the
+# ordinary way and the special case that used to be needed here is gone.
 #
 # The check always passes. `a0 & 28` is at most 28 and the bound is 32, so the
 # not-taken guess is right and the rollback arm is dead. That is deliberate: the

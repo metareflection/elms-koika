@@ -27,15 +27,16 @@ trait Isa extends StateTOps {
   // target relative to it. [None] for unconditional jumps, for computed jumps,
   // and for anything that is not a branch.
   //
-  // Whether to speculate past it is not this method's call. [Speculative]
-  // decides that, and only it knows why the answer has to be "forwards only".
+  // Whether to speculate past it is not this method's call. A model decides
+  // that, and only [Speculative] has a reason for the answer to be "forwards
+  // only".
   def branch(pc: Int, i: Instr): Option[(Cond, Int)]
 
   // [Some(rd)] when [i] may run speculatively and writing [rd] is its only
   // effect that rollback would have to undo.
   //
-  // Stores must answer [None]. [rollback] restores registers and nothing else,
-  // so a store that ran inside a branch window would never be taken back, and
+  // Stores must answer [None]. A squash restores registers and nothing else, so
+  // a store that ran inside a branch window would never be taken back, and
   // answering [None] is what closes the window before one can. The cache side
   // effect is the exception on purpose, since it is the channel the whole model
   // exists to expose.

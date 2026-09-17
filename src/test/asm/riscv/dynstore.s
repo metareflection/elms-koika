@@ -8,18 +8,20 @@
 # different `Rep` each time in the machine and the same one in the residue, and
 # the instruction after the store reads back through the same unknown index.
 #
-# What it pins down is two things. The queue costs nothing structural: the window
-# closes at the backward jump because no control flow is `speculable`, so the
-# loop is still one slot per pc and the residue does not grow with the trip
-# count. A store in a loop that inlined its window past the jump would not
-# terminate, which is the failure this demo would show as a hang.
+# What it pins down is two things. The queue costs nothing structural: the store
+# window closes at the backward jump because no control flow is `speculable`, so
+# the loop's slots are the ones `Predictive` would have emitted anyway and the
+# residue does not grow with the trip count. A store in a loop that inlined its
+# window past the jump would not terminate, which is the failure this demo would
+# show as a hang.
 #
-# And it is the only demo where a store window opens with a branch window's
-# saved registers still on the list. `bge` speculates the `add` and the `lw`
+# And it is the only demo where a store window opens on the heels of a branch
+# window that had registers saved. `bge` speculates the `add` and the `lw`
 # before the store closes it, so x8 and x5 are saved, and the store window has
 # to start its own list rather than inherit theirs: a squash here that restored
-# x8 would undo a register the branch got right. `Forwarding.closing` is where
-# that handoff happens and this is what exercises it.
+# x8 would undo a register the branch got right. The branch's list rides in
+# `Predictive`'s slot key and is spent resolving it, and `Forwarding.Queued`
+# opens an empty one, so this is the demo that checks the two stay apart.
 #
 # The value stored is the secret, so the load behind it reads around the queue
 # and gets whatever the last trip left rather than what this trip wrote.

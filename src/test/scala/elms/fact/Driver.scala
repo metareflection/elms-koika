@@ -47,9 +47,9 @@ enum Param derives CanEqual {
 // claim covers says [uniform]; anything else is a statement about where the
 // claim stops.
 //
-// [forwarding] is last rather than next to [speculative], which it extends,
-// because the columns are no longer a chain: it sees a channel [predictive]
-// cannot and misses every one [predictive] has.
+// [forwarding] is last rather than next to [speculative], which it no longer
+// extends. It extends [predictive], so it catches everything every column to
+// its left catches and the queue as well, and the columns are a chain again.
 case class Expect(
     naive: Verdict,
     cache: Verdict,

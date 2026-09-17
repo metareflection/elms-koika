@@ -58,7 +58,7 @@ object Init {
   def naive(stateT: String): String = body(stateT, saved = false, cache = false, stack = false)
   def cache(stateT: String): String = body(stateT, saved = false, cache = true, stack = false)
   def speculative(stateT: String): String = body(stateT, saved = true, cache = true, stack = false)
-  // The queue is staging-time, so this model's state is [Speculative]'s.
+  // The queue is staging-time, so this model's state is [Predictive]'s.
   def forwarding(stateT: String): String = speculative(stateT)
   def nonblocking(stateT: String): String =
     body(stateT, saved = false, cache = true, stack = false, ready = true)

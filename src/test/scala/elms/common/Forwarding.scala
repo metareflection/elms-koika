@@ -6,42 +6,49 @@ import elms.prelude.given
 // A store queue in front of the cache, and the load that reads around it.
 //
 // Every model to the left of this one commits a store the instant it executes,
-// which [Isa.speculable] writes down as a requirement: rollback restores
+// which [Isa.speculable] writes down as a requirement: a squash restores
 // registers and nothing else, so a store that ran speculatively could never be
 // taken back. A queue removes the requirement rather than working around it.
 // The store sits in the queue for a while, a squash discards it, and never
 // reaches [Cached] to dirty a line in the first place.
 //
-// What that buys is a channel [Speculative] cannot see. A load issued before
+// What that buys is a channel no branch predictor sees. A load issued before
 // the queued store's address has resolved cannot know whether it aliases, so
 // the disambiguation predictor guesses that it does not and the load reads
 // memory: the word the store was about to overwrite, rather than the word it
 // wrote. That is Spectre v4, and `bypass.s` is eight instructions of it.
 //
-// The queue holds [Rep]s in an ordinary Scala field, which is sound for exactly
-// the reason [Speculative]'s window is inlined. A [Rep] names a class in the
-// e-graph of whichever function is open, so one that outlived a slot boundary
-// would reach whatever that index happens to mean in the next function.
-// [useCache] is false while the queue is occupied, so no slot is ever declared
-// while there is something in it, and nothing here crosses a boundary.
+// The queue holds [Rep]s in an ordinary Scala field, and [useCache] is what
+// makes that sound. A [Rep] names a class in the e-graph of whichever function
+// is open, so one that outlived a slot boundary would reach whatever that
+// index happens to mean in the next function. [useCache] is false while the
+// queue is occupied, so [Common.call] inlines the rest of the window rather
+// than declaring a slot for it, and nothing here crosses a boundary.
+//
+// The branch window is [Predictive]'s and travels in the slot key, so the two
+// windows never have to know about each other. A store is not [speculable], so
+// a branch window ends at one: by the time [run] sees the store,
+// [Predictive]'s [settle] has closed the branch window and gone back around
+// through [Common.call], and the store opens its own with the ambient one
+// empty. `bypass_late.s` is that program, and on the tower's previous shape it
+// needed a hook in the base model to work at all.
 @virtualize
-trait Forwarding extends Speculative {
+trait Forwarding extends Predictive {
   // Instructions after a store before its address resolves. A load inside that
   // bypasses the queue; a load past it forwards on a match.
   val storeLatency: Int = 2
 
   // Instructions the store stays in the queue. At least [storeLatency], or the
   // window closes before anything could have read around it and the model is
-  // [Speculative] with extra steps.
+  // [Predictive] with extra steps.
   val storeWindow: Int = 4
   require(storeWindow >= storeLatency, s"storeWindow $storeWindow < storeLatency $storeLatency")
 
   // What a forwarded load costs instead of a cache probe.
   //
-  // The same as [Cached]'s LRU tail hit, which is worth knowing when reading a
-  // counterexample: the forward arm and the tail-hit arm are indistinguishable
-  // in the timer, so a gap is never attributable to the forwarding decision
-  // alone.
+  // The same as [Cached]'s first-level hit, which is worth knowing when reading
+  // a counterexample: the forward arm and the hit arm are indistinguishable in
+  // the timer, so a gap is never attributable to the forwarding decision alone.
   val forwardCost: Int = 1
 
   // How many low bits of the word index the queue compares before deciding to
@@ -61,12 +68,15 @@ trait Forwarding extends Speculative {
   // the window and [set_mem] filling it in, which is the state a narrow store's
   // read-modify-write is observed in. [bypassed] is the addresses of the loads
   // that read around the store, in program order, and the only thing the
-  // deferred alias check reads.
+  // deferred alias check reads. [saved] is what [Predictive.Window] carries in
+  // the slot key; it is a field here because this window is inlined and so
+  // never reaches a key.
   private case class Queued(
       at: Int,
       entry: Option[(Rep[Int], Rep[Int])],
       bypassed: Vector[Rep[Int]],
-      forwarded: Vector[Rep[Int]]
+      forwarded: Vector[Rep[Int]],
+      saved: Vector[Reg]
   )
   private var queued: Option[Queued] = None
 
@@ -119,9 +129,9 @@ trait Forwarding extends Speculative {
           // [close]'s question, and this load took the value on trust.
           queued = Some(q.copy(forwarded = q.forwarded :+ addr))
           // The arms have to be the value of the virtualized `if` rather than
-          // assignments to a `var`, for the reason [Speculative.execute] spells
-          // out: a `var` here is an ordinary Scala variable holding a [Rep], so
-          // it names whichever arm was staged last.
+          // assignments to a `var`. A `var` here is an ordinary Scala variable
+          // holding a [Rep], so it would name whichever arm was staged last and
+          // the emitted C would read a symbol declared inside the other block.
           if (tag(qaddr) === tag(addr)) {
             s.timer += forwardCost
             qval
@@ -143,37 +153,16 @@ trait Forwarding extends Speculative {
     case None => super.get_mem(s, addr)
   }
 
-  override def execute(pc: Int, s: Rep[State]): Rep[State] = queued match {
-    case Some(q) => inside(pc, q, s)
-    // A store window opens only with no branch window already open, and no
-    // branch runs inside a store window because [speculable] refuses one. That
-    // is what keeps the two from nesting and [inBranch] from having to become a
-    // stack.
-    case None =>
-      if (inBranch.isEmpty && pc < prog.length && isStore(prog(pc))) { open(pc, s) }
-      else { super.execute(pc, s) }
-  }
-
-  // A store that closed a branch window. [Speculative] has already cleared
-  // [inBranch] by the time this runs, so the no-nesting invariant holds and a
-  // window can open here the same way it does in [execute].
-  //
-  // [savedRegisters] is why this is not a one-liner. It still holds what the
-  // branch window saved, and the branch resolved to its guess on the arm that
-  // reaches here, so those saves are finished: a store window that inherited
-  // them would restore a correctly speculated register on its own squash. It
-  // gets an empty list and hands the old one back, which is [Predictive.under]'s
-  // idiom and, unlike clearing in place, does not care which arm of the
-  // virtualized `if` around this call was staged first.
-  override protected def closing(pc: Int, s: Rep[State]): Rep[State] =
-    if (queued.isEmpty && pc < prog.length && isStore(prog(pc))) {
-      val outer = savedRegisters.toVector
-      resetSaved()
-      val result = open(pc, s)
-      resetSaved()
-      savedRegisters ++= outer
-      result
-    } else { super.closing(pc, s) }
+  override protected def run(pc: Int, w: Option[Window], s: Rep[State]): Rep[State] =
+    queued match {
+      case Some(q) => inside(pc, q, s)
+      // A store window opens only with no branch window already open, and no
+      // branch runs inside a store window because [speculable] refuses one.
+      // That is what keeps the two from nesting.
+      case None =>
+        if (w.isEmpty && pc < prog.length && isStore(prog(pc))) { open(pc, s) }
+        else { super.run(pc, w, s) }
+    }
 
   // [step] runs the store, [set_mem] diverts it into the queue, and the
   // `call(pc + 1, s)` at the end of [step] finds [useCache] false and inlines
@@ -181,7 +170,7 @@ trait Forwarding extends Speculative {
   // [step]'s continuation, and the close is [inside]'s to do rather than this
   // method's.
   private def open(at: Int, s: Rep[State]): Rep[State] = {
-    queued = Some(Queued(at, None, Vector(), Vector()))
+    queued = Some(Queued(at, None, Vector(), Vector(), Vector()))
     current = at
     step(at, s)
   }
@@ -190,14 +179,14 @@ trait Forwarding extends Speculative {
     if (pc >= prog.length || pc >= q.at + 1 + storeWindow) { close(q, pc, s) }
     else {
       speculable(prog(pc)) match {
-        // No [reads] check, unlike [Speculative]'s window. A branch condition
-        // is evaluated against the live register file at the join point, so a
+        // No [reads] check, unlike [Predictive]'s window. A branch condition is
+        // evaluated against the live register file at the join point, so a
         // speculated write to one of its inputs corrupts it; the store's
         // address and the bypassing loads' are [Rep]s captured where they were
         // computed, and a later write to the register they came from cannot
         // reach them.
         case Some(rd) => {
-          saveForRollback(s, rd)
+          queued = Some(q.copy(saved = save(s, q.saved, rd)))
           current = pc
           step(pc, s)
         }
@@ -214,12 +203,12 @@ trait Forwarding extends Speculative {
     // test rather than being written into both arms.
     q.entry.foreach((addr, v) => super.set_mem(s, addr, v))
 
-    val result = q.entry match {
+    q.entry match {
       case Some((addr, _)) if q.bypassed.nonEmpty || q.forwarded.nonEmpty =>
-        // [rollback] is [Speculative]'s, penalty included: a memory ordering
+        // [rollback] is [Predictive]'s, penalty included: a memory ordering
         // violation costs what a mispredicted branch costs, and both restore
-        // every register the window saved. That is why control restarts at the
-        // store and not at the load that aliased. [savedRegisters] accumulates
+        // every register the window saved. That is why control restarts past
+        // the store rather than at the load that aliased. [q.saved] accumulates
         // from the window's open, so the offending load's pc is not a point the
         // register file was ever consistent at, and which load it was is a
         // runtime fact that a static program counter cannot be handed anyway.
@@ -230,7 +219,7 @@ trait Forwarding extends Speculative {
         // which takes regions and would put each test in a block of its own.
         val wrong = q.bypassed.map(_ === addr) ++ q.forwarded.map(misforwarded(_, addr))
         if (wrong.reduce(_ | _)) {
-          rollback(s)
+          rollback(s, q.saved)
           call(q.at + 1, s)
         } else { call(at, s) }
 
@@ -238,8 +227,5 @@ trait Forwarding extends Speculative {
       // there is nothing to have got wrong.
       case _ => call(at, s)
     }
-
-    resetSaved()
-    result
   }
 }
