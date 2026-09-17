@@ -14,7 +14,7 @@ import elms.koika.test.common.{
   Predictive,
   PredictiveNonBlocking,
   Reach,
-  Speculative,
+  Static,
   StateT
 }
 
@@ -80,9 +80,9 @@ class RiscVBranchyTests extends KoikaSuite {
     check("cache/branchy", snippet, Verdict.Clean, klee = Reach.LikelyTimeout)
   }
 
-  test("riscv spec branchy") {
-    val snippet = new BranchyDriver with Speculative {}
-    check("speculative/branchy", snippet, Verdict.Clean, klee = Reach.LikelyTimeout)
+  test("riscv static branchy") {
+    val snippet = new BranchyDriver with Static {}
+    check("static/branchy", snippet, Verdict.Clean, klee = Reach.LikelyTimeout)
   }
 
   test("riscv predictive branchy") {

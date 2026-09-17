@@ -47,13 +47,15 @@ enum Param derives CanEqual {
 // claim covers says [uniform]; anything else is a statement about where the
 // claim stops.
 //
-// [forwarding] is last rather than next to [speculative], which it no longer
-// extends. It extends [predictive], so it catches everything every column to
-// its left catches and the queue as well, and the columns are a chain again.
+// [static] is [predictive] with the history bits taken away, so the two sit
+// next to each other and a port that answers differently on them is a port
+// whose leak needed a trained predictor. [forwarding] is last because it
+// extends [predictive] and so catches everything every column to its left
+// catches, and the queue as well.
 case class Expect(
     naive: Verdict,
     cache: Verdict,
-    speculative: Verdict,
+    static: Verdict,
     predictive: Verdict,
     forwarding: Verdict
 ) derives CanEqual

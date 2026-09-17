@@ -6,7 +6,7 @@ import elms.prelude.given
 import elms.koika.test.{KoikaSuite, Verdict}
 import elms.koika.test.common.{Init, Predictive}
 
-// Nothing here that [SpecDriver] does not also want. The predictor leaves no
+// Nothing here that [StaticDriver] does not also want. The predictor leaves no
 // trace in the struct, because its history is specialized away: what it
 // believes is which generated function the program is in.
 trait PredictiveDriver extends RiscVDriver[64] with Predictive {

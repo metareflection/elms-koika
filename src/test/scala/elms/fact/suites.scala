@@ -4,7 +4,7 @@ import elms.prelude.*
 import elms.prelude.given
 
 import elms.koika.test.KoikaSuite
-import elms.koika.test.common.{Cached, Forwarding, Init, Predictive, Speculative}
+import elms.koika.test.common.{Cached, Forwarding, Init, Predictive, Static}
 
 // The FaCT ports against every model. Four programs, two that hold up and two
 // that say where FaCT's guarantee stops.
@@ -60,15 +60,15 @@ class FactCacheTests extends KoikaSuite {
 }
 
 @virtualize
-class FactSpecTests extends KoikaSuite {
-  val under = "fact/speculative/"
+class FactStaticTests extends KoikaSuite {
+  val under = "fact/static/"
 
   for (p <- Program.all) {
-    test(s"fact spec ${p.name}") {
-      val snippet = new FactDriver(p) with Speculative {
+    test(s"fact static ${p.name}") {
+      val snippet = new FactDriver(p) with Static {
         override val init = Init.Spilling.speculative(stateT)
       }
-      check(p.name, snippet, p.expect.speculative)
+      check(p.name, snippet, p.expect.static)
     }
   }
 }

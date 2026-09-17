@@ -398,6 +398,18 @@ trait Cached extends Direct {
   }
 }
 
+// Speculation with no history: not-taken at every branch, and the window
+// inlined rather than emitted as functions.
+//
+// [Static] is what this model became. It reaches the same guess through
+// [Predictive]'s window, which costs a slot per lookahead state and buys
+// backward branches. This one refuses those, because with the window inlined a
+// backward target inside one inlines forever, and that is a fact about the
+// generator rather than about any machine.
+//
+// Kept for the NanoRISC suite, which is here for continuity with an earlier
+// version of this work and should go on answering the way it did. Nothing else
+// extends it.
 @virtualize
 trait Speculative extends Cached {
   given liftable: Liftable[Unit] = summon[Liftable[Unit]]

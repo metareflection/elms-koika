@@ -6,7 +6,7 @@ import elms.prelude.given
 import elms.core.StructManifest
 
 import elms.koika.test.{KoikaSuite, Verdict}
-import elms.koika.test.common.{Init, Speculative, StateT}
+import elms.koika.test.common.{Init, Static, StateT}
 import elms.koika.test.squared.StateT2
 import elf.{Datum, Taint}
 
@@ -104,11 +104,11 @@ class RiscVCompiledTests extends KoikaSuite {
     check("naive", snippet, Verdict.Leak)
   }
 
-  test("riscv compiled speculative") {
-    val snippet = new CompiledDriver with Speculative {
+  test("riscv compiled static") {
+    val snippet = new CompiledDriver with Static {
       override val init = Init.speculative(stateT)
     }
-    check("speculative", snippet, Verdict.Leak)
+    check("static", snippet, Verdict.Leak)
   }
 
   // [PredictiveDriver] already carries the `init` the other two spell out, plus

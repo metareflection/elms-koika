@@ -145,7 +145,7 @@ trait Predictive extends Cached {
   ): Rep[State] = {
     // The branch is what the predictor learns from, and it learns the truth
     // rather than the guess.
-    val next = learned.updated(p.at, taken)
+    val next = learn(p.at, taken)
     // [pc] has not run yet, whether or not the guess held.
     if (taken == p.guess) { goto(None, next, pc, s) }
     else {
@@ -187,4 +187,28 @@ trait Predictive extends Cached {
   // attributable to the program. A two-bit saturating counter is this method
   // and [Key.learned]'s value type, and nothing else.
   def predict(pc: Int): Boolean = learned.getOrElse(pc, false)
+
+  // What the predictor knows once [at] has resolved [taken]. A seam of its own
+  // rather than a line inside [settle], because the history is also [Key]'s
+  // third component: what a model records here is what decides how many slots
+  // one pc is numbered into.
+  def learn(at: Int, taken: Boolean): Map[Int, Boolean] = learned.updated(at, taken)
+}
+
+// The guess a machine with no history bits makes, which is not-taken at every
+// branch forever.
+//
+// Here to be compared against. A demo that leaks under this one did not need a
+// predictor to be trained, which is a claim about the threat model rather than
+// about the predictor, and with only [Predictive] in the tower there would be
+// nothing to attribute a leak to.
+//
+// [learn] and not [predict] is the override. Nothing is ever recorded, so
+// [Key.learned] is empty at every slot and the inherited [predict] answers
+// `false` on its own; overriding the guess instead would leave the history in
+// the key and number one pc into a slot per history, each staging the same
+// code.
+@virtualize
+trait Static extends Predictive {
+  override def learn(at: Int, taken: Boolean): Map[Int, Boolean] = Map.empty
 }
