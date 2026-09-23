@@ -4,12 +4,19 @@ import elms.prelude.*
 import elms.prelude.given
 
 import elms.codegen.{CCodegen, Config}
-import elms.koika.test.common.GenericKoikaDriver
+import elms.core.StructManifest
+
+import elms.koika.test.common.{KoikaDriver, StateT}
+import elms.koika.test.squared.{Flat, SquaredKoikaDriver, StateT2}
 
 // What RISC-V needs from the driver that NanoRisc does not. [M] stays open
 // because the FaCT ports spill and the demos do not, so memory is the one
 // length these two do not agree on.
-trait RiscVDriver[M <: Int: ValueOf] extends GenericKoikaDriver[32, M, 24, 12] with Exec {
+//
+// [S] is [KoikaDriver]'s and nothing here reads it. The C around a residue is
+// the same whether a slot is handed one state or two, which is what lets the
+// squared tower reuse every line of it.
+trait RiscVShell[M <: Int: ValueOf, S: StructManifest] extends KoikaDriver[32, M, 24, 12, S] {
   // `CCodegen` names generated C variables `x0`, `x1`, and so does RISC-V name
   // its registers. Nothing breaks, but anyone reading a snapshot would read
   // `x11[0] = 20` as a register write when it is an array of them.
@@ -37,3 +44,17 @@ trait RiscVDriver[M <: Int: ValueOf] extends GenericKoikaDriver[32, M, 24, 12] w
   // cannot hear Scala; [RiscVElfTests] is what compares the two back.
   def demo(name: String): Vector[RiscV.Instr] = elf.Elf.load(s"src/test/asm/riscv/$name.o").prog
 }
+
+trait RiscVDriver[M <: Int: ValueOf] extends RiscVShell[M, StateT[32, M, 24, 12]] with Exec
+
+// The same demos, run in step. Everything above is unchanged; what differs is
+// that a slot takes both states and the clocks are compared on the way into
+// each one.
+//
+// [Flat] here is what `Exec extends Direct` is on the line above: the memory
+// model a demo gets when it asks for none, and the one a `with Cached` at the
+// test site displaces.
+trait SquaredRiscVDriver[M <: Int: ValueOf]
+    extends SquaredKoikaDriver[32, M, 24, 12]
+    with RiscVShell[M, StateT2[32, M, 24, 12]]
+    with Flat

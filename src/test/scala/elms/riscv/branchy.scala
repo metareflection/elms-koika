@@ -3,7 +3,10 @@ package elms.koika.test.riscv
 import elms.prelude.*
 import elms.prelude.given
 
+import elms.core.StructManifest
+
 import elms.koika.test.{KoikaSuite, Verdict}
+import elms.koika.test.squared.StateT2
 import elms.koika.test.common.{
   Cached,
   Init,
@@ -11,7 +14,8 @@ import elms.koika.test.common.{
   Predictive,
   PredictiveNonBlocking,
   Reach,
-  Speculative
+  Speculative,
+  StateT
 }
 
 // `branchy.s`'s own driver. At file scope for its `initialize_input`, which
@@ -21,8 +25,8 @@ import elms.koika.test.common.{
 // One `init` for all six models, rather than the four the other suites spell
 // out between them. This demo exists to be measured, and which fields a model
 // leaves untouched is not what is being measured.
-trait BranchyDriver extends RiscVDriver[64] {
-  override val prog = demo("branchy")
+trait BranchyShell[S: StructManifest] extends RiscVShell[64, S] {
+  val prog: Vector[RiscV.Instr] = demo("branchy")
 
   override val init = Init.all(stateT)
 
@@ -48,6 +52,13 @@ trait BranchyDriver extends RiscVDriver[64] {
        |${draws.mkString("\n")}""".stripMargin
   }
 }
+
+trait BranchyDriver extends RiscVDriver[64] with BranchyShell[StateT[32, 64, 24, 12]]
+
+// The same demo, run in step.
+trait SquaredBranchyDriver
+    extends SquaredRiscVDriver[64]
+    with BranchyShell[StateT2[32, 64, 24, 12]]
 
 @virtualize
 class RiscVBranchyTests extends KoikaSuite {

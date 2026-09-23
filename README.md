@@ -88,10 +88,13 @@ has said what should happen to it. `check` writes the claim into the first line
 of the generated C, which makes it part of the snapshot `sbt test` pins, and
 [`verify`](src/out/cbmc/verify) reads it back out and runs the checker:
 
-`./src/out/cbmc/verify [--certify] [file.c ...]`
+`./src/out/cbmc/verify [--certify] [--full] [file.c ...]`
 
-With no arguments it takes every snapshot in the tree, 129 of them in 126
-seconds.
+With no arguments it takes the main suite, 129 snapshots in 126 seconds. The
+five it holds back are `lockstep/`, which answers the same demos as `squared/`
+by the construction `squared/` replaced; `sbt test` regenerates them either
+way, so what `--full` buys is the check rather than the C. Naming files runs
+exactly those, main suite or not.
 It prints one line per file and exits non-zero if CBMC says anything other than
 what the file claims, so a model that stops detecting what it used to detect is
 a failing run rather than a stale comment. The claims themselves are greppable
@@ -99,31 +102,63 @@ without running anything:
 
 `head -qn1 src/out/cbmc/**/*.check.c`
 
-The tree under [`src/out/cbmc/lockstep`](src/out/cbmc/lockstep) is the same demos answered
-a different way. `Lockstep` rewrites a residue into a product of itself with
-itself, so one run of one copy of the control flow carries both states and the
-timers are compared on entry to every slot rather than once at the end. Every
-verdict there has to match its twin next door, because the two are answering the
-same question about the same program.
+The tree under [`src/out/cbmc/squared`](src/out/cbmc/squared) is the same demos answered
+a different way. A second tower, under
+[`src/test/scala/elms/squared`](src/test/scala/elms/squared), interprets a
+program over a pair of states rather than one, so a slot takes both, the two
+runs share one copy of the control flow, and the timers are compared on the way
+into every slot rather than once at the end. Every verdict there has to match
+its twin next door, because the two are answering the same question about the
+same program.
 
-What that buys depends on who is holding the bill, and the bill changed hands
-when the cache did. Sharing the control flow makes every timer comparison an
-assumption as well as a question, so a pair that has already drifted leaves the
-search instead of being enumerated and rejected. That is a claim about a path
-space, and against the old two-entry cache it was worth five times: `branchy` at
-eighteen probes was 30.1s lockstepped against 149.9s self-composed.
+That is the squared semantics and nothing more. An expression is evaluated in
+both states, and a branch stays a branch only where the two runs provably agree
+about which way to go, which is asserted at the point it is needed rather than
+left to the timer downstream. The rules underneath are written for a single run
+over an abstract value domain, and the pair is what runs them twice.
 
-A set-associative cache moved the cost somewhere the pass does not reach. What
-is expensive now is array theory over subscripts nobody knows, and lockstepping
-doubles the updates in flight while pruning none of them. `branchy` at six
-probes is 41.2s against 40.4s, and at the four it ships with it is 1.63s against
-1.48s. Twice, no difference, and if anything the wrong way.
+Which is also why the same source can be *run*. Substitute ordinary `Int`s for
+the staged values and the interpreter walks the program instead of writing one
+down, and `SquaredRunSuite` does exactly that: the first two columns of the
+table below, on sampled inputs, in about a second with no checker anywhere. A
+witnessed leak is a proof and a clean sample is not, which is what `src/out`
+and CBMC are for, but a product semantics that only ever existed as C had to be
+wrong in C before anyone found out.
 
-So the pass currently earns nothing in time, and it is kept for the other thing
-it does: every verdict in that tree has to match its twin next door, which is a
+What the sharing buys depends on who is holding the bill, and the bill changed
+hands when the cache did. Sharing the control flow makes every timer comparison
+an assumption as well as a question, so a pair that has already drifted leaves
+the search instead of being enumerated and rejected. That is a claim about a
+path space, and against the old two-entry cache it was worth five times:
+`branchy` at eighteen probes was 30.1s as a product against 149.9s
+self-composed.
+
+A set-associative cache moved the cost somewhere the sharing does not reach.
+What is expensive now is array theory over subscripts nobody knows, and running
+two states doubles the updates in flight while pruning none of them. `branchy`
+at the four probes it ships with is 1.43s squared against 1.31s self-composed.
+Twice the work, no difference, and if anything the wrong way. At six probes it
+was 41.2s against 40.4s, and that pair has not been re-taken because the probe
+count lives in the assembly rather than in a flag.
+
+So it currently earns nothing in time, and it is kept for the other thing it
+does: every verdict in that tree has to match its twin next door, which is a
 second opinion on the same program from a differently shaped formula. Its speed
 argument is waiting on a demo whose cost is a path space, and the tree does not
 have one at the moment.
+
+[`src/out/cbmc/lockstep`](src/out/cbmc/lockstep) is a third answer to the same
+five, and a historical one. `Lockstep` built the product by rewriting the
+residue after staging, deciding which branches to fuse by whether they happened
+to contain a slot call, and it is what the interpreter replaced. It stays
+because a second construction of the same product is worth having on the day
+they disagree, and it stays out of a default `verify` because they do not: the
+same five verdicts, at 1.47s on the `branchy` measurement above, which is the
+interpreter's number plus the noise.
+
+`sbt test` still regenerates it, so the C never goes stale while nobody is
+looking at it. What `--full` adds is a checker's opinion of it, which is the
+part that costs something.
 
 Here is what they currently say. The first three demos exist for both NanoRisc
 and RISC-V and answer the same on each, so the table does not split them;
@@ -699,7 +734,11 @@ it.
 `src/out/klee` is the same 129 residues checked by [KLEE](#KLEE) instead, and
 [`src/out/klee/verify`](src/out/klee/verify) is its script:
 
-`./src/out/klee/verify [--slow | --only-slow] [file.c ...]`
+`./src/out/klee/verify [--slow | --only-slow] [--full] [file.c ...]`
+
+`--full` means what it means next door: the five under `lockstep/` are held
+back from a default run, because a KLEE budget is the last thing to spend
+confirming that two constructions of one product still agree.
 
 Both trees agree, 129 verdicts for 129, model sensitivity included. That
 agreement is the point of having two: a residue really is an ordinary C program,
@@ -774,7 +813,7 @@ all 123 agree (6 skipped)
 ```
 
 `--slow` adds them back, and `--only-slow` runs nothing else, which is the one
-to reach for after touching `Lockstep` or the cache model.
+to reach for after touching the squared tower or the cache model.
 
 KLEE reads bitcode, and bitcode only loads into a KLEE built against the same
 LLVM, so the script compiles and checks inside a pinned

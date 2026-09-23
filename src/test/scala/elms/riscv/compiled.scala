@@ -3,8 +3,11 @@ package elms.koika.test.riscv
 import elms.prelude.*
 import elms.prelude.given
 
+import elms.core.StructManifest
+
 import elms.koika.test.{KoikaSuite, Verdict}
-import elms.koika.test.common.{Init, Speculative}
+import elms.koika.test.common.{Init, Speculative, StateT}
+import elms.koika.test.squared.StateT2
 import elf.{Datum, Taint}
 
 private val image = elf.Elf.load("src/test/asm/riscv/cmp.o")
@@ -16,8 +19,8 @@ private val image = elf.Elf.load("src/test/asm/riscv/cmp.o")
 // At file scope rather than inside the suite, because it is the longest and
 // branchiest demo in the tree and so the one anything measuring a checker wants
 // to reach for.
-trait CompiledDriver extends RiscVDriver[64] {
-  override val prog = image.prog
+trait CompiledShell[S: StructManifest] extends RiscVShell[64, S] {
+  val prog: Vector[RiscV.Instr] = image.prog
 
   private def base(d: Datum): Int = d.addr / 4
   private def length(d: Datum): Int = d.size / 4
@@ -82,6 +85,13 @@ trait CompiledDriver extends RiscVDriver[64] {
 
   override lazy val initialize_secret: String = secrets.map(split).mkString
 }
+
+trait CompiledDriver extends RiscVDriver[64] with CompiledShell[StateT[32, 64, 24, 12]]
+
+// The same demo, run in step.
+trait SquaredCompiledDriver
+    extends SquaredRiscVDriver[64]
+    with CompiledShell[StateT2[32, 64, 24, 12]]
 
 @virtualize
 class RiscVCompiledTests extends KoikaSuite {

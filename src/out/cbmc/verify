@@ -1,10 +1,13 @@
 #!/usr/bin/env zsh
 
-# usage: ./verify [--certify] [files...]
+# usage: ./verify [--certify] [--full] [files...]
 #
 # Checks every residue against the verdict its test declared. With no arguments
-# that is every snapshot under this directory. Exits non-zero when any file
-# disagrees, so this is a test and not a report.
+# that is the main suite: every snapshot under this directory except the ones
+# --full adds back. Exits non-zero when any file disagrees, so this is a test
+# and not a report.
+#
+# Naming files explicitly runs exactly those, main suite or not.
 #
 # The claim lives in the file, on the `// verify:` line that `KoikaSuite.check`
 # writes at the top of it. So the thing this script compares against is the same
@@ -23,8 +26,9 @@
 # not finished in seventy-two minutes without.
 #
 # Naming the one property instead, which is what this used to do, is a hair
-# slower and no longer correct: a `lockstep/` residue asserts once per slot, and
-# any of them is the leak.
+# slower and no longer correct: a product residue under `squared/` or
+# `lockstep/` asserts once per slot rather than once at the end, and any of
+# them is the leak.
 #
 # --certify re-runs each file with `--unwinding-assertions` and reports whether
 # its declared bound actually covers every loop and every recursion in it. A
@@ -36,14 +40,39 @@
 
 here=${0:a:h}
 
+# What the main suite leaves out. `lockstep/` is the same five demos as
+# `squared/`, built by rewriting a residue rather than by interpreting the
+# program over two states, and it is kept for the day the two constructions
+# disagree rather than for the coverage it adds, which is none. Checking both
+# on every run buys a second opinion nobody asked for at the price of
+# everybody's time.
+#
+# `sbt test` still regenerates it, so the C stays current whether or not
+# anybody checks it.
+full_only='*/lockstep/*'
+
 certify=0
-if [[ $1 == --certify ]]; then
-    certify=1
+full=0
+while [[ $1 == --* ]]; do
+    case $1 in
+        --certify) certify=1 ;;
+        --full)    full=1 ;;
+        *) print -u2 -- "unknown flag $1"; exit 2 ;;
+    esac
     shift
-fi
+done
+
+typeset -i held_back=0
 
 files=($@)
-(( $#files )) || files=(${here}/**/*.check.c(N))
+if (( ! $#files )); then
+    files=(${here}/**/*.check.c(N))
+    if (( ! full )); then
+        held_back=${#${(M)files:#${~full_only}}}
+        files=(${files:#${~full_only}})
+        (( held_back )) && print -- "skip     $held_back under lockstep/ (superseded by squared/; pass --full to check them)"
+    fi
+fi
 
 typeset -i failures=0
 log=$(mktemp)
@@ -94,9 +123,12 @@ done
 
 rm -f $log
 
+note=""
+(( held_back )) && note=" ($held_back held back for --full)"
+
 if (( failures )); then
-    print -- "$failures of $#files disagree"
+    print -- "$failures of $#files disagree$note"
     exit 1
 fi
 
-print -- "all $#files agree"
+print -- "all $#files agree$note"

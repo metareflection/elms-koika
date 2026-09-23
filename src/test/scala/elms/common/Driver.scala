@@ -14,14 +14,20 @@ abstract class DslDriver[A: Typable, B: Typable]
 // once: the struct members get them from [State], and the `#define`s the
 // hand-written C reads get them from `valueOf`. One literal each, so the two
 // cannot drift.
-abstract class GenericKoikaDriver[
+//
+// [S] is what a slot is handed. One state for a model that runs once, and a
+// pair of them for the lockstep tower next door. Everything below is the C
+// around the residue and does not care which: `main` is the one thing that
+// does, and it is overridable for exactly that reason.
+abstract class KoikaDriver[
     R <: Int: ValueOf,
     M <: Int: ValueOf,
     C <: Int: ValueOf,
-    T <: Int: ValueOf
-] extends DslDriver[StateT[R, M, C, T], StateT[R, M, C, T]] with StateTOps {
-  override type State = StateT[R, M, C, T]
-  override given stateManifest: StructManifest[State] = StateT.manifest
+    T <: Int: ValueOf,
+    S
+](using repr: StructManifest[S]) extends DslDriver[S, S] {
+  type State = S
+  given stateManifest: StructManifest[State] = repr
 
   override val codegen = CCodegen()
 
@@ -109,7 +115,7 @@ abstract class GenericKoikaDriver[
       |    s2.mem[SECRET_OFFSET+i] = bounded(0, 20);
       |  }""".stripMargin
 
-  // Takes the prover only so [Lockstepped] can, which needs it for the two
+  // Takes the prover only so [SquaredKoikaDriver] can, which needs it for the
   // helpers it declares. Nothing here does.
   def main(prover: Prover): String =
     s"""int main(int argc, char* argv[]) {
@@ -148,3 +154,12 @@ abstract class GenericKoikaDriver[
        |
        |${main(prover)}""".stripMargin
 }
+
+// The tower's own driver: one state in, one state out, and the two runs
+// compared by `main` after the residue has been called twice.
+abstract class GenericKoikaDriver[
+    R <: Int: ValueOf,
+    M <: Int: ValueOf,
+    C <: Int: ValueOf,
+    T <: Int: ValueOf
+] extends KoikaDriver[R, M, C, T, StateT[R, M, C, T]] with StateTOps

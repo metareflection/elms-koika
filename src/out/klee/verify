@@ -1,10 +1,13 @@
 #!/usr/bin/env zsh
 
-# usage: ./verify [--slow | --only-slow] [files...]
+# usage: ./verify [--slow | --only-slow] [--full] [files...]
 #
 # Checks every KLEE residue against the verdict its test declared. With no
-# arguments that is every snapshot under this directory. Exits non-zero when any
-# file disagrees, so this is a test and not a report.
+# arguments that is the main suite: every snapshot under this directory except
+# the ones --full adds back. Exits non-zero when any file disagrees, so this is
+# a test and not a report.
+#
+# Naming files explicitly runs exactly those, main suite or not.
 #
 # A file whose line says `likely-timeout` is one the tree expects KLEE not to
 # finish, and those are skipped unless you pass --slow, or --only-slow to run
@@ -53,12 +56,21 @@
 
 here=${0:a:h}
 
+# What the main suite leaves out, and `src/out/cbmc/verify` leaves out the same
+# tree for the same reason: `lockstep/` is the same five demos as `squared/`,
+# built by rewriting a residue rather than by interpreting the program over two
+# states. It is kept for the day the two constructions disagree, and a KLEE
+# budget is the last thing to spend finding out that they still agree.
+full_only='*/lockstep/*'
+
 slow=0
 only_slow=0
+full=0
 while [[ $1 == --* ]]; do
     case $1 in
         --slow)      slow=1 ;;
         --only-slow) slow=1; only_slow=1 ;;
+        --full)      full=1 ;;
         *) print -u2 -- "unknown flag $1"; exit 2 ;;
     esac
     shift
@@ -121,8 +133,17 @@ outcome() {
     fi
 }
 
+typeset -i held_back=0
+
 files=($@)
-(( $#files )) || files=(${here}/**/*.check.c(N))
+if (( ! $#files )); then
+    files=(${here}/**/*.check.c(N))
+    if (( ! full )); then
+        held_back=${#${(M)files:#${~full_only}}}
+        files=(${files:#${~full_only}})
+        (( held_back )) && print -- "skip     $held_back under lockstep/ (superseded by squared/; pass --full to check them)"
+    fi
+fi
 
 if (( ! $#files )); then
     print -- "no snapshots under ${here#$PWD/} (generate them with \`sbt test\`)"
@@ -185,7 +206,10 @@ for file in $files; do
 done
 
 note=""
-(( skipped )) && note=" ($skipped skipped)"
+parts=()
+(( skipped )) && parts+=("$skipped skipped")
+(( held_back )) && parts+=("$held_back held back for --full")
+(( $#parts )) && note=" (${(j:, :)parts})"
 
 if (( failures )); then
     print -- "$failures of $#files disagree$note"

@@ -5,7 +5,7 @@ import elms.prelude.given
 
 import scala.util.{Failure, Try}
 
-import elms.koika.test.common.{GenericKoikaDriver, Prover, Reach}
+import elms.koika.test.common.{KoikaDriver, Prover, Reach}
 
 // What a checker should say about a residue program.
 //
@@ -35,7 +35,7 @@ abstract class KoikaSuite extends SnapshotFunSuite {
   // object as the program it runs on.
   def check(
       label: String,
-      snippet: GenericKoikaDriver[?, ?, ?, ?],
+      snippet: KoikaDriver[?, ?, ?, ?, ?],
       expect: Verdict,
       klee: Reach = Reach.Settles
   ): Unit =

@@ -10,6 +10,12 @@ import elms.koika.test.riscv.{BranchyDriver, CompiledDriver, RiscVDriver}
 // self-composition. Every verdict here has to match the one next door, because
 // the two are answering the same question about the same program.
 //
+// [SquaredSuite] answers these same five out of the interpreter, so these
+// snapshots are a second construction of a product nobody doubts. Staging
+// them costs a second and keeps the C current; checking them costs a
+// checker's time and buys nothing most days, so `verify` holds them back
+// until asked with `--full`.
+//
 // Labels carry the model, so a residue lands beside its twin's path with
 // `lockstep/` on the front.
 @virtualize

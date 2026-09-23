@@ -5,6 +5,18 @@ import scala.collection.immutable.VectorMap
 import elms.core.{Name, Op, STRUCT, StructRepr, Type, UNIT}
 import elms.core.tree.{E, Function, Let, Program, Term, V, View}
 
+// The same product the squared interpreter builds, built the other way: by
+// rewriting a residue after staging rather than by interpreting the program
+// over a pair of states in the first place. Superseded, and kept because a
+// second construction of the same thing is worth having on the day the two
+// disagree. `sbt test` still stages it, and `verify --full` is what checks
+// what it staged.
+//
+// Which branches to fuse is decided here by whether one happens to contain a
+// slot call, and that is the difference worth knowing about. It is a proxy for
+// "is this control flow" rather than the thing itself, and the interpreter
+// says which it means instead of guessing.
+//
 // The residue run against two states at once, over one copy of the control
 // flow, with the timers compared on entry to every slot.
 //
@@ -15,10 +27,10 @@ import elms.core.tree.{E, Function, Let, Program, Term, V, View}
 // rejected.
 //
 // What that is worth depends entirely on how much of the bill the solver is
-// holding, and it grows with the path space. `branchy` at eighteen probes is
-// 30.1s against 149.9s; at the twelve it ships with, 6.1s against 6.7s. Every
-// other demo in the tree is elaborator-bound and comes out a little slower,
-// since the residue is now duplicated inline rather than called twice.
+// holding, and it grows with the path space. Against the two-entry cache this
+// predates, `branchy` at eighteen probes was 30.1s against 149.9s. Against the
+// one in the tree now it is 1.47s against 1.31s at the four probes `branchy`
+// ships, which is the wrong way round; the README has the rest of that story.
 //
 // It also has a precondition that is easy to lose: the two runs' addresses have
 // to be provably equal. `Cached` writes a dirty line back at an index nobody
