@@ -17,10 +17,10 @@ lazy val root = project
     scalacOptions ++= Seq("-feature", "-deprecation"),
 
     libraryDependencies += "org.scala-lang" %% "scala3-compiler" % scalaVersion.value,
-    libraryDependencies += "org.scalactic" %% "scalactic" % "3.2.19",
-    libraryDependencies += "org.scalatest" %% "scalatest" % "3.2.19" % "test",
+    libraryDependencies += "org.scalactic" %% "scalactic" % "3.2.20",
+    libraryDependencies += "org.scalatest" %% "scalatest" % "3.2.20" % "test",
     libraryDependencies += "org.scala-lang" %% "scala3-compiler" % scalaVersion.value % Test,
-    libraryDependencies += "org.scalameta" %% "munit" % "1.3.2" % Test,
+    libraryDependencies += "org.scalameta" %% "munit" % "1.3.6" % Test,
 
     Test / fork := true,
 
@@ -32,6 +32,12 @@ lazy val root = project
     // and predictive emit nothing longer than a hundred lines and want none of
     // it.
     Test / javaOptions += "-Xss16m",
+
+    // `.jvmopts` silences the JDK 24 sun.misc.Unsafe warning for sbt's own
+    // JVM, but the tests fork, and scala3-library's `LazyVals` reaches for
+    // Unsafe again on the way up. Same warning, second JVM, so it needs saying
+    // twice.
+    Test / javaOptions += "--sun-misc-unsafe-memory-access=allow",
 
     Test / javaOptions += {
       val conv = fileConverter.value

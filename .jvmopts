@@ -1,0 +1,11 @@
+# The sbt launcher drops its own default JAVA_OPTS once this file exists, so
+# the encoding it would have set has to be repeated here.
+-Dfile.encoding=UTF-8
+
+# JDK 24 turned both of these into warnings printed before sbt says hello.
+# sbt's own Scala library reaches for sun.misc.Unsafe in `scala.runtime.LazyVals`,
+# and sbt loads JNA's native library through `System.load`. Neither is ours to
+# fix, and neither is a problem yet, so say so up front rather than reading the
+# same eight lines on every boot.
+--sun-misc-unsafe-memory-access=allow
+--enable-native-access=ALL-UNNAMED
