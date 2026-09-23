@@ -146,7 +146,7 @@ if (( ! $#files )); then
 fi
 
 if (( ! $#files )); then
-    print -- "no snapshots under ${here#$PWD/} (generate them with \`sbt test\`)"
+    print -- "no snapshots under ${here#$PWD/} (generate them with \`sbt testFull\`)"
     exit 1
 fi
 
@@ -158,7 +158,7 @@ for file in $files; do
     name=${file#$PWD/}
     expected=$(sed -n '1s|^// verify: \([a-z]*\).*|\1|p' $file)
     if [[ -z $expected ]]; then
-        print -- "no-claim $name (regenerate it with \`sbt test\`)"
+        print -- "no-claim $name (regenerate it with \`sbt testFull\`)"
         (( failures++ ))
         continue
     fi

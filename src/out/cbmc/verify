@@ -11,9 +11,9 @@
 #
 # The claim lives in the file, on the `// verify:` line that `KoikaSuite.check`
 # writes at the top of it. So the thing this script compares against is the same
-# thing `sbt test` pins, and a demo cannot acquire a verdict by having someone
-# write one in a comment. That line carries the unwind bound too, out of
-# `GenericKoikaDriver.unwind`.
+# thing `sbt testFull` pins, and a demo cannot acquire a verdict by having
+# someone write one in a comment. That line carries the unwind bound too, out
+# of `GenericKoikaDriver.unwind`.
 #
 # `--no-standard-checks` leaves CBMC nothing to check but the residue's own
 # assertions.
@@ -47,7 +47,7 @@ here=${0:a:h}
 # on every run buys a second opinion nobody asked for at the price of
 # everybody's time.
 #
-# `sbt test` still regenerates it, so the C stays current whether or not
+# `sbt testFull` still regenerates it, so the C stays current whether or not
 # anybody checks it.
 full_only='*/lockstep/*'
 
@@ -81,7 +81,7 @@ for file in $files; do
     name=${file#$PWD/}
     expected=$(sed -n '1s|^// verify: \([a-z]*\).*|\1|p' $file)
     if [[ -z $expected ]]; then
-        print -- "no-claim $name (regenerate it with \`sbt test\`)"
+        print -- "no-claim $name (regenerate it with \`sbt testFull\`)"
         (( failures++ ))
         continue
     fi

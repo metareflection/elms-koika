@@ -33,12 +33,23 @@ That wants either `clang`, whose integrated assembler covers RISC-V and so needs
 no cross toolchain, or a `riscv{64,32}-*-gcc`. The `.o` files are not checked in,
 and a suite that cannot find one aborts with a message naming the script.
 
-Running `sbt test` from the root will run all the tests, generating `.actual`
-files and checking them against the `.check` files under
+`./src/test/fact/build` is the same story for the FaCT suites, and wants `opt`,
+`llc` and a `clang` that can target RV32I. The FaCT compiler is not among them,
+because what is checked in is the LLVM it emitted. Skip this and the five FaCT
+suites fail twenty times over with a missing object.
+
+Running `sbt testFull` from the root will run all the tests, generating
+`.actual` files and checking them against the `.check` files under
 [`src/out/cbmc`](src/out/cbmc) and [`src/out/klee`](src/out/klee), one tree
 per backend.
 Failing tests will leave the generated `.actual` files for inspection.
 Snapshot files mostly follow the naming convention of `[testfile]/[suffix].check.c`.
+
+`testFull` and not `test`: under sbt 2 the latter is incremental, and a suite
+whose sources have not changed does not run. That is usually what is wanted and
+is exactly wrong when the thing being checked is a tree of snapshots, since a
+model two traits up can change what a suite writes without that suite's own
+file being touched.
 
 The examples are verified twice, once with [CBMC](#CBMC) and once with
 [KLEE](#KLEE). CBMC first.
@@ -85,14 +96,14 @@ test("riscv naive spectre") {
 
 `Verdict` is a required argument, so a new demo does not compile until somebody
 has said what should happen to it. `check` writes the claim into the first line
-of the generated C, which makes it part of the snapshot `sbt test` pins, and
-[`verify`](src/out/cbmc/verify) reads it back out and runs the checker:
+of the generated C, which makes it part of the snapshot `sbt testFull` pins,
+and [`verify`](src/out/cbmc/verify) reads it back out and runs the checker:
 
 `./src/out/cbmc/verify [--certify] [--full] [file.c ...]`
 
 With no arguments it takes the main suite, 129 snapshots in 130 seconds. The
 five it holds back are `lockstep/`, which answers the same demos as `squared/`
-by the construction `squared/` replaced; `sbt test` regenerates them either
+by the construction `squared/` replaced; `sbt testFull` regenerates them either
 way, so what `--full` buys is the check rather than the C. Naming files runs
 exactly those, main suite or not.
 It prints one line per file and exits non-zero if CBMC says anything other than
@@ -156,7 +167,7 @@ they disagree, and it stays out of a default `verify` because they do not: the
 same five verdicts, at 1.47s on the `branchy` measurement above, which is the
 interpreter's number plus the noise.
 
-`sbt test` still regenerates it, so the C never goes stale while nobody is
+`sbt testFull` still regenerates it, so the C never goes stale while nobody is
 looking at it. What `--full` adds is a checker's opinion of it, which is the
 part that costs something.
 
