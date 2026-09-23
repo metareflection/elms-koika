@@ -25,6 +25,12 @@ trait Machine
   extension (h: Half)
     def regs: Rep[Array[Int]]
     def mem: Rep[Array[Int]]
+
+    // Where [Speculative] puts a register before it lets a speculated
+    // instruction write it. Each run saves its own, and which registers are
+    // saved is a staging-time fact the two share.
+    def saved_regs: Rep[Array[Int]]
+
     def cache_tags: Rep[Array[Int]]
     def cache_dirty: Rep[Array[Int]]
     def cache_age: Rep[Array[Int]]

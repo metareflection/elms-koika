@@ -5,7 +5,7 @@ import scala.util.Random
 
 import org.scalatest.funsuite.AnyFunSuite
 
-import elms.koika.test.squared.{CachedRun, Chip, FlatRun, Outcome, Run}
+import elms.koika.test.squared.{CachedRun, Chip, FlatRun, Outcome, PredictiveRun, Run, StaticRun}
 import elms.koika.test.riscv.{RiscV, elf}
 
 // The squared interpreter, run rather than staged.
@@ -16,7 +16,7 @@ import elms.koika.test.riscv.{RiscV, elf}
 // is the one worth asking while the interpreter is being written: a product
 // semantics nobody can run has to be wrong in C before anyone finds out.
 //
-// The table below is [README.md]'s, first two columns. Every cell is a verdict
+// The table below is [README.md]'s, first four columns. Every cell is a verdict
 // the staged tower already publishes, so this is a second opinion on the same
 // models from a semantics that emits nothing.
 //
@@ -136,6 +136,10 @@ class SquaredRunSuite extends AnyFunSuite {
     cell("naive", FlatRun(_), name, leaks)
   private def cached(name: String, leaks: Boolean): Unit =
     cell("cache", CachedRun(_), name, leaks)
+  private def static(name: String, leaks: Boolean): Unit =
+    cell("static", StaticRun(_), name, leaks)
+  private def predictive(name: String, leaks: Boolean): Unit =
+    cell("predictive", PredictiveRun(_), name, leaks)
 
   naive("shortcircuit", leaks = true)
   naive("2ctr", leaks = false)
@@ -153,27 +157,57 @@ class SquaredRunSuite extends AnyFunSuite {
   cached("hidden", leaks = true)
   cached("reload", leaks = false)
 
+  static("shortcircuit", leaks = true)
+  static("2ctr", leaks = true)
+  static("spectre", leaks = true)
+  static("constant_time", leaks = false)
+  static("evict", leaks = true)
+  static("hidden", leaks = true)
+  static("reload", leaks = true)
+
+  predictive("shortcircuit", leaks = true)
+  predictive("2ctr", leaks = true)
+  predictive("spectre", leaks = true)
+  predictive("constant_time", leaks = false)
+  predictive("evict", leaks = true)
+  predictive("hidden", leaks = true)
+  predictive("reload", leaks = true)
+
   cell("naive", FlatRun(_), "branchy", leaks = false, input = branchyArg)
   cell("cache", CachedRun(_), "branchy", leaks = false, input = branchyArg)
+  cell("static", StaticRun(_), "branchy", leaks = false, input = branchyArg)
+  cell("predictive", PredictiveRun(_), "branchy", leaks = false, input = branchyArg)
 
   // `spectre.s` sets its own index and bound to the same constant, so the
-  // bounds check is always taken and neither of these models reaches the load
-  // behind it. That is the whole reason the demo needs speculation to be
-  // interesting, and it is why it is the one row below that cannot say
+  // bounds check is always taken and neither of the first two models reaches
+  // the load behind it. That is the whole reason the demo needs speculation
+  // to be interesting, and it is why it is the one row that cannot say
   // anything about a cache.
   private val neverLoads = Set("spectre")
 
-  // A model that charged nothing for a probe would pass every clean row above
-  // for the wrong reason, and the clean rows are what the leak rows are read
-  // against. [Flat] spends nothing, so a naive run's clock is its instruction
-  // count and anything over that is the hierarchy.
-  test("the cache costs something") {
+  // A model that charged nothing for what the one before it added would pass
+  // every clean row above for the wrong reason, and the clean rows are what
+  // the leak rows are read against. [Flat] spends nothing, so a naive run's
+  // clock is its instruction count and anything over that came from a model.
+  test("each model charges for what it added") {
     val demos = cost.keys.collect { case ("cache", d) => d }.toSeq.sorted
     assert(demos.nonEmpty)
     demos.foreach { d =>
-      val (fast, slow) = (cost(("naive", d)), cost(("cache", d)))
-      if (neverLoads(d)) { assert(slow == fast, s"$d: $slow cycles, and it runs no load") }
-      else { assert(slow > fast, s"$d: $slow cycles with a cache and $fast without one") }
+      val flat = cost(("naive", d))
+      val cached = cost(("cache", d))
+      if (neverLoads(d)) { assert(cached == flat, s"$d: $cached cycles, and it runs no load") }
+      else { assert(cached > flat, s"$d: $cached cycles with a cache and $flat without one") }
+    }
+
+    // `spectre` reaches a load only by speculating past a bounds check, which
+    // is the row `neverLoads` exempts above saying the same thing from the
+    // other side. Both predictors guess not-taken on a cold branch, so both
+    // have to show it.
+    for (model <- Seq("static", "predictive")) {
+      assert(
+        cost((model, "spectre")) > cost(("cache", "spectre")),
+        s"$model: speculation did not reach the load behind the bounds check"
+      )
     }
   }
 }

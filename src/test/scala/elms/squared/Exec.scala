@@ -16,6 +16,10 @@ import RiscV.*
 // [elms.koika.test.riscv.Exec], which is where the ISA arguments live.
 @virtualize
 trait Exec extends Squared {
+  // A conditional direct branch: what it tests, and where it goes. Static,
+  // because the operands are register names and the target is an offset.
+  type Cond = (Cmp, Reg, Reg)
+
   // A byte offset lands on an instruction index, and a misaligned one is a bug
   // in the demo rather than something the generated C should have to check.
   private def target(pc: Int, offset: Imm): Int = {
@@ -23,9 +27,41 @@ trait Exec extends Squared {
     pc + offset.i / 4
   }
 
+  // The condition [i] tests and the index it jumps to, for a conditional
+  // direct branch and nothing else. Whether to speculate past one is
+  // [Speculative]'s call, and only it knows why the answer has to be
+  // "forwards only".
+  def branch(pc: Int, i: Instr): Option[(Cond, Int)] = i match {
+    case Instr.Branch(cmp, rs1, rs2, off) => Some(((cmp, rs1, rs2), target(pc, off)))
+    case _                                => None
+  }
+
+  // [Some(rd)] when [i] may run speculatively and writing [rd] is its only
+  // effect a rollback would have to undo.
+  //
+  // Wider than it looks like it should be, and it has to be. RV32I has no
+  // register-plus-register addressing and no scaled index, so the arithmetic
+  // that turns a secret into a cache index is its own instruction; refusing
+  // to speculate it would close the window before the gadget ran. Stores are
+  // absent on purpose, since [rollback] restores registers and nothing else.
+  def speculable(i: Instr): Option[Reg] = i match {
+    case Instr.Load(_, rd, _, _)  => Some(rd)
+    case Instr.Op(_, rd, _, _)    => Some(rd)
+    case Instr.OpImm(_, rd, _, _) => Some(rd)
+    case Instr.Lui(rd, _)         => Some(rd)
+    case Instr.Auipc(rd, _)       => Some(rd)
+    case _                        => None
+  }
+
+  // Every register [c] depends on. Over-approximating is safe; missing one
+  // silently corrupts branch resolution, because [evalCond] runs against the
+  // live register file at the join point rather than at the branch.
+  def reads(c: Cond): Set[Reg] = c match { case (_, rs1, rs2) => Set(rs1, rs2) }
+
   private def flip(x: Rep[Int]): Rep[Int] = x ^ unit(Int.MinValue)
 
-  private def evalCond(h: Half, cmp: Cmp, rs1: Reg, rs2: Reg): Rep[Boolean] = {
+  def evalCond(h: Half, c: Cond): Rep[Boolean] = {
+    val (cmp, rs1, rs2) = c
     val a = read(h, rs1)
     val b = read(h, rs2)
     cmp match {
@@ -130,7 +166,7 @@ trait Exec extends Squared {
           call(target(pc, off), s)
         }
         case Instr.Branch(cmp, rs1, rs2, off) =>
-          agree(each(s)(h => evalCond(h, cmp, rs1, rs2))) {
+          agree(each(s)(h => evalCond(h, (cmp, rs1, rs2)))) {
             call(target(pc, off), s)
           } {
             call(pc + 1, s)

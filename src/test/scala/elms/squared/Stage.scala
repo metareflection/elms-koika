@@ -38,6 +38,7 @@ abstract class SquaredKoikaDriver[
   extension (h: Half) {
     def regs: Rep[Array[Int]] = words(h, "regs")
     def mem: Rep[Array[Int]] = words(h, "mem")
+    def saved_regs: Rep[Array[Int]] = words(h, "saved_regs")
     def cache_tags: Rep[Array[Int]] = words(h, "cache_tags")
     def cache_dirty: Rep[Array[Int]] = words(h, "cache_dirty")
     def cache_age: Rep[Array[Int]] = words(h, "cache_age")
@@ -65,7 +66,10 @@ abstract class SquaredKoikaDriver[
     __ifThenElse(c, t, e)
 
   private val declared = mutable.Set[Int]()
-  private val pending = mutable.Queue[Int]()
+
+  // Slots asked for but not yet staged, and how to put the staging-time state
+  // back the way the [call] that asked left it.
+  private val pending = mutable.Queue[(Int, () => Unit)]()
 
   private def slotName(at: Int): String = s"slot_$at"
 
@@ -73,22 +77,20 @@ abstract class SquaredKoikaDriver[
   // handed one, so a call site that wants a slot the worklist has not reached
   // has nothing to apply but the name that slot's function will be given.
   private def declare(at: Int): Rep[State => State] = {
-    if (declared.add(at)) { pending.enqueue(at) }
+    if (declared.add(at)) { pending.enqueue((at, checkpoint())) }
     unsafeDeclare[State => State](slotName(at))
   }
 
-  override def call(i: Int, s: Pair): Pair = {
-    require(i >= 0, s"jump to negative pc $i")
-    if (live(i)) { declare(i)(s) } else { s }
-  }
+  override protected def transfer(to: Int, s: Pair): Pair = declare(to)(s)
 
   // Slots come off this list and go back on it while it drains, which is the
   // point: every body is staged at the same depth, so how deep the program's
   // own call graph runs stops being a question about the JVM stack.
   private def drain(): Unit =
     while (pending.nonEmpty) {
-      val at = pending.dequeue()
-      fun(slotName(at)) { (p: Pair) => resume(at, p) }
+      val (at, restore) = pending.dequeue()
+      restore()
+      fun(slotName(at)) { (p: Pair) => enter(at, p) }
     }
 
   override def snippet(s: Pair): Pair = {
@@ -102,7 +104,7 @@ abstract class SquaredKoikaDriver[
   // Nothing is copied and nothing here knows which fields a given model
   // bothers to initialize.
   //
-  // [resume] compares the clocks on the way into a slot, so the last
+  // [enter] compares the clocks on the way into a slot, so the last
   // instruction's cost has not been looked at when the residue returns. The
   // comparison below is what looks at it.
   override def main(prover: Prover): String = {

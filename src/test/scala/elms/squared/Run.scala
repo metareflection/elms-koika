@@ -12,6 +12,7 @@ import elms.koika.test.riscv.RiscV
 final case class Chip(
     regs: Array[Int],
     mem: Array[Int],
+    saved_regs: Array[Int],
     cache_tags: Array[Int],
     cache_dirty: Array[Int],
     cache_age: Array[Int],
@@ -26,6 +27,7 @@ object Chip {
   def blank(numRegs: Int, memSize: Int, g: Geometry): Chip = Chip(
     regs = new Array[Int](numRegs),
     mem = new Array[Int](memSize),
+    saved_regs = new Array[Int](numRegs),
     cache_tags = Array.fill(g.entries)(-1),
     cache_dirty = new Array[Int](g.entries),
     cache_age = new Array[Int](g.entries),
@@ -75,6 +77,7 @@ abstract class Run(val prog: Vector[RiscV.Instr]) extends Exec with Interp {
   extension (h: Half) {
     def regs: Rep[Array[Int]] = Rep(h.v.regs)
     def mem: Rep[Array[Int]] = Rep(h.v.mem)
+    def saved_regs: Rep[Array[Int]] = Rep(h.v.saved_regs)
     def cache_tags: Rep[Array[Int]] = Rep(h.v.cache_tags)
     def cache_dirty: Rep[Array[Int]] = Rep(h.v.cache_dirty)
     def cache_age: Rep[Array[Int]] = Rep(h.v.cache_age)
@@ -94,9 +97,9 @@ abstract class Run(val prog: Vector[RiscV.Instr]) extends Exec with Interp {
   override protected def choose(c: Rep[Boolean])(t: => Pair)(e: => Pair): Pair =
     if (c.v) { t } else { e }
 
-  override def call(i: Int, s: Pair): Pair = {
-    at = i
-    if (live(i)) { resume(i, s) } else { s }
+  override protected def transfer(to: Int, s: Pair): Pair = {
+    at = to
+    enter(to, s)
   }
 
   // [a] and [b] are mutated in place, so a caller wanting to inspect them
@@ -104,7 +107,7 @@ abstract class Run(val prog: Vector[RiscV.Instr]) extends Exec with Interp {
   def apply(a: Chip, b: Chip): Outcome =
     try {
       val (x, y) = snippet((a, b))
-      // [resume] compares on the way into a slot, so the last instruction's
+      // [enter] compares on the way into a slot, so the last instruction's
       // cost has not been looked at yet. The residue's `main` ends with the
       // same comparison for the same reason.
       if (x.timer != y.timer) { Outcome.Drifted(at) } else { Outcome.InStep(x.timer) }
@@ -123,5 +126,22 @@ final class FlatRun(prog: Vector[RiscV.Instr]) extends Run(prog) with Flat
 final class CachedRun(prog: Vector[RiscV.Instr], val geometry: Geometry = Geometry.default)
     extends Run(prog)
     with Cached {
+  override protected def shape: Geometry = geometry
+}
+
+// [Predictive]'s interning table is a staging-time index into emitted
+// functions when this tower emits, and it is a walk's own bookkeeping when it
+// runs: one concrete run takes one path through the lookahead, so a key it
+// mints is a key it visits. Which means a [Run] is good for one pair of chips
+// and the suites below build a fresh one per sample.
+final class StaticRun(prog: Vector[RiscV.Instr], val geometry: Geometry = Geometry.default)
+    extends Run(prog)
+    with Static {
+  override protected def shape: Geometry = geometry
+}
+
+final class PredictiveRun(prog: Vector[RiscV.Instr], val geometry: Geometry = Geometry.default)
+    extends Run(prog)
+    with Predictive {
   override protected def shape: Geometry = geometry
 }

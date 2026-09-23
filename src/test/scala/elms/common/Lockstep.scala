@@ -9,7 +9,7 @@ import elms.core.tree.{E, Function, Let, Program, Term, V, View}
 // rewriting a residue after staging rather than by interpreting the program
 // over a pair of states in the first place. Superseded, and kept because a
 // second construction of the same thing is worth having on the day the two
-// disagree. `sbt test` still stages it, and `verify --full` is what checks
+// disagree. `sbt testFull` still stages it, and `verify --full` is what checks
 // what it staged.
 //
 // Which branches to fuse is decided here by whether one happens to contain a

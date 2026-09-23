@@ -40,8 +40,8 @@
 
 here=${0:a:h}
 
-# What the main suite leaves out. `lockstep/` is the same five demos as
-# `squared/`, built by rewriting a residue rather than by interpreting the
+# What the main suite leaves out. `lockstep/` is five of the demos `squared/`
+# answers, built by rewriting a residue rather than by interpreting the
 # program over two states, and it is kept for the day the two constructions
 # disagree rather than for the coverage it adds, which is none. Checking both
 # on every run buys a second opinion nobody asked for at the price of

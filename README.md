@@ -101,9 +101,9 @@ and [`verify`](src/out/cbmc/verify) reads it back out and runs the checker:
 
 `./src/out/cbmc/verify [--certify] [--full] [file.c ...]`
 
-With no arguments it takes the main suite, 129 snapshots in 130 seconds. The
-five it holds back are `lockstep/`, which answers the same demos as `squared/`
-by the construction `squared/` replaced; `sbt testFull` regenerates them either
+With no arguments it takes the main suite, 135 snapshots in 132 seconds. The
+five it holds back are `lockstep/`, which answers five of `squared/`'s demos by
+the construction `squared/` replaced; `sbt testFull` regenerates them either
 way, so what `--full` buys is the check rather than the C. Naming files runs
 exactly those, main suite or not.
 It prints one line per file and exits non-zero if CBMC says anything other than
@@ -130,8 +130,9 @@ over an abstract value domain, and the pair is what runs them twice.
 
 Which is also why the same source can be *run*. Substitute ordinary `Int`s for
 the staged values and the interpreter walks the program instead of writing one
-down, and `SquaredRunSuite` does exactly that: the first two columns of the
-table below, on sampled inputs, in about a second with no checker anywhere. A
+down, and `SquaredRunSuite` does exactly that: the first four columns of the
+table below, on sampled inputs, in about three seconds with no checker
+anywhere. A
 witnessed leak is a proof and a clean sample is not, which is what `src/out`
 and CBMC are for, but a product semantics that only ever existed as C had to be
 wrong in C before anyone found out.
@@ -158,8 +159,8 @@ second opinion on the same program from a differently shaped formula. Its speed
 argument is waiting on a demo whose cost is a path space, and the tree does not
 have one at the moment.
 
-[`src/out/cbmc/lockstep`](src/out/cbmc/lockstep) is a third answer to the same
-five, and a historical one. `Lockstep` built the product by rewriting the
+[`src/out/cbmc/lockstep`](src/out/cbmc/lockstep) is a third answer to five of
+them, and a historical one. `Lockstep` built the product by rewriting the
 residue after staging, deciding which branches to fuse by whether they happened
 to contain a slot call, and it is what the interpreter replaced. It stays
 because a second construction of the same product is worth having on the day
@@ -170,6 +171,23 @@ interpreter's number plus the noise.
 `sbt testFull` still regenerates it, so the C never goes stale while nobody is
 looking at it. What `--full` adds is a checker's opinion of it, which is the
 part that costs something.
+
+The two constructions decide what to assert differently, and that is the
+argument for having kept both. `Lockstep` fused a branch when it happened to
+contain a slot call, which is a syntactic proxy for "is this control flow".
+The interpreter is told instead: `agree` is the rule's author saying the two
+runs have to go the same way, and a branch written any other way is data each
+run settles for itself. Under `Predictive` the model owns exactly one `agree`,
+where a window resolves, which asks whether the two runs' branch came out the
+same at the point the model asks it rather than leaving it to the clock
+afterwards.
+
+`squared/riscv/static` and `squared/riscv/predictive` are three demos each so
+far, and between them they show the other half of what the table claims. The
+two predictors agree on every verdict, and `constant_time` still stages into
+1401 lines of residue under one and 2462 under the other, because a branch
+that resolves taken leaves `predictive` holding a history `static` never
+records.
 
 Here is what they currently say. The first three demos exist for both NanoRisc
 and RISC-V and answer the same on each, so the table does not split them;
