@@ -18,7 +18,7 @@ trait Common extends Isa {
   // spells and what every call site to that slot writes down. Two slots that
   // number the same are one function whether or not they mean the same thing.
   def slot(pc: Int): Int = pc
-  def resume(at: Int, s: Rep[State]): Rep[State] = execute(at, s)
+  def resume(at: Int, s: Rep[State]): Rep[State] = step(at, s)
   def live(at: Int): Boolean = at < prog.length
 
   private val declared = mutable.Set[Int]()
@@ -65,15 +65,8 @@ trait Common extends Isa {
   //
   // What this must not undo is the cache. A load that missed has already moved
   // the line, a re-executed load to that address hits, and that is the channel
-  // every model from [Speculative] rightward exists to expose.
+  // every model that speculates exists to expose.
   def squash(s: Rep[State]): Rep[Unit] = unit(())
-
-  // The indirection via `execute` is necessary to generate functions for
-  // each instruction. [Speculative] is the only thing that overrides it, and
-  // when it wants plain semantics it asks for [step] rather than [super]:
-  // "the next `execute` in the chain" would depend on where the ISA lands in
-  // the linearization, which is exactly the coupling this split removes.
-  def execute(pc: Int, s: Rep[State]): Rep[State] = step(pc, s)
 
   def call(i: Int, s: Rep[State]): Rep[State] = {
     require(i >= 0, s"jump to negative pc $i")
@@ -395,115 +388,5 @@ trait Cached extends Direct {
   override def set_mem(s: Rep[State], addr: Rep[Int], v: Rep[Int]): Rep[Unit] = {
     runCache(s, addr, Some(v))
     unit(())
-  }
-}
-
-// Speculation with no history: not-taken at every branch, and the window
-// inlined rather than emitted as functions.
-//
-// [Static] is what this model became. It reaches the same guess through
-// [Predictive]'s window, which costs a slot per lookahead state and buys
-// backward branches. This one refuses those, because with the window inlined a
-// backward target inside one inlines forever, and that is a fact about the
-// generator rather than about any machine.
-//
-// Kept for the NanoRISC suite, which is here for continuity with an earlier
-// version of this work and should go on answering the way it did. Nothing else
-// extends it.
-@virtualize
-trait Speculative extends Cached {
-  given liftable: Liftable[Unit] = summon[Liftable[Unit]]
-
-  // Insertion-ordered on purpose: [rollback] iterates this to emit code, so a
-  // plain [Set] would make the register order in the generated C a function of
-  // [Reg]'s `hashCode`.
-  val savedRegisters = mutable.LinkedHashSet[Reg]()
-
-  def saveForRollback(s: Rep[State], rd: Reg): Rep[Unit] = {
-    if (!savedRegisters.contains(rd)) {
-      s.saved_regs(regIndex(rd)) = get_reg(s, regIndex(rd))
-      savedRegisters += rd
-    }
-    unit(())
-  }
-  def rollback(s: Rep[State]): Rep[Unit] = {
-    s.timer += 15
-    for (rd <- savedRegisters) { set_reg(s, regIndex(rd), s.saved_regs(regIndex(rd))) }
-    unit(())
-  }
-  def resetSaved(): Unit = { savedRegisters.clear() }
-
-  var inBranch: Option[(Cond, Int)] = None
-
-  // [useCache] is `inBranch.isEmpty`, so a slot only ever reaches the worklist
-  // with the window closed and there is nothing to remember about that. The
-  // saved registers are another matter: the join-point arm of [execute] calls
-  // before it clears them, so the set travels with the slot.
-  override def checkpoint(): () => Unit = {
-    val saved = savedRegisters.toVector
-    () => {
-      inBranch = None
-      resetSaved()
-      savedRegisters ++= saved
-    }
-  }
-
-  override def useCache: Boolean = inBranch.isEmpty
-  override def execute(pc: Int, s: Rep[State]): Rep[State] = inBranch match {
-    case None if pc < prog.length => branch(pc, prog(pc)) match {
-        // Forwards only, and the test belongs here rather than in [Isa.branch].
-        // While speculating [useCache] is false, so [call] inlines [execute]
-        // instead of going through the memo table; a backward target inside a
-        // speculation window inlines forever.
-        case Some((cnd, tgt)) if tgt > pc => {
-          inBranch = Some((cnd, tgt))
-          call(pc + 1, s)
-        }
-        case _ => step(pc, s)
-      }
-    case None => step(pc, s)
-    case Some((cnd, tgt)) => {
-      // The join-point test comes before the bounds test: [tgt] can be
-      // `prog.length`, and with [useCache] false [call] no longer filters
-      // out-of-range indices.
-      if (pc == tgt) {
-        // Assigned before [call], because it re-enables memoization and is what
-        // makes that call emit a real C function call rather than inlining.
-        inBranch = None
-        if (evalCond(s, cnd)) {
-          rollback(s)
-          call(tgt, s)
-        }
-        resetSaved()
-        s
-      } else if (pc < prog.length) {
-        speculable(prog(pc)) match {
-          case Some(rd) if !reads(cnd).contains(rd) => {
-            saveForRollback(s, rd)
-            step(pc, s)
-          }
-          case _ => {
-            inBranch = None
-            // The two arms have to be the value of the virtualized `if` rather
-            // than assignments to a `var`. A `var` here is an ordinary Scala
-            // variable holding a `Rep`, so it ends up naming whichever arm was
-            // staged last, and the emitted C returns a symbol declared inside
-            // the other branch's block.
-            //
-            // The instruction that closed the window has not run yet, and it
-            // runs through [step] rather than [call]: a window is inlined, and
-            // [call] would emit a function call where every snapshot in the
-            // tree has straight-line code.
-            val result =
-              if (evalCond(s, cnd)) {
-                rollback(s)
-                call(tgt, s)
-              } else { step(pc, s) }
-            resetSaved()
-            result
-          }
-        }
-      } else { s }
-    }
   }
 }

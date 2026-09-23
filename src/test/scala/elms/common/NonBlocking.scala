@@ -118,7 +118,7 @@ trait NonBlocking extends Cached {
   // occupies the memory system, so a later miss queues behind it; modelling
   // that means modelling how many can be outstanding at once, which is a
   // structural hazard and nothing else in this tower has one. What survives a
-  // squash here is the cache, which is where [Speculative]'s channel lives
+  // squash here is the cache, which is where the speculative channel lives
   // anyway.
   override def squash(s: Rep[State]): Rep[Unit] = {
     for (i <- 0 until num_regs) { s.reg_ready(unit(i)) = s.timer }

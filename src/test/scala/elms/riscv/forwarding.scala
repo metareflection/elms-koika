@@ -105,8 +105,8 @@ class RiscVForwardingTests extends KoikaSuite {
     check("hidden", snippet, Verdict.Leak)
   }
 
-  // `spectre.s` with the reload step. Inherited from [Speculative]: there is no
-  // store in it, so this snapshot is its speculative twin to the byte.
+  // `spectre.s` with the reload step. Nothing this model adds is in it: there
+  // is no store, so this snapshot is its `predictive` twin to the byte.
   test("riscv forwarding reload") {
     val snippet = new FwdDriver {
       override val prog = demo("reload")

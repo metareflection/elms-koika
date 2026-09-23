@@ -24,13 +24,14 @@ lazy val root = project
 
     Test / fork := true,
 
-    // Speculative inlines a whole speculation window into the function it
-    // opened in, and ELMS elaborates a function body by recursing once per
-    // statement. `src/test/fact/salsa20.o` has a window 1696 statements long,
-    // which is more than the default 1MB stack holds. Forwarding extends
-    // Speculative and inherits that window, so it wants this too; naive, cache
-    // and predictive emit nothing longer than a hundred lines and want none of
-    // it.
+    // Forwarding inlines a store window into the function that opened it, and
+    // ELMS elaborates a function body by recursing once per statement.
+    // `src/test/fact/salsa20.o` has thirty-eight stores and its longest slot
+    // comes out at 986 statements, against 260 for every model that inlines
+    // nothing. That fits the default 1MB stack, where the 1696-statement branch
+    // window this model used to inherit did not, so this is margin rather than
+    // a requirement. Kept as margin: the number is a property of one demo and
+    // the next demo is free to be longer.
     Test / javaOptions += "-Xss16m",
 
     // `.jvmopts` silences the JDK 24 sun.misc.Unsafe warning for sbt's own

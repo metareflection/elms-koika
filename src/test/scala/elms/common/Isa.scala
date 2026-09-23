@@ -27,9 +27,9 @@ trait Isa extends StateTOps {
   // target relative to it. [None] for unconditional jumps, for computed jumps,
   // and for anything that is not a branch.
   //
-  // Whether to speculate past it is not this method's call. A model decides
-  // that, and only [Speculative] has a reason for the answer to be "forwards
-  // only".
+  // Whether to speculate past it is not this method's call, and no model in the
+  // tower needs the answer restricted: [Predictive] emits a window as functions
+  // rather than inlining one, so a backward target terminates.
   def branch(pc: Int, i: Instr): Option[(Cond, Int)]
 
   // [Some(rd)] when [i] may run speculatively and writing [rd] is its only

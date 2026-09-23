@@ -17,10 +17,11 @@
 // `table`, where `t & 15` by construction cannot follow it. Word 3 is what
 // leaves the probe something to collide with.
 //
-// `out[idx & 7]` keeps `idx` live past the join. `Speculative` evaluates the
-// branch condition at the join point, so its window closes at the first
-// instruction whose destination that condition reads, and letting `idx` die at
-// the branch is enough for llc to put the address temporary in a0.
+// `out[idx & 7]` keeps `idx` live past the join. A window's condition is
+// evaluated at the join point rather than at the branch, so the window closes
+// at the first instruction whose destination that condition reads, and letting
+// `idx` die at the branch is enough for llc to put the address temporary in
+// a0.
 //
 // The bound is the literal 16 for a reason of FaCT's. `if (idx < lim)` is
 // what the Spectre paper's victim function says, and FaCT rejects that: the

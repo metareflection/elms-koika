@@ -23,9 +23,9 @@
 # two runs disagree rather than which line an attacker would have to hunt for.
 #
 # The `j` is load-bearing and is about the model rather than about the machine.
-# `Predictive` resolves a window at the first instruction it cannot speculate,
-# with no join-point test of the kind `Speculative` has, so a window walks
-# straight past the branch's own target and keeps going. Put the probe directly
+# `Predictive` resolves a window at the first instruction it cannot speculate
+# and tests nothing at the branch's own target, so a window walks straight past
+# that target and keeps going. Put the probe directly
 # at `done` and it runs *inside* the window, installs line 0 whatever the secret
 # was, and the re-executed probe after the squash hits every time. A jump is not
 # speculable, so this one ends the window where the branch target is.

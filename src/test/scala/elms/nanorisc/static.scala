@@ -4,32 +4,32 @@ import elms.prelude.*
 import elms.prelude.given
 
 import elms.koika.test.{KoikaSuite, Verdict}
-import elms.koika.test.common.{Init, Speculative}
+import elms.koika.test.common.{Init, Static}
 
 @virtualize
-class SpecTests extends KoikaSuite {
-  val under = "nanorisc/speculative/"
+class StaticTests extends KoikaSuite {
+  val under = "nanorisc/static/"
 
-  trait SpecDriver extends NanoRiscDriver with Speculative {
+  trait StaticDriver extends NanoRiscDriver with Static {
     override val init = Init.speculative(stateT)
   }
 
-  test("nanorisc spec shortcircuit") {
-    val snippet = new SpecDriver {
+  test("nanorisc static shortcircuit") {
+    val snippet = new StaticDriver {
       override val prog = NanoRiscDemos.build_shortcircuit_demo(secret_offset, 4)
     }
     check("shortcircuit", snippet, Verdict.Leak)
   }
 
-  test("nanorisc spec 2ctr") {
-    val snippet = new SpecDriver {
+  test("nanorisc static 2ctr") {
+    val snippet = new StaticDriver {
       override val prog = NanoRiscDemos.spec_small
     }
     check("2ctr", snippet, Verdict.Leak)
   }
 
-  test("nanorisc spec spectre") {
-    val snippet = new SpecDriver {
+  test("nanorisc static spectre") {
+    val snippet = new StaticDriver {
       override val prog = NanoRiscDemos.build_spectre_demo(secret_offset)
     }
     check("spectre", snippet, Verdict.Leak)

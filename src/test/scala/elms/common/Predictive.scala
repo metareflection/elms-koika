@@ -5,15 +5,14 @@ import scala.collection.mutable
 import elms.prelude.*
 import elms.prelude.given
 
-// Speculation driven by a predictor with history rather than by a fixed guess.
+// Speculation driven by a predictor with history.
 //
-// [Speculative] guesses not-taken everywhere, which is a constant, so its
-// window is a static object and it turns memoization off to inline one. Here it
-// depends on what the branch did last, so a pc becomes reachable under more
-// than one window and under more than one thing the predictor believes.
-// Memoization stays on and keys on all three, which is why a backward target is
-// emitted once rather than inlined forever: [Speculative]'s forwards-only guard
-// buys nothing here and is gone.
+// What the machine guesses depends on what the branch did last, so a pc becomes
+// reachable under more than one window and under more than one thing the
+// predictor believes. Memoization keys on all three, which is what lets a
+// backward target be emitted once: a model that inlines its window instead has
+// to refuse backward branches outright, since a backward target inside an
+// inlined window inlines forever.
 //
 // The predictor's history is staging-time rather than a field of [State], and
 // that is the whole performance story. A [Rep] guess would force both
@@ -40,7 +39,7 @@ trait Predictive extends Cached {
   //
   // [learned] is keyed by branch pc and holds each branch's last outcome. A
   // branch missing from it has not run yet and predicts not-taken, which is the
-  // cold start [Speculative] hardcodes for every branch forever.
+  // cold start [Static] never leaves.
   case class Key(pc: Int, window: Option[Window], learned: Map[Int, Boolean])
 
   private val interned = mutable.ArrayBuffer[Key]()
@@ -87,16 +86,18 @@ trait Predictive extends Cached {
   private def opening(at: Int, cond: Cond, recovery: Int, guess: Boolean): Option[Window] =
     Some(Window(Pending(at, cond, recovery, guess), Vector()))
 
-  // Where a subclass gets at an instruction. [Predictive] intercepts at
-  // [resume], so nothing below here goes through [Common.execute] and an
-  // override of that would never fire. [w] is handed over rather than read back
-  // out of the ambient, so that an override can dispatch on it.
+  // Where a subclass gets at an instruction. This model takes the walk over at
+  // [Common.resume], so an override further down has to be of this. [w] is
+  // handed over rather than read back out of the ambient, so that an override
+  // can dispatch on it.
   protected def run(pc: Int, w: Option[Window], s: Rep[State]): Rep[State] = w match {
     // [live] has already ruled out `pc == prog.length` on this arm.
     case None => branch(pc, prog(pc)) match {
         case Some((cnd, tgt)) => {
-          // A branch is an instruction. [Speculative] charges nothing for one,
-          // which is an artifact of it skipping [step] to open a window.
+          // A branch is an instruction and ticks like one. A model that opens
+          // its window by going straight past [step] charges nothing for the
+          // branch, and a correctly guessed one then comes out a cycle cheaper
+          // than not speculating at all.
           tick(s)
           // Static, so only the guessed continuation is staged. The other one
           // is reached by whichever key holds the opposite history.
