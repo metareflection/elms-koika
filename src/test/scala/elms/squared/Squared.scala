@@ -71,6 +71,10 @@ trait Squared extends Machine {
     choose(c.a)(t)(e)
   }
 
+  // Whether slot [at] is a function worth emitting. [at] is a slot number and
+  // not a pc; the two agree until [Predictive] numbers one pc into several,
+  // and a caller that means "does the program go this far" wants
+  // `pc < prog.length` instead.
   def live(at: Int): Boolean = at < prog.length
 
   // One emitted function per slot, and a slot is a pc in every model here but

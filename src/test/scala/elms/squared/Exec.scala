@@ -141,8 +141,12 @@ trait Exec extends Squared {
       }
     }
 
+  // `pc < prog.length` and not [Squared.live], which takes a slot number. The
+  // two are the same number until [Predictive] hands out its own numbering,
+  // and then they are not: this asked `live` whether slot 14 existed when
+  // what it meant was whether the program had a fourteenth instruction.
   override def step(pc: Int, s: Pair): Pair =
-    if (live(pc)) {
+    if (pc < prog.length) {
       each(s)(tick)
       prog(pc) match {
         case Instr.Op(op, rd, rs1, rs2) => {

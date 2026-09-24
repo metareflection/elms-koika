@@ -79,13 +79,25 @@ class SquaredSuite extends KoikaSuite {
     override val init = Init.speculative(stateT)
   }
 
+  // Every demo `src/out/*/riscv/static` answers, so the two trees are the same
+  // question asked two ways rather than a sample of it.
+  //
   // Paired with the verdict rather than tested for it, because `@virtualize`
   // looks a `unit` up on the enclosing class before it decides whether an
   // `if` is one of its own, and a suite is not a `DslOps`.
   private val guessed = Seq(
     "2ctr" -> Verdict.Leak,
-    "spectre" -> Verdict.Leak,
-    "constant_time" -> Verdict.Clean
+    "bypass" -> Verdict.Clean,
+    "bypass_alias" -> Verdict.Clean,
+    "bypass_ct" -> Verdict.Clean,
+    "bypass_late" -> Verdict.Clean,
+    "constant_time" -> Verdict.Clean,
+    "dynstore" -> Verdict.Clean,
+    "evict" -> Verdict.Leak,
+    "hidden" -> Verdict.Leak,
+    "reload" -> Verdict.Leak,
+    "shortcircuit" -> Verdict.Leak,
+    "spectre" -> Verdict.Leak
   )
 
   for ((demoName, expect) <- guessed) {
@@ -98,5 +110,17 @@ class SquaredSuite extends KoikaSuite {
       val snippet = new PredictiveDriver { override val prog = demo(demoName) }
       check(s"predictive/$demoName", snippet, expect)
     }
+  }
+
+  // `branchy.s` brings its own `initialize_input` and its own `init`, so it
+  // comes through [SquaredBranchyDriver] rather than through the loop above.
+  test("squared riscv static branchy") {
+    val snippet = new SquaredBranchyDriver with Static {}
+    check("static/branchy", snippet, Verdict.Clean, klee = Reach.LikelyTimeout)
+  }
+
+  test("squared riscv predictive branchy") {
+    val snippet = new SquaredBranchyDriver with Predictive {}
+    check("predictive/branchy", snippet, Verdict.Clean, klee = Reach.LikelyTimeout)
   }
 }

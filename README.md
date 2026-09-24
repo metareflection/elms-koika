@@ -101,7 +101,7 @@ and [`verify`](src/out/cbmc/verify) reads it back out and runs the checker:
 
 `./src/out/cbmc/verify [--certify] [--full] [file.c ...]`
 
-With no arguments it takes the main suite, 135 snapshots in 132 seconds. The
+With no arguments it takes the main suite, 155 snapshots in 149 seconds. The
 five it holds back are `lockstep/`, which answers five of `squared/`'s demos by
 the construction `squared/` replaced; `sbt testFull` regenerates them either
 way, so what `--full` buys is the check rather than the C. Naming files runs
@@ -182,12 +182,21 @@ where a window resolves, which asks whether the two runs' branch came out the
 same at the point the model asks it rather than leaving it to the clock
 afterwards.
 
-`squared/riscv/static` and `squared/riscv/predictive` are three demos each so
-far, and between them they show the other half of what the table claims. The
-two predictors agree on every verdict, and `constant_time` still stages into
-1401 lines of residue under one and 2462 under the other, because a branch
-that resolves taken leaves `predictive` holding a history `static` never
-records.
+`squared/riscv/static` and `squared/riscv/predictive` are every demo the two
+columns next door answer, thirteen each, so the two trees are the same
+question asked two ways rather than a sample of it. Between them they show the
+other half of what the table claims: the two predictors agree on every
+verdict, and `constant_time` still stages into 1401 lines of residue under one
+and 2462 under the other, because a branch that resolves taken leaves
+`predictive` holding a history `static` never records.
+
+Widening that set from three demos to thirteen is what found the only bug the
+squared tower has had. `Squared.live` takes a slot number and `Exec.step` was
+handing it a pc, which are the same number until `Predictive` numbers one pc
+into several and then are not. Ten demos never noticed. `shortcircuit` asked
+whether slot 14 existed when what it meant was whether the program had a
+fourteenth instruction, and fell over rather than answering wrong, which is
+the good version of that mistake.
 
 Here is what they currently say. The first three demos exist for both NanoRisc
 and RISC-V and answer the same on each, so the table does not split them;
