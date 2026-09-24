@@ -101,7 +101,7 @@ and [`verify`](src/out/cbmc/verify) reads it back out and runs the checker:
 
 `./src/out/cbmc/verify [--certify] [--full] [file.c ...]`
 
-With no arguments it takes the main suite, 167 snapshots in 162 seconds. The
+With no arguments it takes the main suite, 200 snapshots in 197 seconds. The
 five it holds back are `lockstep/`, which answers five of `squared/`'s demos by
 the construction `squared/` replaced; `sbt testFull` regenerates them either
 way, so what `--full` buys is the check rather than the C. Naming files runs
@@ -130,9 +130,8 @@ over an abstract value domain, and the pair is what runs them twice.
 
 Which is also why the same source can be *run*. Substitute ordinary `Int`s for
 the staged values and the interpreter walks the program instead of writing one
-down, and `SquaredRunSuite` does exactly that: the first five columns of the
-table below, on sampled inputs, in about ten seconds with no checker
-anywhere. A
+down, and `SquaredRunSuite` does exactly that: every column of the table
+below, on sampled inputs, in about twenty seconds with no checker anywhere. A
 witnessed leak is a proof and a clean sample is not, which is what `src/out`
 and CBMC are for, but a product semantics that only ever existed as C had to be
 wrong in C before anyone found out.
@@ -200,6 +199,13 @@ the residue. Counting writes to the clock in each emitted function of
 under `predictive` gives 1, 2, 1, 2, 1, 2, 1. The nine is the window, five
 instructions and their cache costs in the slot that opened it.
 
+`nonblocking` and `predictive_nb` finish the set, twenty-six more, and with
+them every model in the table has a squared twin. They are what the
+`defer`, `untimed`, `squash` and `finish` seams in `squared/Squared` were put
+there for: each one had a comment saying what it would mean and no instance
+behind it until a model arrived that lets a load land after the instruction
+that issued it.
+
 Widening the guessed set from three demos to thirteen is what found the only
 bug the squared tower has had. `Squared.live` takes a slot number and `Exec.step` was
 handing it a pc, which are the same number until `Predictive` numbers one pc
@@ -235,6 +241,7 @@ two columns, which are RISC-V only so far.
 | `bypass_late` | clean | clean | clean | clean | leak | clean | clean |
 | `dynstore` | clean | clean | clean | clean | clean | clean | clean |
 | `bypass_alias` | clean | clean | clean | clean | leak | clean | clean |
+| `balanced` | clean | clean | leak | leak | leak | clean | leak |
 
 `evict` is the row the geometry was for, and it is a stronger statement than
 `2ctr` next to it. `2ctr` needs a cache of some kind. `evict` needs a cache with
@@ -270,6 +277,22 @@ stage differently, `shortcircuit`, `constant_time`, `reload`, `dynstore`, `cmp`,
 `folded`, `guarded` and `salsa20`, because a branch that resolves taken leaves
 `predictive` holding a history `static` never records, and the two then number
 the instructions after it into different slots.
+
+`balanced` is a row about the predictor and nothing else. A secret word decides
+a branch whose two arms are the same length, so a machine that does not
+speculate runs two instructions either way and the clocks come back together.
+Three columns report that. The four with a predictor in them do not: the branch
+is cold in both runs, so both guess not-taken, and only the run that takes it
+pays the fifteen. A balanced branch is a constant-time idiom for exactly as
+long as nobody is predicting it.
+
+It is in the tree for a second reason, which is what it does to the squared
+tower. `Squared.agree` asserts that the two runs take each conditional the same
+way, so a squared twin of the three clean cells above cannot come back clean
+whatever the arms cost. That twin is not written yet. When it is, neither
+answer is a bug: self-composition decides whether the two clocks can differ,
+and the squared tower decides that and whether the control flow can, and this
+is the first program here that separates the two.
 
 That sentence stops at the fifth column, and the two after it are each a
 different reason why.
@@ -801,7 +824,7 @@ it.
 
 ## Checking with KLEE
 
-`src/out/klee` is the same 129 residues checked by [KLEE](#KLEE) instead, and
+`src/out/klee` is the same 200 residues checked by [KLEE](#KLEE) instead, and
 [`src/out/klee/verify`](src/out/klee/verify) is its script:
 
 `./src/out/klee/verify [--slow | --only-slow] [--full] [file.c ...]`
@@ -810,7 +833,7 @@ it.
 back from a default run, because a KLEE budget is the last thing to spend
 confirming that two constructions of one product still agree.
 
-Both trees agree, 129 verdicts for 129, model sensitivity included. That
+Both trees agree, 200 verdicts for 200, model sensitivity included. That
 agreement is the point of having two: a residue really is an ordinary C program,
 and nothing about the claim depends on which checker reads it.
 
@@ -834,8 +857,8 @@ No error file is only clean if the run also finished, which is
 `halting execution` on stderr. Drop the last two and an exploration that ran out
 of time reports exactly like a proof.
 
-Six files in the tree are marked for that case, every one of them `branchy`
-with a cache in front of the walk, and they say so where they call `check`:
+Fourteen files in the tree are marked for that case, and they say so where
+they call `check`:
 
 ```scala
 check("cache/branchy", snippet, Verdict.Clean, klee = Reach.LikelyTimeout)
@@ -848,16 +871,30 @@ faster solver into a failing test, and demanding the verdict asks KLEE for
 something it could not give when the label went on, so either outcome is
 accepted and a wrong one still is not.
 
-The name overstates it now, and the measurement is worth writing down rather
-than leaving as a label nobody re-ran. At 120 seconds `cache/branchy` ends with
-0 completed paths against 23 partially completed, and at ten minutes it ends the
-same way, which is where the label came from. At the 1200 the budget has since
-grown to, it finishes: 814 seconds, every path completed, clean. All six do. So
-`LikelyTimeout` currently means expensive rather than unreachable, and it is
-kept because fourteen minutes apiece is still not something a default run should
-spend. What would retire it is a demo whose path space KLEE genuinely cannot
-walk, and `branchy` at twelve probes was that demo before the cache made it too
-slow for CBMC.
+The label means two different things now, and which one a file gets is
+measured rather than assumed.
+
+Eleven of the fourteen are `branchy` with a cache in front of the walk, one per
+model that has one and one per squared twin, and every one of them finishes
+inside the budget. At 120 seconds `cache/branchy` ends with 0 completed paths
+against 23 partially completed, and at ten minutes it ends the same way, which
+is where the label came from. At the 1200 the budget has since grown to it
+takes 814 seconds, every path completed, clean; the two the squared tower added
+last take 958 and 970. So for those eleven `LikelyTimeout` means expensive
+rather than unreachable, and it is kept because a quarter of an hour apiece is
+not something a default run should spend.
+
+The other three do not finish, and they are the squared tower's:
+`squared/riscv/forwarding/bypass_alias`, the same under `bypass_late`, and
+`squared/riscv/predictive_nb/reload`. Each was given 1500 seconds of wall clock
+and produced no verdict, against 453 for the slowest squared residue that does.
+`--max-time` stops KLEE forking new states and does not interrupt a query
+already in flight, so the budget is a search bound and not a wall clock, and a
+file like this hangs a default run rather than failing it. All three are where
+the squared model carries the most: the two `bypass` rows are the store queue's
+deferred alias check over addresses nobody knows, doubled, and
+`predictive_nb/reload` is the join, where a squash rewrites every register's
+arrival time in both runs and the probe still asks the cache afterwards.
 
 None of this is for want of a path space. `runCache` answers out of L1, out of
 L2 or out of memory, so four probes are (3^4 + 1) / 2 paths and CBMC is done in
@@ -872,15 +909,22 @@ had to grow from 120 to 1200 with the cache. Five residues started reporting
 case: `fact/static/guarded` finds its leak in 326s and
 `riscv/forwarding/bypass` in 485s, so the old budget was turning "not yet" into
 a failing test. A budget is a cap and not a cost, so the files that settled
-quickly still do, and the only ones that spend most of one are the six above.
+quickly still do, and the only ones that spend most of one are the fourteen
+above.
 
-Each of those six costs about fourteen minutes, so a default run skips them and
-says which it skipped:
+Each of those costs a full budget or more, so a default run skips them and says
+which it skipped:
 
 ```
+skip     5 under lockstep/ (superseded by squared/; pass --full to check them)
 skip     src/out/klee/riscv/cache/branchy.check.c (likely-timeout; pass --slow to run it)
-all 123 agree (6 skipped)
+all 187 agree (13 skipped, 5 held back for --full)
 ```
+
+Those counts are the tree's arithmetic and not a transcript: 200 snapshots in
+the main suite, thirteen of them labelled. Every one of the 187 has been
+checked on its own, and the three that hang were found by checking them on
+their own; what nobody has sat through is all 187 in a single run.
 
 `--slow` adds them back, and `--only-slow` runs nothing else, which is the one
 to reach for after touching the squared tower or the cache model.

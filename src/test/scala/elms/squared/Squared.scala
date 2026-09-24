@@ -160,8 +160,12 @@ trait Squared extends Machine {
   // way in.
   protected def transfer(at: Int, s: Pair): Pair
 
+  // What the model still owes when the program runs out of instructions.
+  // Nothing, for every model that has already spent every cycle it charged.
+  def finish(s: Pair): Pair = s
+
   // Where a pair of runs enters the program. This is also what
   // `SnippetDriver.snippet` wants when the interpreter stages, which is why it
   // takes and returns the same type the emitted `snippet` does.
-  def snippet(s: Pair): Pair = call(0, s)
+  def snippet(s: Pair): Pair = finish(call(0, s))
 }

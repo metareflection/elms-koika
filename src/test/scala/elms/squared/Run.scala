@@ -13,6 +13,7 @@ final case class Chip(
     regs: Array[Int],
     mem: Array[Int],
     saved_regs: Array[Int],
+    reg_ready: Array[Int],
     cache_tags: Array[Int],
     cache_dirty: Array[Int],
     cache_age: Array[Int],
@@ -28,6 +29,7 @@ object Chip {
     regs = new Array[Int](numRegs),
     mem = new Array[Int](memSize),
     saved_regs = new Array[Int](numRegs),
+    reg_ready = new Array[Int](numRegs),
     cache_tags = Array.fill(g.entries)(-1),
     cache_dirty = new Array[Int](g.entries),
     cache_age = new Array[Int](g.entries),
@@ -64,8 +66,8 @@ abstract class Run(val prog: Vector[RiscV.Instr]) extends Exec with Interp {
   type Half = Rep[Chip]
   type Pair = (Chip, Chip)
 
-  def numRegs: Int = 32
-  def memSize: Int = 64
+  def num_regs: Int = 32
+  def mem_size: Int = 64
 
   // Which slot is being interpreted. Only ever read to say where a mismatch
   // happened.
@@ -78,6 +80,7 @@ abstract class Run(val prog: Vector[RiscV.Instr]) extends Exec with Interp {
     def regs: Rep[Array[Int]] = Rep(h.v.regs)
     def mem: Rep[Array[Int]] = Rep(h.v.mem)
     def saved_regs: Rep[Array[Int]] = Rep(h.v.saved_regs)
+    def reg_ready: Rep[Array[Int]] = Rep(h.v.reg_ready)
     def cache_tags: Rep[Array[Int]] = Rep(h.v.cache_tags)
     def cache_dirty: Rep[Array[Int]] = Rep(h.v.cache_dirty)
     def cache_age: Rep[Array[Int]] = Rep(h.v.cache_age)
@@ -113,7 +116,7 @@ abstract class Run(val prog: Vector[RiscV.Instr]) extends Exec with Interp {
       if (x.timer != y.timer) { Outcome.Drifted(at) } else { Outcome.InStep(x.timer) }
     } catch { case Stop(o) => o }
 
-  def blank: Chip = Chip.blank(numRegs, memSize, shape)
+  def blank: Chip = Chip.blank(num_regs, mem_size, shape)
 
   // How long the cache arrays are. [Flat] has no cache to describe, and it
   // still gets them: `struct StateT` is one shape whatever the model, and a
@@ -149,5 +152,19 @@ final class PredictiveRun(prog: Vector[RiscV.Instr], val geometry: Geometry = Ge
 final class ForwardingRun(prog: Vector[RiscV.Instr], val geometry: Geometry = Geometry.default)
     extends Run(prog)
     with Forwarding {
+  override protected def shape: Geometry = geometry
+}
+
+final class NonBlockingRun(prog: Vector[RiscV.Instr], val geometry: Geometry = Geometry.default)
+    extends Run(prog)
+    with NonBlocking {
+  override protected def shape: Geometry = geometry
+}
+
+final class PredictiveNonBlockingRun(
+    prog: Vector[RiscV.Instr],
+    val geometry: Geometry = Geometry.default
+) extends Run(prog)
+    with PredictiveNonBlocking {
   override protected def shape: Geometry = geometry
 }

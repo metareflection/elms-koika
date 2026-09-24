@@ -51,6 +51,7 @@ struct StateT {
 
 void squared_assert(bool);
 void squared_assume(bool);
+void squared_diverged(bool);
 
 struct StateT2 * slot_12(struct StateT2 * v2778);
 struct StateT2 * slot_14(struct StateT2 * v2871);
@@ -487,7 +488,7 @@ struct StateT2 * slot_6(struct StateT2 * v731) {
   int * v746 = v743->regs;
   int v747 = v746[7];
   bool v788 = (v740 >= v742) == (v745 >= v747);
-  squared_assert(v788);
+  squared_diverged(v788);
   squared_assume(v788);
   bool v789 = v740 >= v742;
   struct StateT2 * v775;
@@ -1972,7 +1973,7 @@ struct StateT2 * slot_8(struct StateT2 * v811) {
   int * v1530 = v1334->cache_dirty;
   v1530[v1527] = 1;
   bool v2176 = (((int)((unsigned int)v852 >> 2)) == ((int)((unsigned int)v826 >> 2))) == (((int)((unsigned int)v982 >> 2)) == ((int)((unsigned int)v831 >> 2)));
-  squared_assert(v2176);
+  squared_diverged(v2176);
   squared_assume(v2176);
   bool v2177 = ((int)((unsigned int)v852 >> 2)) == ((int)((unsigned int)v826 >> 2));
   struct StateT2 * v1560;
@@ -2121,7 +2122,7 @@ struct StateT2 * slot_15(struct StateT2 * v3399) {
   int * v3414 = v3411->regs;
   int v3415 = v3414[7];
   bool v3456 = (v3408 >= v3410) == (v3413 >= v3415);
-  squared_assert(v3456);
+  squared_diverged(v3456);
   squared_assume(v3456);
   bool v3457 = v3408 >= v3410;
   struct StateT2 * v3443;
@@ -2601,7 +2602,8 @@ void init(struct StateT *s) {
   }
 }
 
-void squared_assert(bool c) { koika_assert(c, "squared drift"); }
+void squared_assert(bool c) { koika_assert(c, "timer drift"); }
+void squared_diverged(bool c) { koika_assert(c, "control flow diverged"); }
 void squared_assume(bool c) { koika_assume(c); }
 
 int main(int argc, char* argv[]) {

@@ -10,7 +10,9 @@ import elms.koika.test.squared.{
   Chip,
   FlatRun,
   ForwardingRun,
+  NonBlockingRun,
   Outcome,
+  PredictiveNonBlockingRun,
   PredictiveRun,
   Run,
   StaticRun
@@ -25,7 +27,7 @@ import elms.koika.test.riscv.{RiscV, elf}
 // is the one worth asking while the interpreter is being written: a product
 // semantics nobody can run has to be wrong in C before anyone finds out.
 //
-// The table below is [README.md]'s, first five columns. Every cell is a verdict
+// The table below is [README.md]'s, all seven columns. Every cell is a verdict
 // the staged tower already publishes, so this is a second opinion on the same
 // models from a semantics that emits nothing.
 //
@@ -151,6 +153,10 @@ class SquaredRunSuite extends AnyFunSuite {
     cell("predictive", PredictiveRun(_), name, leaks)
   private def forwarding(name: String, leaks: Boolean): Unit =
     cell("forwarding", ForwardingRun(_), name, leaks)
+  private def nonblocking(name: String, leaks: Boolean): Unit =
+    cell("nonblocking", NonBlockingRun(_), name, leaks)
+  private def predictiveNb(name: String, leaks: Boolean): Unit =
+    cell("predictive_nb", PredictiveNonBlockingRun(_), name, leaks)
 
   naive("shortcircuit", leaks = true)
   naive("2ctr", leaks = false)
@@ -220,10 +226,46 @@ class SquaredRunSuite extends AnyFunSuite {
   forwarding("bypass_late", leaks = true)
   forwarding("dynstore", leaks = false)
 
+
+  // A miss stops being worth a fixed hundred cycles and starts being worth
+  // whatever the program could not fill, so most of the cache column's leaks
+  // go away here. `evict` and `hidden` are the two that say so loudest.
+  nonblocking("shortcircuit", leaks = true)
+  nonblocking("2ctr", leaks = true)
+  nonblocking("spectre", leaks = false)
+  nonblocking("constant_time", leaks = false)
+  nonblocking("evict", leaks = false)
+  nonblocking("hidden", leaks = false)
+  nonblocking("reload", leaks = false)
+  nonblocking("bypass", leaks = false)
+  nonblocking("bypass_alias", leaks = false)
+  nonblocking("bypass_ct", leaks = false)
+  nonblocking("bypass_late", leaks = false)
+  nonblocking("dynstore", leaks = false)
+
+  // The join. It agrees with the column to its left on every demo but
+  // `reload`, which is `spectre` with the probe an attacker would actually
+  // perform, and that row is the one saying the speculative channel is the
+  // cache line rather than the stall.
+  predictiveNb("shortcircuit", leaks = true)
+  predictiveNb("2ctr", leaks = true)
+  predictiveNb("spectre", leaks = false)
+  predictiveNb("constant_time", leaks = false)
+  predictiveNb("evict", leaks = false)
+  predictiveNb("hidden", leaks = false)
+  predictiveNb("reload", leaks = true)
+  predictiveNb("bypass", leaks = false)
+  predictiveNb("bypass_alias", leaks = false)
+  predictiveNb("bypass_ct", leaks = false)
+  predictiveNb("bypass_late", leaks = false)
+  predictiveNb("dynstore", leaks = false)
+
   cell("naive", FlatRun(_), "branchy", leaks = false, input = branchyArg)
   cell("cache", CachedRun(_), "branchy", leaks = false, input = branchyArg)
   cell("static", StaticRun(_), "branchy", leaks = false, input = branchyArg)
   cell("predictive", PredictiveRun(_), "branchy", leaks = false, input = branchyArg)
+  cell("nonblocking", NonBlockingRun(_), "branchy", leaks = false, input = branchyArg)
+  cell("predictive_nb", PredictiveNonBlockingRun(_), "branchy", leaks = false, input = branchyArg)
 
   // `spectre.s` sets its own index and bound to the same constant, so the
   // bounds check is always taken and neither of the first two models reaches

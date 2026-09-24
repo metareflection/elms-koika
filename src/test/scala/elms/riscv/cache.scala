@@ -103,4 +103,14 @@ class RiscVCacheTests extends KoikaSuite {
     }
     check("reload", snippet, Verdict.Clean)
   }
+
+  // The balanced branch again. Neither arm touches memory and the program's one
+  // load is at a public address, so a cache has nothing to say about which way
+  // the branch went.
+  test("riscv cache balanced") {
+    val snippet = new CacheDriver {
+      override val prog = demo("balanced")
+    }
+    check("balanced", snippet, Verdict.Clean)
+  }
 }

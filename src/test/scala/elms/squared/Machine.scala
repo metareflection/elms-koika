@@ -31,6 +31,11 @@ trait Machine
     // saved is a staging-time fact the two share.
     def saved_regs: Rep[Array[Int]]
 
+    // The cycle each register's value lands on, for [NonBlocking]. Indexed by
+    // the same static register number [regs] is, so the subscript is a
+    // constant and none of what a set-indexed cache costs a checker applies.
+    def reg_ready: Rep[Array[Int]]
+
     def cache_tags: Rep[Array[Int]]
     def cache_dirty: Rep[Array[Int]]
     def cache_age: Rep[Array[Int]]
@@ -49,8 +54,13 @@ trait Machine
 
   def tick(h: Half): Rep[Unit] = h.timer = h.timer + unit(1)
 
-  // Cycles the clock pays for, now. There is no [Common.defer] here, because
-  // nothing in this tower lets the instructions behind a load keep going, and
-  // a name with one meaning is not a distinction.
+  // Cycles the clock pays for, now.
   def spend(h: Half, lat: Rep[Int]): Rep[Unit] = h.timer = h.timer + lat
+
+  // What a load costs. The same thing, for every model that stalls on one. It
+  // is a separate name because a load is the one access somebody is waiting
+  // on: a machine that lets the instructions behind it keep going charges this
+  // to the register that waits rather than to the clock, and a memory system
+  // that had already spent it would have nothing left to hand over.
+  def defer(h: Half, lat: Rep[Int]): Rep[Unit] = spend(h, lat)
 }

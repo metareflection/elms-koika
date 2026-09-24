@@ -113,4 +113,13 @@ class RiscVForwardingTests extends KoikaSuite {
     }
     check("reload", snippet, Verdict.Leak)
   }
+
+  // No store in the program, so this snapshot is its `predictive` twin to the
+  // byte and the leak is the misprediction that column already reports.
+  test("riscv forwarding balanced") {
+    val snippet = new FwdDriver {
+      override val prog = demo("balanced")
+    }
+    check("balanced", snippet, Verdict.Leak)
+  }
 }

@@ -106,4 +106,13 @@ class RiscVPredictiveTests extends KoikaSuite {
     }
     check("reload", snippet, Verdict.Leak)
   }
+
+  // The same fifteen cycles `static` reports. The branch runs once, so there is
+  // no history for this model to hold that `static` does not.
+  test("riscv predictive balanced") {
+    val snippet = new PredictiveDriver {
+      override val prog = demo("balanced")
+    }
+    check("balanced", snippet, Verdict.Leak)
+  }
 }

@@ -103,4 +103,18 @@ class RiscVStaticTests extends KoikaSuite {
     }
     check("reload", snippet, Verdict.Leak)
   }
+
+  // Where the balanced branch stops being balanced, and the first column that
+  // says so. The branch is cold in both runs, so both guess not-taken; the run
+  // that takes it pays the fifteen and the other pays nothing.
+  //
+  // The arms costing the same is what makes this a claim about the predictor
+  // rather than about the program. Take the speculation away and the demo is
+  // constant-time, which is what the three clean columns report.
+  test("riscv static balanced") {
+    val snippet = new StaticDriver {
+      override val prog = demo("balanced")
+    }
+    check("balanced", snippet, Verdict.Leak)
+  }
 }

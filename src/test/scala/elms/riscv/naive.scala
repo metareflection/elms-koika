@@ -106,4 +106,18 @@ class RiscVNaiveTests extends KoikaSuite {
     }
     check("reload", snippet, Verdict.Clean)
   }
+
+  // A secret-dependent branch whose two arms are the same length. This model
+  // charges for an instruction and nothing else, so the arms cost two apiece
+  // and the two runs' clocks come back together whichever way each went.
+  //
+  // The squared tower answers this one `leak`, and it is the first demo in the
+  // tree where the two constructions of the product disagree. `balanced.s` has
+  // that story.
+  test("riscv naive balanced") {
+    val snippet = new NaiveDriver {
+      override val prog = demo("balanced")
+    }
+    check("balanced", snippet, Verdict.Clean)
+  }
 }

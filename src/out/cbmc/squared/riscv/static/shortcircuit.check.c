@@ -50,6 +50,7 @@ struct StateT {
 
 void squared_assert(bool);
 void squared_assume(bool);
+void squared_diverged(bool);
 
 struct StateT2 * slot_14(struct StateT2 * v1595);
 struct StateT2 * slot_6(struct StateT2 * v239);
@@ -88,7 +89,7 @@ struct StateT2 * slot_14(struct StateT2 * v1595) {
   int * v1610 = v1607->regs;
   int v1611 = v1610[11];
   bool v1645 = (!(v1604 == v1606)) == (!(v1609 == v1611));
-  squared_assert(v1645);
+  squared_diverged(v1645);
   squared_assume(v1645);
   bool v1646 = !(v1604 == v1606);
   struct StateT2 * v1632;
@@ -1228,7 +1229,7 @@ struct StateT2 * slot_9(struct StateT2 * v1364) {
   int * v1379 = v1376->regs;
   int v1380 = v1379[15];
   bool v1438 = (v1373 >= v1375) == (v1378 >= v1380);
-  squared_assert(v1438);
+  squared_diverged(v1438);
   squared_assume(v1438);
   bool v1439 = v1373 >= v1375;
   struct StateT2 * v1425;
@@ -1353,7 +1354,8 @@ void init(struct StateT *s) {
   }
 }
 
-void squared_assert(bool c) { koika_assert(c, "squared drift"); }
+void squared_assert(bool c) { koika_assert(c, "timer drift"); }
+void squared_diverged(bool c) { koika_assert(c, "control flow diverged"); }
 void squared_assume(bool c) { koika_assume(c); }
 
 int main(int argc, char* argv[]) {

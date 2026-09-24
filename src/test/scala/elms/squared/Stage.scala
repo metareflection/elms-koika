@@ -39,6 +39,7 @@ abstract class SquaredKoikaDriver[
     def regs: Rep[Array[Int]] = words(h, "regs")
     def mem: Rep[Array[Int]] = words(h, "mem")
     def saved_regs: Rep[Array[Int]] = words(h, "saved_regs")
+    def reg_ready: Rep[Array[Int]] = words(h, "reg_ready")
     def cache_tags: Rep[Array[Int]] = words(h, "cache_tags")
     def cache_dirty: Rep[Array[Int]] = words(h, "cache_dirty")
     def cache_age: Rep[Array[Int]] = words(h, "cache_age")
@@ -52,15 +53,22 @@ abstract class SquaredKoikaDriver[
 
   // Through [Op.Custom] and not a `#define`, because `CCodegen` emits a
   // prototype for a custom op and a macro would be expanded into it.
-  // `koika_assert` is a macro, so the two names below are wrapped in
-  // functions by [main] rather than called directly.
-  private def claim(c: Rep[Boolean]): Unit = {
-    unsafeReflect[Unit](Op.Custom("squared_assert", UNIT), c)
+  // `koika_assert` is a macro, so the names below are wrapped in functions by
+  // [main] rather than called directly.
+  //
+  // Both obligations prune as well as report, so both take the same assumption
+  // afterwards. They assert under separate names because they are not the same
+  // obligation. A clock that came apart is the question this tower asks. A
+  // branch that came apart is the precondition it needs in order to ask it, and
+  // a counterexample that cannot say which of them failed is a counterexample
+  // nobody can read.
+  private def claim(assertion: String, c: Rep[Boolean]): Unit = {
+    unsafeReflect[Unit](Op.Custom(assertion, UNIT), c)
     unsafeReflect[Unit](Op.Custom("squared_assume", UNIT), c)
   }
 
-  override def sameClock(x: Sided[Rep[Int]]): Unit = claim(x.a === x.b)
-  override def sameWay(x: Sided[Rep[Boolean]]): Unit = claim(x.a === x.b)
+  override def sameClock(x: Sided[Rep[Int]]): Unit = claim("squared_assert", x.a === x.b)
+  override def sameWay(x: Sided[Rep[Boolean]]): Unit = claim("squared_diverged", x.a === x.b)
 
   override protected def choose(c: Rep[Boolean])(t: => Pair)(e: => Pair): Pair =
     __ifThenElse(c, t, e)
@@ -96,7 +104,7 @@ abstract class SquaredKoikaDriver[
   override def snippet(s: Pair): Pair = {
     val entry = call(0, s)
     drain()
-    entry
+    finish(entry)
   }
 
   // The two states are built the way every model already builds them, one at
@@ -109,7 +117,8 @@ abstract class SquaredKoikaDriver[
   // comparison below is what looks at it.
   override def main(prover: Prover): String = {
     val paired = stateManifest.name
-    s"""void squared_assert(bool c) { koika_assert(c, "squared drift"); }
+    s"""void squared_assert(bool c) { koika_assert(c, "timer drift"); }
+       |void squared_diverged(bool c) { koika_assert(c, "control flow diverged"); }
        |void squared_assume(bool c) { koika_assume(c); }
        |
        |int main(int argc, char* argv[]) {

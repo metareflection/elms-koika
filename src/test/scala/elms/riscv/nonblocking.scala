@@ -110,4 +110,15 @@ class RiscVNonBlockingTests extends KoikaSuite {
     }
     check("reload", snippet, Verdict.Clean)
   }
+
+  // Clean, for the reason `naive` and `cache` are. Nothing in this column
+  // speculates, so neither arm pays a penalty the other does not, and the one
+  // load's address is public so the miss costs both runs the same whichever
+  // way the branch went.
+  test("riscv nonblocking balanced") {
+    val snippet = new NbDriver {
+      override val prog = demo("balanced")
+    }
+    check("balanced", snippet, Verdict.Clean)
+  }
 }

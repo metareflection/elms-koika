@@ -239,10 +239,16 @@ trait Cached extends Flat {
     // most expensive thing in here: doing it twice was most of the formula.
     val ps = levels.indices.toVector.map(probe(h, _, line))
     val some = ps.map(Some(_))
-    spend(h, latency(ps))
     v match {
-      case Some(x) => { store(h, 0, line, offset, x, some); x }
-      case None    => h.cache_vals(word(bring(h, 0, line, some), offset))
+      case Some(x) => {
+        spend(h, latency(ps))
+        store(h, 0, line, offset, x, some)
+        x
+      }
+      case None => {
+        defer(h, latency(ps))
+        h.cache_vals(word(bring(h, 0, line, some), offset))
+      }
     }
   }
 
