@@ -101,7 +101,7 @@ and [`verify`](src/out/cbmc/verify) reads it back out and runs the checker:
 
 `./src/out/cbmc/verify [--certify] [--full] [file.c ...]`
 
-With no arguments it takes the main suite, 155 snapshots in 149 seconds. The
+With no arguments it takes the main suite, 167 snapshots in 162 seconds. The
 five it holds back are `lockstep/`, which answers five of `squared/`'s demos by
 the construction `squared/` replaced; `sbt testFull` regenerates them either
 way, so what `--full` buys is the check rather than the C. Naming files runs
@@ -130,8 +130,8 @@ over an abstract value domain, and the pair is what runs them twice.
 
 Which is also why the same source can be *run*. Substitute ordinary `Int`s for
 the staged values and the interpreter walks the program instead of writing one
-down, and `SquaredRunSuite` does exactly that: the first four columns of the
-table below, on sampled inputs, in about three seconds with no checker
+down, and `SquaredRunSuite` does exactly that: the first five columns of the
+table below, on sampled inputs, in about ten seconds with no checker
 anywhere. A
 witnessed leak is a proof and a clean sample is not, which is what `src/out`
 and CBMC are for, but a product semantics that only ever existed as C had to be
@@ -190,8 +190,18 @@ verdict, and `constant_time` still stages into 1401 lines of residue under one
 and 2462 under the other, because a branch that resolves taken leaves
 `predictive` holding a history `static` never records.
 
-Widening that set from three demos to thirteen is what found the only bug the
-squared tower has had. `Squared.live` takes a slot number and `Exec.step` was
+`squared/riscv/forwarding` is twelve more, everything the store-queue column
+answers. It is the first model here that inlines, so it is the first thing to
+use the seam the clock comparison rule exists for: while a store window is
+open, `call` runs the next instruction where it stands and no slot begins, so
+the two runs are not compared until the window closes. You can read that off
+the residue. Counting writes to the clock in each emitted function of
+`squared/riscv/forwarding/bypass` gives 1, 2, 1, 2, 1, 9, 1; the same count
+under `predictive` gives 1, 2, 1, 2, 1, 2, 1. The nine is the window, five
+instructions and their cache costs in the slot that opened it.
+
+Widening the guessed set from three demos to thirteen is what found the only
+bug the squared tower has had. `Squared.live` takes a slot number and `Exec.step` was
 handing it a pc, which are the same number until `Predictive` numbers one pc
 into several and then are not. Ten demos never noticed. `shortcircuit` asked
 whether slot 14 existed when what it meant was whether the program had a

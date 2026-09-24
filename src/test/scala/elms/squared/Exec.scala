@@ -53,6 +53,13 @@ trait Exec extends Squared {
     case _                        => None
   }
 
+  // Whether [i] writes memory. [Forwarding] needs it in order to know where a
+  // store window opens, and nothing else asks.
+  def isStore(i: Instr): Boolean = i match {
+    case Instr.Store(_, _, _, _) => true
+    case _                       => false
+  }
+
   // Every register [c] depends on. Over-approximating is safe; missing one
   // silently corrupts branch resolution, because [evalCond] runs against the
   // live register file at the join point rather than at the branch.

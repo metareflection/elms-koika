@@ -49,10 +49,33 @@ trait Squared extends Machine {
 
   def half(s: Pair, i: Int): Half
 
+  private var side: Int = -1
+
+  // Which run [each] is evaluating its body for, which a model needs when the
+  // state it keeps between instructions holds a value one run computed.
+  // [Forwarding]'s queue is the only such state in the tower.
+  //
+  // Meaningful only inside an [each] body, and it says so rather than
+  // answering 0 outside one. A wrong answer here is a residue that reads a
+  // symbol belonging to the other run, which is not a thing a checker would
+  // report.
+  protected def running: Int = {
+    require(side >= 0, "the running side was read outside [each]")
+    side
+  }
+
   // Evaluate [body] in each run's own machine. Half the squared semantics, and
   // the half that covers everything that is not control flow.
-  final def each[A](s: Pair)(body: Half => A): Sided[A] =
-    Sided(body(half(s, 0)), body(half(s, 1)))
+  final def each[A](s: Pair)(body: Half => A): Sided[A] = {
+    val outer = side
+    try {
+      side = 0
+      val a = body(half(s, 0))
+      side = 1
+      val b = body(half(s, 1))
+      Sided(a, b)
+    } finally { side = outer }
+  }
 
   // The clocks agree on the way into a slot. The leak, if there is one.
   def sameClock(x: Sided[Rep[Int]]): Unit

@@ -4,7 +4,7 @@ import elms.prelude.*
 import elms.prelude.given
 
 import elms.koika.test.common.{Init, Reach}
-import elms.koika.test.squared.{Cached, Predictive, Static}
+import elms.koika.test.squared.{Cached, Forwarding, Predictive, Static}
 import elms.koika.test.riscv.{SquaredBranchyDriver, SquaredCompiledDriver, SquaredRiscVDriver}
 
 // The same demos as `src/out/*/riscv`, answered by the squared interpreter
@@ -109,6 +109,36 @@ class SquaredSuite extends KoikaSuite {
     test(s"squared riscv predictive $demoName") {
       val snippet = new PredictiveDriver { override val prog = demo(demoName) }
       check(s"predictive/$demoName", snippet, expect)
+    }
+  }
+
+  // The store queue, and the first model here that inlines. Three demos come
+  // out differently from the two predictors above: `bypass`, `bypass_alias`
+  // and `bypass_late` are clean under a machine that commits a store the
+  // instant it runs and are not under one that queues it.
+  trait ForwardingDriver extends SquaredRiscVDriver[64] with Forwarding {
+    override val init = Init.forwarding(stateT)
+  }
+
+  private val queued = Seq(
+    "2ctr" -> Verdict.Leak,
+    "bypass" -> Verdict.Leak,
+    "bypass_alias" -> Verdict.Leak,
+    "bypass_ct" -> Verdict.Clean,
+    "bypass_late" -> Verdict.Leak,
+    "constant_time" -> Verdict.Clean,
+    "dynstore" -> Verdict.Clean,
+    "evict" -> Verdict.Leak,
+    "hidden" -> Verdict.Leak,
+    "reload" -> Verdict.Leak,
+    "shortcircuit" -> Verdict.Leak,
+    "spectre" -> Verdict.Leak
+  )
+
+  for ((demoName, expect) <- queued) {
+    test(s"squared riscv forwarding $demoName") {
+      val snippet = new ForwardingDriver { override val prog = demo(demoName) }
+      check(s"forwarding/$demoName", snippet, expect)
     }
   }
 

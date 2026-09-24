@@ -145,3 +145,9 @@ final class PredictiveRun(prog: Vector[RiscV.Instr], val geometry: Geometry = Ge
     with Predictive {
   override protected def shape: Geometry = geometry
 }
+
+final class ForwardingRun(prog: Vector[RiscV.Instr], val geometry: Geometry = Geometry.default)
+    extends Run(prog)
+    with Forwarding {
+  override protected def shape: Geometry = geometry
+}

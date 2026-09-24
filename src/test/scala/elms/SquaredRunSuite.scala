@@ -5,7 +5,16 @@ import scala.util.Random
 
 import org.scalatest.funsuite.AnyFunSuite
 
-import elms.koika.test.squared.{CachedRun, Chip, FlatRun, Outcome, PredictiveRun, Run, StaticRun}
+import elms.koika.test.squared.{
+  CachedRun,
+  Chip,
+  FlatRun,
+  ForwardingRun,
+  Outcome,
+  PredictiveRun,
+  Run,
+  StaticRun
+}
 import elms.koika.test.riscv.{RiscV, elf}
 
 // The squared interpreter, run rather than staged.
@@ -16,7 +25,7 @@ import elms.koika.test.riscv.{RiscV, elf}
 // is the one worth asking while the interpreter is being written: a product
 // semantics nobody can run has to be wrong in C before anyone finds out.
 //
-// The table below is [README.md]'s, first four columns. Every cell is a verdict
+// The table below is [README.md]'s, first five columns. Every cell is a verdict
 // the staged tower already publishes, so this is a second opinion on the same
 // models from a semantics that emits nothing.
 //
@@ -140,6 +149,8 @@ class SquaredRunSuite extends AnyFunSuite {
     cell("static", StaticRun(_), name, leaks)
   private def predictive(name: String, leaks: Boolean): Unit =
     cell("predictive", PredictiveRun(_), name, leaks)
+  private def forwarding(name: String, leaks: Boolean): Unit =
+    cell("forwarding", ForwardingRun(_), name, leaks)
 
   naive("shortcircuit", leaks = true)
   naive("2ctr", leaks = false)
@@ -192,6 +203,22 @@ class SquaredRunSuite extends AnyFunSuite {
   predictive("bypass_ct", leaks = false)
   predictive("bypass_late", leaks = false)
   predictive("dynstore", leaks = false)
+
+  // The store-queue column, where `bypass`, `bypass_alias` and `bypass_late`
+  // stop being clean. `branchy.s` has no store in it and no suite next door,
+  // so this column stops one demo short of the others.
+  forwarding("shortcircuit", leaks = true)
+  forwarding("2ctr", leaks = true)
+  forwarding("spectre", leaks = true)
+  forwarding("constant_time", leaks = false)
+  forwarding("evict", leaks = true)
+  forwarding("hidden", leaks = true)
+  forwarding("reload", leaks = true)
+  forwarding("bypass", leaks = true)
+  forwarding("bypass_alias", leaks = true)
+  forwarding("bypass_ct", leaks = false)
+  forwarding("bypass_late", leaks = true)
+  forwarding("dynstore", leaks = false)
 
   cell("naive", FlatRun(_), "branchy", leaks = false, input = branchyArg)
   cell("cache", CachedRun(_), "branchy", leaks = false, input = branchyArg)
