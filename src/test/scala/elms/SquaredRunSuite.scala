@@ -260,6 +260,22 @@ class SquaredRunSuite extends AnyFunSuite {
   predictiveNb("bypass_late", leaks = false)
   predictiveNb("dynstore", leaks = false)
 
+  // The row the two towers disagree about, and the reason is the same in all
+  // seven columns: a pair of secrets on either side of the midpoint takes the
+  // branch two ways, and `sameWay` stops the walk there. Every witness this
+  // samples is [Outcome.Diverged] and none is a [Outcome.Drifted], so the three
+  // columns that read clean next door leak here, and so do the four that leak
+  // next door for a reason this tower never gets far enough to see. Under
+  // `static` the self-composed witness is a pair at 106 cycles and 122, and
+  // every such pair is one this tower assumed away.
+  naive("balanced", leaks = true)
+  cached("balanced", leaks = true)
+  static("balanced", leaks = true)
+  predictive("balanced", leaks = true)
+  forwarding("balanced", leaks = true)
+  nonblocking("balanced", leaks = true)
+  predictiveNb("balanced", leaks = true)
+
   cell("naive", FlatRun(_), "branchy", leaks = false, input = branchyArg)
   cell("cache", CachedRun(_), "branchy", leaks = false, input = branchyArg)
   cell("static", StaticRun(_), "branchy", leaks = false, input = branchyArg)

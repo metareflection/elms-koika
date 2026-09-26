@@ -101,7 +101,7 @@ and [`verify`](src/out/cbmc/verify) reads it back out and runs the checker:
 
 `./src/out/cbmc/verify [--certify] [--full] [file.c ...]`
 
-With no arguments it takes the main suite, 200 snapshots in 197 seconds. The
+With no arguments it takes the main suite, all 207 snapshots of it. The
 five it holds back are `lockstep/`, which answers five of `squared/`'s demos by
 the construction `squared/` replaced; `sbt testFull` regenerates them either
 way, so what `--full` buys is the check rather than the C. Naming files runs
@@ -182,14 +182,14 @@ same at the point the model asks it rather than leaving it to the clock
 afterwards.
 
 `squared/riscv/static` and `squared/riscv/predictive` are every demo the two
-columns next door answer, thirteen each, so the two trees are the same
+columns next door answer, fourteen each, so the two trees are the same
 question asked two ways rather than a sample of it. Between them they show the
 other half of what the table claims: the two predictors agree on every
 verdict, and `constant_time` still stages into 1401 lines of residue under one
 and 2462 under the other, because a branch that resolves taken leaves
 `predictive` holding a history `static` never records.
 
-`squared/riscv/forwarding` is twelve more, everything the store-queue column
+`squared/riscv/forwarding` is thirteen more, everything the store-queue column
 answers. It is the first model here that inlines, so it is the first thing to
 use the seam the clock comparison rule exists for: while a store window is
 open, `call` runs the next instruction where it stands and no slot begins, so
@@ -199,7 +199,7 @@ the residue. Counting writes to the clock in each emitted function of
 under `predictive` gives 1, 2, 1, 2, 1, 2, 1. The nine is the window, five
 instructions and their cache costs in the slot that opened it.
 
-`nonblocking` and `predictive_nb` finish the set, twenty-six more, and with
+`nonblocking` and `predictive_nb` finish the set, twenty-eight more, and with
 them every model in the table has a squared twin. They are what the
 `defer`, `untimed`, `squash` and `finish` seams in `squared/Squared` were put
 there for: each one had a comment saying what it would mean and no instance
@@ -289,10 +289,34 @@ long as nobody is predicting it.
 It is in the tree for a second reason, which is what it does to the squared
 tower. `Squared.agree` asserts that the two runs take each conditional the same
 way, so a squared twin of the three clean cells above cannot come back clean
-whatever the arms cost. That twin is not written yet. When it is, neither
-answer is a bug: self-composition decides whether the two clocks can differ,
-and the squared tower decides that and whether the control flow can, and this
-is the first program here that separates the two.
+whatever the arms cost. That twin is written now, and CBMC on one demo out of
+each tower says it directly:
+
+```
+# src/out/cbmc/riscv/naive/balanced.check.c
+[main.assertion.1] line 181 timing leak: SUCCESS
+
+# src/out/cbmc/squared/riscv/naive/balanced.check.c
+[main.assertion.1]             line 328 timing leak:           SUCCESS
+[squared_assert.assertion.1]   line 308 timer drift:           SUCCESS
+[squared_diverged.assertion.1] line 309 control flow diverged: FAILURE
+```
+
+Different declared verdicts, `clean` next door and `leak` here, and the
+assertion that fails is never the clock. `timer drift` succeeds in all seven
+squared columns, the four with a predictor included. Under `static` that is
+the sharp version. The self-composed leak there is a real pair of clocks, 106
+cycles against 122, and every pair that reaches those two numbers is one that
+took the branch two ways, so `squared_assume` has cut it before anything looks
+at a timer.
+
+Neither answer is a bug and neither is the other one's approximation.
+Self-composition decides whether the two clocks can differ. The squared tower
+decides that and whether the control flow can, which together are the classical
+constant-time discipline, and this is the first program here that separates the
+two. `squared/riscv/naive` is the one squared column holding a single demo,
+because one demo is all it takes to say this and `Flat` is the model with the
+least left in it to blame.
 
 That sentence stops at the fifth column, and the two after it are each a
 different reason why.
@@ -824,7 +848,7 @@ it.
 
 ## Checking with KLEE
 
-`src/out/klee` is the same 200 residues checked by [KLEE](#KLEE) instead, and
+`src/out/klee` is the same 207 residues checked by [KLEE](#KLEE) instead, and
 [`src/out/klee/verify`](src/out/klee/verify) is its script:
 
 `./src/out/klee/verify [--slow | --only-slow] [--full] [file.c ...]`
@@ -833,7 +857,7 @@ it.
 back from a default run, because a KLEE budget is the last thing to spend
 confirming that two constructions of one product still agree.
 
-Both trees agree, 200 verdicts for 200, model sensitivity included. That
+Both trees agree, 207 verdicts for 207, model sensitivity included. That
 agreement is the point of having two: a residue really is an ordinary C program,
 and nothing about the claim depends on which checker reads it.
 
@@ -918,13 +942,13 @@ which it skipped:
 ```
 skip     5 under lockstep/ (superseded by squared/; pass --full to check them)
 skip     src/out/klee/riscv/cache/branchy.check.c (likely-timeout; pass --slow to run it)
-all 187 agree (13 skipped, 5 held back for --full)
+all 194 agree (13 skipped, 5 held back for --full)
 ```
 
-Those counts are the tree's arithmetic and not a transcript: 200 snapshots in
-the main suite, thirteen of them labelled. Every one of the 187 has been
+Those counts are the tree's arithmetic and not a transcript. 207 snapshots in
+the main suite, thirteen of them labelled. Every one of the 194 has been
 checked on its own, and the three that hang were found by checking them on
-their own; what nobody has sat through is all 187 in a single run.
+their own; what nobody has sat through is all 194 in a single run.
 
 `--slow` adds them back, and `--only-slow` runs nothing else, which is the one
 to reach for after touching the squared tower or the cache model.

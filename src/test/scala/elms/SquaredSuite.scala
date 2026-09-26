@@ -15,9 +15,16 @@ import elms.koika.test.squared.{
 import elms.koika.test.riscv.{SquaredBranchyDriver, SquaredCompiledDriver, SquaredRiscVDriver}
 
 // The same demos as `src/out/*/riscv`, answered by the squared interpreter
-// instead of by self-composition. Every verdict here has to match the one next
-// door, because the two are answering the same question about the same
-// program, and that agreement is what keeps the two towers from drifting.
+// instead of by self-composition. A verdict here matching the one next door is
+// what keeps the two towers from drifting, and it is what every row but one
+// does.
+//
+// The exception is `balanced`, and it is deliberate. The two constructions do
+// not decide the same property. Self-composition asks whether the two clocks
+// can differ. This one asks that and whether the control flow can, since
+// `Squared.agree` compares the branch conditions as well, which makes it
+// strictly the stronger of the two. `balanced` is the first demo in the tree
+// where the difference shows, and the comment on its rows below says how.
 //
 // Labels carry the model, so a residue lands beside its twin's path with
 // `squared/` on the front.
@@ -59,6 +66,37 @@ class SquaredSuite extends KoikaSuite {
   test("squared riscv cache branchy") {
     val snippet = new SquaredBranchyDriver with Cached {}
     check("cache/branchy", snippet, Verdict.Clean, klee = Reach.LikelyTimeout)
+  }
+
+  // The row the two towers disagree about, and the only demo here whose twin
+  // next door reads `clean`. The two arms of `balanced.s` cost the same, so a
+  // model with no predictor in it brings the clocks back together and
+  // self-composition has nothing to report. `Squared.agree` never gets that
+  // far. The two runs take the branch different ways and `sameWay` fires on
+  // the way in.
+  //
+  // Neither answer is a bug and neither is the other one's approximation.
+  // Self-composition decides whether the two clocks can differ. This tower
+  // decides that and whether the control flow can, which together are the
+  // classical constant-time discipline.
+  //
+  // `naive` is the one squared column with a single demo in it, because one
+  // demo is all it takes to say this and [Flat] is the model with the least
+  // left in it to blame.
+  test("squared riscv naive balanced") {
+    val snippet = new SquaredRiscVDriver[64] {
+      override val init = Init.naive(stateT)
+      override val prog = demo("balanced")
+    }
+    check("naive/balanced", snippet, Verdict.Leak)
+  }
+
+  test("squared riscv cache balanced") {
+    val snippet = new SquaredRiscVDriver[64] with Cached {
+      override val init = Init.cache(stateT)
+      override val prog = demo("balanced")
+    }
+    check("cache/balanced", snippet, Verdict.Leak)
   }
 
   test("squared riscv compiled naive") {
@@ -113,6 +151,7 @@ class SquaredSuite extends KoikaSuite {
   // `if` is one of its own, and a suite is not a `DslOps`.
   private val guessed = Seq(
     "2ctr" -> Verdict.Leak,
+    "balanced" -> Verdict.Leak,
     "bypass" -> Verdict.Clean,
     "bypass_alias" -> Verdict.Clean,
     "bypass_ct" -> Verdict.Clean,
@@ -150,6 +189,7 @@ class SquaredSuite extends KoikaSuite {
 
   private val queued = Seq(
     "2ctr" -> Verdict.Leak,
+    "balanced" -> Verdict.Leak,
     "bypass" -> Verdict.Leak,
     "bypass_alias" -> Verdict.Leak,
     "bypass_ct" -> Verdict.Clean,
@@ -188,6 +228,7 @@ class SquaredSuite extends KoikaSuite {
   // Two rows survive a memory system that does not stop.
   private val hiddenMiss = Seq(
     "2ctr" -> Verdict.Leak,
+    "balanced" -> Verdict.Leak,
     "bypass" -> Verdict.Clean,
     "bypass_alias" -> Verdict.Clean,
     "bypass_ct" -> Verdict.Clean,
@@ -206,6 +247,7 @@ class SquaredSuite extends KoikaSuite {
   // says the speculative channel is the cache line rather than the stall.
   private val joined = Seq(
     "2ctr" -> Verdict.Leak,
+    "balanced" -> Verdict.Leak,
     "bypass" -> Verdict.Clean,
     "bypass_alias" -> Verdict.Clean,
     "bypass_ct" -> Verdict.Clean,
