@@ -132,6 +132,27 @@ final class CachedRun(prog: Vector[RiscV.Instr], val geometry: Geometry = Geomet
   override protected def shape: Geometry = geometry
 }
 
+// The same two models squared dynamically, which is the cheap way to ask what
+// the residues under `dynamic/` answer. [Outcome.Diverged] is unreachable for
+// these, since nothing compares the branch conditions any more, so a clock
+// that came apart is all a sample has left to witness.
+//
+// `Dynamic` here is about when a conditional is settled. It is not the
+// counterpart of [StaticRun], which names a branch predictor.
+final class DynamicFlatRun(prog: Vector[RiscV.Instr])
+    extends Run(prog)
+    with Flat
+    with DynamicSquared
+
+final class DynamicCachedRun(
+    prog: Vector[RiscV.Instr],
+    val geometry: Geometry = Geometry.default
+) extends Run(prog)
+    with Cached
+    with DynamicSquared {
+  override protected def shape: Geometry = geometry
+}
+
 // [Predictive]'s interning table is a staging-time index into emitted
 // functions when this tower emits, and it is a walk's own bookkeeping when it
 // runs: one concrete run takes one path through the lookahead, so a key it

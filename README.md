@@ -217,6 +217,65 @@ whether slot 14 existed when what it meant was whether the program had a
 fourteenth instruction, and fell over rather than answering wrong, which is
 the good version of that mistake.
 
+`Squared.agree` compares the two runs' branch conditions and assumes them
+equal, which is what makes this tower decide a stronger property than the
+column next door decides, and the `balanced` row below is where the difference
+shows. Call that the *static* squared construction, since which way a
+conditional goes is settled while it stages. Everything above is one, and the
+`static` in `squared/riscv/static` is a different word, a branch predictor
+rather than a staging discipline.
+
+`src/out/*/dynamic/riscv` is the dynamic construction, where a conditional is
+settled by the runs instead. `DynamicSquared` overrides the one seam `agree`
+leaves for it, and a conditional stops having one thing it can do:
+
+```c
+if (v_ca) {
+  if (v_cb) { p = slot_6(p); }
+  else      { p = slot_9(p);  p = slot_10(p); }
+} else {
+  if (v_cb) { p = slot_11(p); p = slot_12(p); }
+  else      { p = slot_4(p); }
+}
+```
+
+That is `dynamic/riscv/naive/balanced` at its `blt`. Four arms, no dispatch,
+and no runtime test of which side anything is, because the pairing is still
+erased at staging time. The two arms where the runs disagree walk each run's
+tail on its own, and a solo slot reads one half of the pair and compares its
+clock against itself:
+
+```c
+struct StateT2 * slot_9(struct StateT2 * v232) {
+  struct StateT * v233 = v232->a;
+  int v234 = v233->timer;
+  bool v246 = v234 == v234;
+  squared_assert(v246);
+```
+
+Nothing below `Squared` knows about any of that. `each` with one run live
+evaluates its body once and pairs the result with itself, which is what makes
+`v234 == v234` the whole of the clock comparison and leaves an `agree` on that
+arm an ordinary conditional. No model underneath needed a line.
+
+Both cells come back `clean`. That is the result the two files exist for. They
+agree with `riscv/naive/balanced` and `riscv/cache/balanced`, where the static
+squared cells next door read `leak`, so what `balanced` exposes really is the
+control-flow obligation and nothing else, and the obligation can be given up.
+
+What giving it up costs is the pruning. On a shared path `squared_assume` cuts
+a pair that has already come apart, which is the only thing the squared
+construction buys over running the residue twice and comparing at the end. On a
+split path there is no pair left to cut and the solver walks both tails, which
+is self-composition's path space arriving exactly where the program was already
+going to be expensive. That, and the question being open rather than settled,
+is why both `verify` scripts hold the subtree back from a default run.
+
+Two models and one demo, so as not to overstate the shape of it. `Predictive`
+can split with a window still open, and `Forwarding.close` requires the two
+runs' queues to be the same shape, which after a split they are not. Both are
+follow-on work, and behind `--full` there is no pressure to rush them.
+
 Here is what they currently say. The first three demos exist for both NanoRisc
 and RISC-V and answer the same on each, so the table does not split them;
 NanoRisc has only the first three models, and RISC-V is what fills the rest.
@@ -319,7 +378,9 @@ decides that and whether the control flow can, which together are the classical
 constant-time discipline, and this is the first program here that separates the
 two. `squared/riscv/naive` is the one squared column holding a single demo,
 because one demo is all it takes to say this and `Flat` is the model with the
-least left in it to blame.
+least left in it to blame. `dynamic/riscv/naive/balanced` is that same demo a
+third time, with the control-flow obligation dropped, and it reads `clean`
+again.
 
 That sentence stops at the fifth column, and the two after it are each a
 different reason why.
@@ -943,9 +1004,9 @@ Each of those costs a full budget or more, so a default run skips them and says
 which it skipped:
 
 ```
-skip     5 under lockstep/ (superseded by squared/; pass --full to check them)
+skip     7 under lockstep/ and dynamic/ (pass --full to check them)
 skip     src/out/klee/riscv/cache/branchy.check.c (likely-timeout; pass --slow to run it)
-all 194 agree (13 skipped, 5 held back for --full)
+all 194 agree (13 skipped, 7 held back for --full)
 ```
 
 Those counts are the tree's arithmetic and not a transcript. 207 snapshots in

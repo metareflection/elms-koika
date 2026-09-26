@@ -8,6 +8,8 @@ import org.scalatest.funsuite.AnyFunSuite
 import elms.koika.test.squared.{
   CachedRun,
   Chip,
+  DynamicCachedRun,
+  DynamicFlatRun,
   FlatRun,
   ForwardingRun,
   NonBlockingRun,
@@ -275,6 +277,15 @@ class SquaredRunSuite extends AnyFunSuite {
   forwarding("balanced", leaks = true)
   nonblocking("balanced", leaks = true)
   predictiveNb("balanced", leaks = true)
+
+  // And the same row squared dynamically, which is what
+  // `src/out/*/dynamic/riscv` answers. Nothing compares the branch conditions
+  // any more, so the two runs take it whichever way their own secret says and
+  // the clock is the only thing left to report. The arms of `balanced.s` cost
+  // the same under a model that does not speculate, so these two cells read
+  // clean and agree with `naive` and `cache` next door.
+  cell("dynamic naive", DynamicFlatRun(_), "balanced", leaks = false)
+  cell("dynamic cache", DynamicCachedRun(_), "balanced", leaks = false)
 
   cell("naive", FlatRun(_), "branchy", leaks = false, input = branchyArg)
   cell("cache", CachedRun(_), "branchy", leaks = false, input = branchyArg)
