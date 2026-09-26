@@ -40,16 +40,25 @@
 
 here=${0:a:h}
 
-# What the main suite leaves out. `lockstep/` is five of the demos `squared/`
-# answers, built by rewriting a residue rather than by interpreting the
-# program over two states, and it is kept for the day the two constructions
-# disagree rather than for the coverage it adds, which is none. Checking both
-# on every run buys a second opinion nobody asked for at the price of
-# everybody's time.
+# What the main suite leaves out. Two trees, held back for opposite reasons.
 #
-# `sbt testFull` still regenerates it, so the C stays current whether or not
+# `lockstep/` is five of the demos `squared/` answers, built by rewriting a
+# residue rather than by interpreting the program over two states, and it is
+# kept for the day the two constructions disagree rather than for the coverage
+# it adds, which is none. Checking it on every run buys a second opinion nobody
+# asked for at the price of everybody's time.
+#
+# `dynamic/` is the other way round. Everything under `squared/` fuses a
+# conditional and assumes the two runs took it the same way, which is the
+# static squared construction; `dynamic/` lets the conditional come out two
+# ways and walks each run's tail on its own. Whether the control-flow
+# obligation can be dropped without losing the construction is an open
+# question, the static tower is the one that ships, and an experiment does not
+# get to slow down or destabilise a default run while the question is open.
+#
+# `sbt testFull` still regenerates both, so the C stays current whether or not
 # anybody checks it.
-full_only='*/lockstep/*'
+full_only='(*/lockstep/*|*/dynamic/*)'
 
 certify=0
 full=0
@@ -70,7 +79,7 @@ if (( ! $#files )); then
     if (( ! full )); then
         held_back=${#${(M)files:#${~full_only}}}
         files=(${files:#${~full_only}})
-        (( held_back )) && print -- "skip     $held_back under lockstep/ (superseded by squared/; pass --full to check them)"
+        (( held_back )) && print -- "skip     $held_back under lockstep/ and dynamic/ (pass --full to check them)"
     fi
 fi
 

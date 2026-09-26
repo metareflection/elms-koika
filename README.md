@@ -101,11 +101,14 @@ and [`verify`](src/out/cbmc/verify) reads it back out and runs the checker:
 
 `./src/out/cbmc/verify [--certify] [--full] [file.c ...]`
 
-With no arguments it takes the main suite, all 207 snapshots of it. The
-five it holds back are `lockstep/`, which answers five of `squared/`'s demos by
-the construction `squared/` replaced; `sbt testFull` regenerates them either
-way, so what `--full` buys is the check rather than the C. Naming files runs
-exactly those, main suite or not.
+With no arguments it takes the main suite, all 207 snapshots of it. Two trees
+are held back, and for opposite reasons. `lockstep/` is five demos `squared/`
+also answers, by the construction `squared/` replaced, and it is held back
+because it agrees and costs time. `dynamic/` is held back because it is not
+settled. It drops the control-flow assumption rather than making it, which is
+an open question about the construction and not a second opinion on a closed
+one. `sbt testFull` regenerates both either way, so what `--full` buys is the
+check rather than the C. Naming files runs exactly those, main suite or not.
 It prints one line per file and exits non-zero if CBMC says anything other than
 what the file claims, so a model that stops detecting what it used to detect is
 a failing run rather than a stale comment. The claims themselves are greppable

@@ -12,7 +12,8 @@
 # A file whose line says `likely-timeout` is one the tree expects KLEE not to
 # finish, and those are skipped unless you pass --slow, or --only-slow to run
 # nothing else. Skipped files are printed, so a default run still says what it
-# did not look at. Six files are in that state and each costs a full budget,
+# did not look at. Fourteen files are in that state. Eleven finish and spend
+# most of a budget doing it, and the other three produce no verdict at all,
 # which is the whole reason for the flag.
 #
 # The claim lives in the file, on the `// verify:` line that `KoikaSuite.check`
@@ -57,11 +58,20 @@
 here=${0:a:h}
 
 # What the main suite leaves out, and `src/out/cbmc/verify` leaves out the same
-# tree for the same reason: `lockstep/` is five of the demos `squared/`
-# answers, built by rewriting a residue rather than by interpreting the program
-# over two states. It is kept for the day the two constructions disagree, and a KLEE
-# budget is the last thing to spend finding out that they still agree.
-full_only='*/lockstep/*'
+# two trees for the same two reasons.
+#
+# `lockstep/` is five of the demos `squared/` answers, built by rewriting a
+# residue rather than by interpreting the program over two states. It is kept
+# for the day the two constructions disagree, and a KLEE budget is the last
+# thing to spend finding out that they still agree.
+#
+# `dynamic/` is the same demos again with the control-flow assumption dropped,
+# so a conditional comes out two ways and each run's tail is walked on its own
+# rather than shared. That is an open question rather than a second opinion on
+# a settled one, and a KLEE budget is the last thing to spend on it for the
+# sharper reason as well: dropping the assumption is dropping the pruning, so a
+# split path is exactly where the search gets expensive.
+full_only='(*/lockstep/*|*/dynamic/*)'
 
 slow=0
 only_slow=0
@@ -141,7 +151,7 @@ if (( ! $#files )); then
     if (( ! full )); then
         held_back=${#${(M)files:#${~full_only}}}
         files=(${files:#${~full_only}})
-        (( held_back )) && print -- "skip     $held_back under lockstep/ (superseded by squared/; pass --full to check them)"
+        (( held_back )) && print -- "skip     $held_back under lockstep/ and dynamic/ (pass --full to check them)"
     fi
 fi
 
