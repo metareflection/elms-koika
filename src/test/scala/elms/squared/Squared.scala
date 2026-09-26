@@ -1,5 +1,7 @@
 package elms.koika.test.squared
 
+import scala.collection.mutable
+
 import elms.prelude.given
 
 import elms.koika.test.riscv.RiscV
@@ -51,6 +53,23 @@ trait Squared extends Machine {
 
   private var side: Int = -1
 
+  private var walking: Vector[Int] = Vector(0, 1)
+
+  // Which runs are still being walked. Both, and it stays both for every model
+  // in the tower as it ships. A conditional fuses, so the pair either goes one
+  // way together or leaves the search, and [DynamicSquared] is the experiment
+  // in letting it come apart instead.
+  protected def active: Vector[Int] = walking
+
+  // [body], with [i] the only run still being walked. Scoped rather than a
+  // setter, because a model that forgot to put this back would go on emitting
+  // half-width slots for a pair that is still whole.
+  protected def solo[A](i: Int)(body: => A): A = {
+    val outer = walking
+    walking = Vector(i)
+    try { body } finally { walking = outer }
+  }
+
   // Which run [each] is evaluating its body for, which a model needs when the
   // state it keeps between instructions holds a value one run computed.
   // [Forwarding]'s queue is the only such state in the tower.
@@ -66,14 +85,30 @@ trait Squared extends Machine {
 
   // Evaluate [body] in each run's own machine. Half the squared semantics, and
   // the half that covers everything that is not control flow.
+  //
+  // One run left is the case that keeps everything below this trait written
+  // for a pair. The body runs once and the result is paired with itself, so
+  // `sameClock(Sided(t, t))` asserts `t == t` and the slicer drops it, and
+  // `agree(Sided(c, c))` has nothing to compare and falls through to an
+  // ordinary [choose], which is what a branch in a single-run walk should be.
+  // No model underneath needs a solo case of its own.
   final def each[A](s: Pair)(body: Half => A): Sided[A] = {
     val outer = side
     try {
-      side = 0
-      val a = body(half(s, 0))
-      side = 1
-      val b = body(half(s, 1))
-      Sided(a, b)
+      active match {
+        case Vector(i) => {
+          side = i
+          val x = body(half(s, i))
+          Sided(x, x)
+        }
+        case _ => {
+          side = 0
+          val a = body(half(s, 0))
+          side = 1
+          val b = body(half(s, 1))
+          Sided(a, b)
+        }
+      }
     } finally { side = outer }
   }
 
@@ -89,21 +124,57 @@ trait Squared extends Machine {
 
   // The other half of the squared semantics. [c] came out of [each], so it is
   // one condition per run, and this is where they are made into one.
-  final def agree(c: Sided[Rep[Boolean]])(t: => Pair)(e: => Pair): Pair = {
+  //
+  // With one run left there is nothing to make into one, and the two sides of
+  // [c] are the same value, so this is an ordinary conditional.
+  final def agree(c: Sided[Rep[Boolean]])(t: => Pair)(e: => Pair): Pair =
+    if (active.length < 2) { choose(c.a)(t)(e) } else { fuseOrSplit(c)(t)(e) }
+
+  // What a conditional does while both runs are still being walked. Fusing
+  // them is the static squared construction, which is the behaviour of every
+  // model that ships, and [DynamicSquared] is the only thing that overrides
+  // it.
+  protected def fuseOrSplit(c: Sided[Rep[Boolean]])(t: => Pair)(e: => Pair): Pair = {
     sameWay(c)
     choose(c.a)(t)(e)
   }
 
   // Whether slot [at] is a function worth emitting. [at] is a slot number and
-  // not a pc; the two agree until [Predictive] numbers one pc into several,
-  // and a caller that means "does the program go this far" wants
+  // not a pc; the two agree until a walk splits or [Predictive] numbers one pc
+  // into several, and a caller that means "does the program go this far" wants
   // `pc < prog.length` instead.
-  def live(at: Int): Boolean = at < prog.length
+  def live(at: Int): Boolean = pcOf(at) < prog.length
 
-  // One emitted function per slot, and a slot is a pc in every model here but
-  // [Predictive], which needs one per lookahead state and hands out its own
-  // numbering.
-  def slot(pc: Int): Int = pc
+  // Solo slots, in the order they were first asked for. Both runs walking is
+  // the overwhelmingly common case and gets no table at all, so this is empty
+  // for every model in the tower as it ships.
+  private val solos = mutable.ArrayBuffer[(Int, Int)]()
+  private val soloSlots = mutable.Map[(Int, Int), Int]()
+
+  // One emitted function per slot, and a slot is a pc together with the runs
+  // walking it. [Predictive] needs a third and a fourth component and hands
+  // out its own numbering.
+  //
+  // A pair keeps the pc as its own slot number, which is what makes this
+  // invisible to everything that never splits. The same functions come out
+  // under the same names they had before [DynamicSquared] existed. A solo walk
+  // is numbered past the end of the program, because the function it emits is
+  // a different function, half the width and with no comparison left in it.
+  def slot(pc: Int): Int = active match {
+    case Vector(i) =>
+      soloBase + soloSlots.getOrElseUpdate((pc, i), { solos += ((pc, i)); solos.length - 1 })
+    case _ => pc
+  }
+
+  // One past the last number a pair can take. [call] asks for `prog.length`
+  // whenever the program runs off the end, so the pc's own range is closed at
+  // both ends and a solo slot starts above it.
+  private def soloBase: Int = prog.length + 1
+
+  // [slot] read backwards. Private because the two callers are both here and
+  // [Predictive] overrides them off its own table rather than inverting this.
+  private def pcOf(at: Int): Int =
+    if (at < soloBase) { at } else { solos(at - soloBase)._1 }
 
   // Whether the next [call] really leaves, which is [Common.useCache] under a
   // name that does not collide with [Cached]. Nothing in this tower says no
@@ -114,9 +185,13 @@ trait Squared extends Machine {
   def inlined: Boolean = false
 
   // Staging-time state a slot carries that the worklist will not, and how to
-  // put it back. [Predictive] interns all of its into the slot number and so
-  // needs nothing here.
-  def checkpoint(): () => Unit = () => ()
+  // put it back. Which runs are walking is the one piece every model has,
+  // because [enter] compares the clocks before [resume] has decoded anything.
+  // [Predictive] interns the rest of its own into the slot number.
+  def checkpoint(): () => Unit = {
+    val was = walking
+    () => { walking = was }
+  }
 
   // Register traffic that is the tower's rather than the program's: copying a
   // register somewhere a rollback can find it, and reading a branch's operands
@@ -141,7 +216,7 @@ trait Squared extends Machine {
 
   // Where a model takes an instruction over. [step] is the ISA's and stays
   // that way.
-  def resume(at: Int, s: Pair): Pair = step(at, s)
+  def resume(at: Int, s: Pair): Pair = step(pcOf(at), s)
 
   // Non-speculative semantics for one instruction, over both runs.
   def step(pc: Int, s: Pair): Pair

@@ -45,7 +45,11 @@ trait Predictive extends Cached with Exec {
   // Everything the generated function for a pc depends on beyond the state.
   // No conditional branch is [speculable], so a window can never open inside
   // another one and that is an [Option] rather than a stack.
-  case class Key(pc: Int, window: Option[Window], learned: Map[Int, Boolean])
+  //
+  // [active] is the whole of [Squared.slot]'s key and it is one of these for
+  // the same reason. A lookahead walked by one run emits a different function
+  // from the same lookahead walked by a pair.
+  case class Key(pc: Int, active: Vector[Int], window: Option[Window], learned: Map[Int, Boolean])
 
   private val interned = mutable.ArrayBuffer[Key]()
   private val numbered = mutable.Map[Key, Int]()
@@ -72,16 +76,16 @@ trait Predictive extends Cached with Exec {
   private def goto(w: Option[Window], l: Map[Int, Boolean], pc: Int, s: Pair): Pair =
     under(w, l) { call(pc, s) }
 
-  override def slot(pc: Int): Int = intern(Key(pc, window, learned))
+  override def slot(pc: Int): Int = intern(Key(pc, active, window, learned))
 
   override def live(at: Int): Boolean = interned(at) match {
     // Running off the end of [prog] with a branch still in flight is a real
     // slot: something has to resolve it.
-    case Key(pc, w, _) => pc < prog.length || w.isDefined
+    case Key(pc, _, w, _) => pc < prog.length || w.isDefined
   }
 
   override def resume(at: Int, s: Pair): Pair = interned(at) match {
-    case Key(pc, w, l) => under(w, l) { run(pc, w, s) }
+    case Key(pc, _, w, l) => under(w, l) { run(pc, w, s) }
   }
 
   private def opening(at: Int, cond: Cond, recovery: Int, guess: Boolean): Option[Window] =
