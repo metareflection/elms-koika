@@ -111,8 +111,8 @@ abstract class KoikaDriver[
     """
       |  // initialize secret
       |  for (int i=0; i<SECRET_SIZE; i++) {
-      |    s1.mem[SECRET_OFFSET+i] = bounded(0, 20);
-      |    s2.mem[SECRET_OFFSET+i] = bounded(0, 20);
+      |    s1.mem[SECRET_OFFSET+i] = secret(0, 20);
+      |    s2.mem[SECRET_OFFSET+i] = secret(0, 20);
       |  }""".stripMargin
 
   // Takes the prover only so [SquaredKoikaDriver] can, which needs it for the

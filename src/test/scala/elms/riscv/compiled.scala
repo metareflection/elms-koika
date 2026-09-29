@@ -65,8 +65,8 @@ trait CompiledShell[S: StructManifest] extends RiscVShell[64, S] {
     s"""
        |  // $name, secret: a different draw in each state
        |  for (int i=0; i<${length(d)}; i++) {
-       |    s1.mem[${base(d)} + i] = bounded(0, 20);
-       |    s2.mem[${base(d)} + i] = bounded(0, 20);
+       |    s1.mem[${base(d)} + i] = secret(0, 20);
+       |    s2.mem[${base(d)} + i] = secret(0, 20);
        |  }""".stripMargin
 
   // `cmp`'s argument is how many words to compare. Both arrays are the same

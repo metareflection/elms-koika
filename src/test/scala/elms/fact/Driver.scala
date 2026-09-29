@@ -205,14 +205,14 @@ abstract class FactDriver(val program: Program) extends RiscVDriver[64] {
       s"""
          |  // a$r's contents, secret: a different draw in each state
          |  for (int i=0; i<$n; i++) {
-         |    s1.mem[$at + i] = bounded(0, 20);
-         |    s2.mem[$at + i] = bounded(0, 20);
+         |    s1.mem[$at + i] = secret(0, 20);
+         |    s2.mem[$at + i] = secret(0, 20);
          |  }""".stripMargin
     case Slot(Param.Word(true, hi), r, _) =>
       s"""
          |  // a$r, secret: a different draw in each state
-         |  s1.regs[$r] = bounded(0, $hi);
-         |  s2.regs[$r] = bounded(0, $hi);""".stripMargin
+         |  s1.regs[$r] = secret(0, $hi);
+         |  s2.regs[$r] = secret(0, $hi);""".stripMargin
     case _ => ""
   }
 

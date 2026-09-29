@@ -38,13 +38,15 @@ enum Prover derives CanEqual {
   }
 
   // The enabled arm of [prelude]: how this checker spells an assertion, an
-  // assumption, and a draw from the nondeterministic input.
+  // assumption, a draw from the nondeterministic input, and the mark that says
+  // a draw was the secret one.
   private def intrinsics: String = this match {
     case CBMC =>
       """int nondet_uint();
         |#define koika_assert(b, s) __CPROVER_assert(b, s)
         |#define koika_assume(b) __CPROVER_assume(b)
-        |#define koika_draw(x) ((x) = nondet_uint())""".stripMargin
+        |#define koika_draw(x) ((x) = nondet_uint())
+        |#define koika_secret(x) ((void)0)""".stripMargin
 
     // The message is dropped, because KLEE reports a failing assertion by file
     // and line rather than by name. Two assertions in one residue stay
@@ -55,15 +57,16 @@ enum Prover derives CanEqual {
         |#include <klee/klee.h>
         |#define koika_assert(b, s) klee_assert(b)
         |#define koika_assume(b) klee_assume(b)
-        |#define koika_draw(x) klee_make_symbolic(&(x), sizeof(x), #x)""".stripMargin
+        |#define koika_draw(x) klee_make_symbolic(&(x), sizeof(x), #x)
+        |#define koika_secret(x) ((void)0)""".stripMargin
   }
 
   // Everything the generated code and the hand-written C around it need before
   // either can be compiled.
   //
-  // Only [intrinsics] differs between backends. `bounded` and the stubbed arm
-  // are shared text, which is what makes two snapshots of one demo diff down
-  // to this block.
+  // Only [intrinsics] differs between backends. `bounded`, `secret` and the
+  // stubbed arm are shared text, which is what makes two snapshots of one demo
+  // diff down to this block.
   def prelude: String =
     s"""#ifdef $guard
        |$intrinsics
@@ -71,11 +74,21 @@ enum Prover derives CanEqual {
        |#define koika_assert(b, s) 0
        |#define koika_assume(b) 0
        |#define koika_draw(x) ((x) = 0)
+       |#define koika_secret(x) ((void)0)
        |#endif
        |int bounded(int low, int high) {
        |  int x;
        |  koika_draw(x);
        |  koika_assume(low <= x && x <= high);
+       |  return x;
+       |}
+       |// Same draw as `bounded`, said of the secret, so a backend that tracks
+       |// where the secret goes has somewhere to start. Self-composition already
+       |// encodes the split by drawing these twice, which is why the mark is
+       |// nothing under a checker that reads the two runs exactly.
+       |int secret(int low, int high) {
+       |  int x = bounded(low, high);
+       |  koika_secret(x);
        |  return x;
        |}""".stripMargin
 }

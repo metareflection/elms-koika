@@ -12,15 +12,26 @@
 #define koika_assert(b, s) klee_assert(b)
 #define koika_assume(b) klee_assume(b)
 #define koika_draw(x) klee_make_symbolic(&(x), sizeof(x), #x)
+#define koika_secret(x) ((void)0)
 #else
 #define koika_assert(b, s) 0
 #define koika_assume(b) 0
 #define koika_draw(x) ((x) = 0)
+#define koika_secret(x) ((void)0)
 #endif
 int bounded(int low, int high) {
   int x;
   koika_draw(x);
   koika_assume(low <= x && x <= high);
+  return x;
+}
+// Same draw as `bounded`, said of the secret, so a backend that tracks
+// where the secret goes has somewhere to start. Self-composition already
+// encodes the split by drawing these twice, which is why the mark is
+// nothing under a checker that reads the two runs exactly.
+int secret(int low, int high) {
+  int x = bounded(low, high);
+  koika_secret(x);
   return x;
 }
 
@@ -166,8 +177,8 @@ int main(int argc, char* argv[]) {
   s2.regs[12] = a12;
   
   // a10, secret: a different draw in each state
-  s1.regs[10] = bounded(0, 1);
-  s2.regs[10] = bounded(0, 1);
+  s1.regs[10] = secret(0, 1);
+  s2.regs[10] = secret(0, 1);
   struct StateT *s1_ = snippet(&s1);
   struct StateT *s2_ = snippet(&s2);
   koika_assert(s1_->timer==s2_->timer, "timing leak");
