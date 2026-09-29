@@ -30,7 +30,7 @@ class DynamicSquaredSuite extends KoikaSuite {
       override val init = Init.naive(stateT)
       override val prog = demo("balanced")
     }
-    check("naive/balanced", snippet, Verdict.Clean)
+    check("naive/balanced", snippet, Verdict.Clean, eva = Taint.Widens)
   }
 
   test("dynamic squared riscv cache balanced") {
@@ -38,6 +38,6 @@ class DynamicSquaredSuite extends KoikaSuite {
       override val init = Init.cache(stateT)
       override val prog = demo("balanced")
     }
-    check("cache/balanced", snippet, Verdict.Clean)
+    check("cache/balanced", snippet, Verdict.Clean, eva = Taint.Widens)
   }
 }

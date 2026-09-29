@@ -3,7 +3,7 @@ package elms.koika.test.riscv
 import elms.prelude.*
 import elms.prelude.given
 
-import elms.koika.test.{KoikaSuite, Verdict}
+import elms.koika.test.{KoikaSuite, Taint, Verdict}
 import elms.koika.test.common.{Init, PredictiveNonBlocking}
 
 // The join of the two columns either side of it: a branch predictor in front of
@@ -63,7 +63,7 @@ class RiscVPredictiveNonBlockingTests extends KoikaSuite {
     val snippet = new PredNbDriver {
       override val prog = demo("bypass")
     }
-    check("bypass", snippet, Verdict.Clean)
+    check("bypass", snippet, Verdict.Clean, eva = Taint.Widens)
   }
 
   test("riscv predictive_nb bypass_ct") {
@@ -77,7 +77,7 @@ class RiscVPredictiveNonBlockingTests extends KoikaSuite {
     val snippet = new PredNbDriver {
       override val prog = demo("bypass_late")
     }
-    check("bypass_late", snippet, Verdict.Clean)
+    check("bypass_late", snippet, Verdict.Clean, eva = Taint.Widens)
   }
 
   test("riscv predictive_nb dynstore") {
@@ -98,14 +98,14 @@ class RiscVPredictiveNonBlockingTests extends KoikaSuite {
     val snippet = new PredNbDriver {
       override val prog = demo("evict")
     }
-    check("evict", snippet, Verdict.Clean)
+    check("evict", snippet, Verdict.Clean, eva = Taint.Widens)
   }
 
   test("riscv predictive_nb hidden") {
     val snippet = new PredNbDriver {
       override val prog = demo("hidden")
     }
-    check("hidden", snippet, Verdict.Clean)
+    check("hidden", snippet, Verdict.Clean, eva = Taint.Widens)
   }
 
   // The row this column exists to answer. `spectre` goes clean here because its

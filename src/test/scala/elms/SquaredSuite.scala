@@ -143,6 +143,40 @@ class SquaredSuite extends KoikaSuite {
 
   private def reach(label: String): Reach = slow.getOrElse(label, Reach.Settles)
 
+  // Where Eva reports a leak the program does not have, measured by
+  // `src/out/eva/verify` rather than reasoned out.
+  //
+  // `bypass` and `bypass_late` hand a secret to a load and then spend the same
+  // number of cycles whichever way the address compares, so the dependence is
+  // real and the difference is not. They widen under every model that commits
+  // a store the instant it runs, and not under `forwarding`, which queues it
+  // and finds a leak Eva agrees about.
+  //
+  // `evict` and `hidden` widen only where the memory system does not stall,
+  // which is the only place the tree claims them clean. The secret reaches
+  // `cache_age` through the `if` that writes it, and nothing Eva tracks says
+  // the hidden miss costs nothing.
+  //
+  // A map rather than a set, because `@virtualize` claims any `if` in a suite
+  // body and then cannot find a `unit` to build one out of.
+  private val widens: Map[String, Taint] =
+    Seq(
+      "static/bypass",
+      "static/bypass_late",
+      "predictive/bypass",
+      "predictive/bypass_late",
+      "nonblocking/bypass",
+      "nonblocking/bypass_late",
+      "nonblocking/evict",
+      "nonblocking/hidden",
+      "predictive_nb/bypass",
+      "predictive_nb/bypass_late",
+      "predictive_nb/evict",
+      "predictive_nb/hidden"
+    ).map(_ -> Taint.Widens).toMap
+
+  private def taint(label: String): Taint = widens.getOrElse(label, Taint.Agrees)
+
   // Every demo `src/out/*/riscv/static` answers, so the two trees are the same
   // question asked two ways rather than a sample of it.
   //
@@ -169,13 +203,13 @@ class SquaredSuite extends KoikaSuite {
     test(s"squared riscv static $demoName") {
       val snippet = new StaticDriver { override val prog = demo(demoName) }
       val label = s"static/$demoName"
-      check(label, snippet, expect, klee = reach(label))
+      check(label, snippet, expect, klee = reach(label), eva = taint(label))
     }
 
     test(s"squared riscv predictive $demoName") {
       val snippet = new PredictiveDriver { override val prog = demo(demoName) }
       val label = s"predictive/$demoName"
-      check(label, snippet, expect, klee = reach(label))
+      check(label, snippet, expect, klee = reach(label), eva = taint(label))
     }
   }
 
@@ -207,7 +241,7 @@ class SquaredSuite extends KoikaSuite {
     test(s"squared riscv forwarding $demoName") {
       val snippet = new ForwardingDriver { override val prog = demo(demoName) }
       val label = s"forwarding/$demoName"
-      check(label, snippet, expect, klee = reach(label))
+      check(label, snippet, expect, klee = reach(label), eva = taint(label))
     }
   }
 
@@ -265,7 +299,7 @@ class SquaredSuite extends KoikaSuite {
     test(s"squared riscv nonblocking $demoName") {
       val snippet = new NonBlockingDriver { override val prog = demo(demoName) }
       val label = s"nonblocking/$demoName"
-      check(label, snippet, expect, klee = reach(label))
+      check(label, snippet, expect, klee = reach(label), eva = taint(label))
     }
   }
 
@@ -273,7 +307,7 @@ class SquaredSuite extends KoikaSuite {
     test(s"squared riscv predictive_nb $demoName") {
       val snippet = new PredNbDriver { override val prog = demo(demoName) }
       val label = s"predictive_nb/$demoName"
-      check(label, snippet, expect, klee = reach(label))
+      check(label, snippet, expect, klee = reach(label), eva = taint(label))
     }
   }
 

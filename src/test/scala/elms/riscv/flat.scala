@@ -3,7 +3,7 @@ package elms.koika.test.riscv
 import elms.prelude.*
 import elms.prelude.given
 
-import elms.koika.test.{KoikaSuite, Verdict}
+import elms.koika.test.{KoikaSuite, Taint, Verdict}
 import elms.koika.test.common.{Cached, Geometry, GenericKoikaDriver, Init, Level}
 
 // The cache this tower used to have, spelled as a geometry: one set of two
@@ -38,12 +38,13 @@ class RiscVFlatTests extends KoikaSuite {
       elf.Elf.load(s"src/test/asm/riscv/$name.o").prog
   }
 
-  // The set conflict, invisible without sets.
+  // The set conflict, invisible without sets. Eva still sees the secret reach
+  // `cache_age`, which is the over-approximation rather than a second channel.
   test("riscv flat evict") {
     val snippet = new FlatDriver {
       override val prog = demo("evict")
     }
-    check("evict", snippet, Verdict.Clean)
+    check("evict", snippet, Verdict.Clean, eva = Taint.Widens)
   }
 
   // The control for the control. `2ctr` leaks through an address rather than

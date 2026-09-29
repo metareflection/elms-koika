@@ -3,7 +3,7 @@ package elms.koika.test.riscv
 import elms.prelude.*
 import elms.prelude.given
 
-import elms.koika.test.{KoikaSuite, Verdict}
+import elms.koika.test.{KoikaSuite, Taint, Verdict}
 import elms.koika.test.common.{Init, Static}
 
 @virtualize
@@ -46,7 +46,7 @@ class RiscVStaticTests extends KoikaSuite {
     val snippet = new StaticDriver {
       override val prog = demo("bypass")
     }
-    check("bypass", snippet, Verdict.Clean)
+    check("bypass", snippet, Verdict.Clean, eva = Taint.Widens)
   }
 
   test("riscv static bypass_ct") {
@@ -60,7 +60,7 @@ class RiscVStaticTests extends KoikaSuite {
     val snippet = new StaticDriver {
       override val prog = demo("bypass_late")
     }
-    check("bypass_late", snippet, Verdict.Clean)
+    check("bypass_late", snippet, Verdict.Clean, eva = Taint.Widens)
   }
 
   test("riscv static dynstore") {

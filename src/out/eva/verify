@@ -1,0 +1,186 @@
+#!/usr/bin/env zsh
+
+# usage: ./verify [--full] [files...]
+#
+# Checks every Eva residue against the verdict its test declared. With no
+# arguments that is the main suite: every snapshot under this directory except
+# the ones --full adds back. Exits non-zero when any file disagrees, so this is
+# a test and not a report.
+#
+# Naming files explicitly runs exactly those, main suite or not.
+#
+# The claim lives in the file, on the `// verify:` line that `KoikaSuite.check`
+# writes at the top of it, same as the other two `verify` scripts read. What
+# differs is the question being asked. CBMC and KLEE both read the self-composed
+# program and decide whether the two timers can actually differ; Eva asks only
+# whether the secret reaches the timer at all. So a demo whose two arms cost the
+# same is a leak here and clean next door, and its line says `leak widened` so
+# that the disagreement is a declaration rather than a surprise to whoever
+# diffed the trees.
+#
+# The bound on the line is `[unroll N]`, off the same
+# `GenericKoikaDriver.unwind` CBMC unwinds to, and spent on recursive calls
+# rather than on loops. Frama-C parses C directly, so there is no bitcode and no
+# LLVM pairing to arrange, which is why none of the podman arm
+# `src/out/klee/verify` carries is needed here.
+
+# Reading a verdict out of Eva takes two conditions, and the obvious one alone
+# is unsound.
+#
+# Eva reports an unproven precondition on a line of its own, and exits 0 doing
+# it, so that line is condition one. Condition two is that `main` reached its
+# last statement, and it is the one that matters. Some demos stage a loop into a
+# cycle of slots; Eva declines to unroll one past its bound, the imprecision
+# widens an index to top, and the out-of-bounds access that follows is proved
+# invalid and reduces the state to bottom. `main` never reaches the sink, Eva
+# never complains about the precondition, and a reader that takes no complaint
+# for a proof reports one it never had. An early sweep did exactly that and had
+# to be thrown out.
+#
+# Which is the same shape `src/out/klee/verify` describes for a run that stopped
+# early, where exit 0 with no error files is byte-identical to a residue KLEE
+# genuinely verified.
+#
+# `-report -report-print-properties` prints a per-property table and is the
+# obvious reader. It is not one. The `untainted` row is printed only where Eva
+# has a complaint, so a leak gets `[    -    ] Pre-condition 'untainted'` and a
+# residue Eva proved clean gets no row at all. Which sounds usable until
+# `constant_time` at the default bound, where Eva never reaches the sink and the
+# row is missing in exactly the way a proof's is. So the table tells a leak from
+# everything else and cannot tell a proof from a run that gave up, and that
+# second one is the distinction this script exists to make. Further down it does
+# print `Unreachable call 'koika_check'`, which is worth knowing when debugging
+# one file by hand and is not something to parse.
+#
+# `unknown` is the third outcome and nothing in the tree produces one, which is
+# exactly why the case is here. The day something does, it has to fail rather
+# than pass.
+
+here=${0:a:h}
+
+# What the main suite leaves out, and the other two `verify` scripts leave out
+# the same two trees.
+#
+# `lockstep/` is five of the demos `squared/` answers, built by rewriting a
+# residue rather than by interpreting the program over two states, and it is
+# kept for the day the two constructions disagree rather than for coverage it
+# adds, which is none. `dynamic/` is those demos again with the control-flow
+# assumption dropped, so a conditional comes out two ways, which is an open
+# question rather than a second opinion on a settled one.
+#
+# Neither reason is about cost here, since Eva is cheap on both. They are held
+# back so a default run of all three scripts covers the same files, and a
+# three-way disagreement is then about the backends rather than about which tree
+# somebody remembered to check.
+full_only='(*/lockstep/*|*/dynamic/*)'
+
+full=0
+while [[ $1 == --* ]]; do
+    case $1 in
+        --full) full=1 ;;
+        *) print -u2 -- "unknown flag $1"; exit 2 ;;
+    esac
+    shift
+done
+
+# Analyse [1]/subject.c with a recursion bound of [2], leaving `eva.log` beside
+# it. True when frama-c got far enough to say anything.
+#
+# Not its exit status, which answers neither question this script asks: it is 0
+# on a residue whose precondition went unproven and 1 on one whose state went to
+# bottom. `-report-exit-code` would make it mean something and is deliberately
+# not passed, because the log says more than a status can. The summary banner is
+# what says frama-c ran, the way `klee-out/info` does next door.
+analyse() {
+    local dir=$1 unroll=$2
+    frama-c -cpp-extra-args=-DEVA -eva -eva-domains taint \
+            -eva-unroll-recursive-calls $unroll \
+            $dir/subject.c >$dir/eva.log 2>&1
+    grep -q 'ANALYSIS SUMMARY' $dir/eva.log
+}
+
+# clean, leak or unknown, by the two conditions above.
+outcome() {
+    local log=$1
+
+    # The line right after the header and not a match anywhere in the log,
+    # because a `NON TERMINATING FUNCTION` under some other function is Eva
+    # saying something true about a helper. Missing outright counts the same as
+    # non-terminating: either way `main` has no end state and the sink was never
+    # evaluated.
+    local ending=$(sed -n '/Values at end of function main:/{n;p;}' $log)
+    if [[ -z $ending || $ending == *'NON TERMINATING'* ]]; then
+        print unknown
+    elif grep -q "precondition 'untainted' got .*status \(unknown\|invalid\)" $log; then
+        print leak
+    else
+        print clean
+    fi
+}
+
+typeset -i held_back=0
+
+files=($@)
+if (( ! $#files )); then
+    files=(${here}/**/*.check.c(N))
+    if (( ! full )); then
+        held_back=${#${(M)files:#${~full_only}}}
+        files=(${files:#${~full_only}})
+        (( held_back )) && print -- "skip     $held_back under lockstep/ and dynamic/ (pass --full to check them)"
+    fi
+fi
+
+if (( ! $#files )); then
+    print -- "no snapshots under ${here#$PWD/} (generate them with \`sbt testFull\`)"
+    exit 1
+fi
+
+typeset -i failures=0
+work=$(mktemp -d)
+trap "rm -rf $work" EXIT
+
+for file in $files; do
+    name=${file#$PWD/}
+    expected=$(sed -n '1s|^// verify: \([a-z]*\).*|\1|p' $file)
+    if [[ -z $expected ]]; then
+        print -- "no-claim $name (regenerate it with \`sbt testFull\`)"
+        (( failures++ ))
+        continue
+    fi
+
+    # Every snapshot this tree has ever held carries the bracket. The fallback
+    # is for a probe somebody drops in here by hand.
+    unroll=$(sed -n '1s|.*\[unroll \([0-9]*\)\].*|\1|p' $file)
+    : ${unroll:=1000}
+
+    dir=$work/run
+    rm -rf $dir && mkdir -p $dir
+    cp $file $dir/subject.c
+
+    if ! analyse $dir $unroll; then
+        print -- "ERROR    $name did not parse or Eva did not start"
+        cat $dir/eva.log
+        (( failures++ ))
+        continue
+    fi
+
+    actual=$(outcome $dir/eva.log)
+
+    if [[ $actual == $expected ]]; then
+        print -- "ok       $name ($actual)"
+    else
+        print -- "MISMATCH $name: claims $expected, Eva says $actual"
+        cat $dir/eva.log
+        (( failures++ ))
+    fi
+done
+
+note=""
+(( held_back )) && note=" ($held_back held back for --full)"
+
+if (( failures )); then
+    print -- "$failures of $#files disagree$note"
+    exit 1
+fi
+
+print -- "all $#files agree$note"

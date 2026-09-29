@@ -3,7 +3,7 @@ package elms.koika.test.riscv
 import elms.prelude.*
 import elms.prelude.given
 
-import elms.koika.test.{KoikaSuite, Verdict}
+import elms.koika.test.{KoikaSuite, Taint, Verdict}
 import elms.koika.test.common.{Init, NonBlocking}
 
 @virtualize
@@ -46,7 +46,7 @@ class RiscVNonBlockingTests extends KoikaSuite {
     val snippet = new NbDriver {
       override val prog = demo("bypass")
     }
-    check("bypass", snippet, Verdict.Clean)
+    check("bypass", snippet, Verdict.Clean, eva = Taint.Widens)
   }
 
   test("riscv nonblocking bypass_ct") {
@@ -60,7 +60,7 @@ class RiscVNonBlockingTests extends KoikaSuite {
     val snippet = new NbDriver {
       override val prog = demo("bypass_late")
     }
-    check("bypass_late", snippet, Verdict.Clean)
+    check("bypass_late", snippet, Verdict.Clean, eva = Taint.Widens)
   }
 
   test("riscv nonblocking dynstore") {
@@ -90,7 +90,7 @@ class RiscVNonBlockingTests extends KoikaSuite {
     val snippet = new NbDriver {
       override val prog = demo("evict")
     }
-    check("evict", snippet, Verdict.Clean)
+    check("evict", snippet, Verdict.Clean, eva = Taint.Widens)
   }
 
   // The same channel as `2ctr` with a loop after it long enough to hide the
@@ -99,7 +99,7 @@ class RiscVNonBlockingTests extends KoikaSuite {
     val snippet = new NbDriver {
       override val prog = demo("hidden")
     }
-    check("hidden", snippet, Verdict.Clean)
+    check("hidden", snippet, Verdict.Clean, eva = Taint.Widens)
   }
 
   // `spectre.s` with the reload step. No speculation here, so the gadget never
@@ -119,6 +119,6 @@ class RiscVNonBlockingTests extends KoikaSuite {
     val snippet = new NbDriver {
       override val prog = demo("balanced")
     }
-    check("balanced", snippet, Verdict.Clean)
+    check("balanced", snippet, Verdict.Clean, eva = Taint.Widens)
   }
 }

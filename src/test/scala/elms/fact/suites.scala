@@ -3,7 +3,7 @@ package elms.koika.test.fact
 import elms.prelude.*
 import elms.prelude.given
 
-import elms.koika.test.KoikaSuite
+import elms.koika.test.{KoikaSuite, Taint}
 import elms.koika.test.common.{Cached, Forwarding, Init, Predictive, Static}
 
 // The FaCT ports against every model. Four programs, two that hold up and two
@@ -49,12 +49,22 @@ class FactNaiveTests extends KoikaSuite {
 class FactCacheTests extends KoikaSuite {
   val under = "fact/cache/"
 
+  // The one FaCT cell Eva widens, out of twenty. `guarded` indexes a table with
+  // a public `idx` and the key sits past the end of it, so the load is tainted
+  // whether or not the machine speculates far enough to time it. Every other
+  // cell here Eva calls the way the other two backends do.
+  //
+  // A map rather than a test on `p.name`, because `@virtualize` claims any `if`
+  // in a suite body and then cannot find a `unit` to build one out of.
+  private val widens = Map("guarded" -> Taint.Widens)
+
   for (p <- Program.all) {
     test(s"fact cache ${p.name}") {
       val snippet = new FactDriver(p) with Cached {
         override val init = Init.Spilling.cache(stateT)
       }
-      check(p.name, snippet, p.expect.cache)
+      val eva = widens.getOrElse(p.name, Taint.Agrees)
+      check(p.name, snippet, p.expect.cache, eva = eva)
     }
   }
 }

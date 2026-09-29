@@ -3,7 +3,7 @@ package elms.koika.test.riscv
 import elms.prelude.*
 import elms.prelude.given
 
-import elms.koika.test.{KoikaSuite, Verdict}
+import elms.koika.test.{KoikaSuite, Taint, Verdict}
 import elms.koika.test.common.Init
 
 @virtualize
@@ -118,6 +118,6 @@ class RiscVNaiveTests extends KoikaSuite {
     val snippet = new NaiveDriver {
       override val prog = demo("balanced")
     }
-    check("balanced", snippet, Verdict.Clean)
+    check("balanced", snippet, Verdict.Clean, eva = Taint.Widens)
   }
 }

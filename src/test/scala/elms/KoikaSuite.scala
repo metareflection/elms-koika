@@ -25,6 +25,40 @@ enum Verdict derives CanEqual {
   }
 }
 
+// Eva's answer, where taint's over-approximation makes it not [Verdict].
+//
+// A may-analysis over one run, so a timer the secret reaches syntactically is a
+// leak to Eva whether or not the arithmetic can tell the two runs apart.
+// `balanced` is the shape: both arms cost the same, the dependence is real, the
+// difference is not.
+//
+// Two cases and not three. A residue Eva cannot reach the end of would want a
+// third, and the unroll bound removed the need, since the swept tree has no
+// such file. Add it the day one appears rather than carrying a case nothing
+// constructs.
+//
+// An enum rather than `eva: Verdict = expect`, because Scala cannot default a
+// parameter to another in the same list, and rather than `Option[Verdict]`
+// because [Widens] makes the unsound direction unrepresentable. A leak
+// narrowed to clean is not a label anyone can write.
+//
+// Nothing to do with `elf.Taint`, which says who a global in a RISC-V image
+// belongs to. `riscv/compiled.scala` imports that one by name and so keeps it.
+enum Taint derives CanEqual {
+  // Eva proves what [Verdict] claims.
+  case Agrees
+
+  // The program is clean and Eva reports a leak anyway.
+  //
+  // Per file rather than per assertion, which is what the squared tower gives
+  // up here. Every `squared_assert` in a residue, 228 of them in the worst one,
+  // expands to the one `koika_check` inside the wrapper, so Eva says the file
+  // leaks and never which slot. Recoverable by putting the contract on
+  // `squared_assert`'s own declaration, at the price of a `prover match` in
+  // `Stage.scala`.
+  case Widens
+}
+
 abstract class KoikaSuite extends SnapshotFunSuite {
   // Every snapshot in this project is a checker's input, so [expect] is
   // required rather than defaulted. A demo nobody has made a claim about is not
@@ -37,14 +71,15 @@ abstract class KoikaSuite extends SnapshotFunSuite {
       label: String,
       snippet: KoikaDriver[?, ?, ?, ?, ?],
       expect: Verdict,
-      klee: Reach = Reach.Settles
+      klee: Reach = Reach.Settles,
+      eva: Taint = Taint.Agrees
   ): Unit =
     // Every backend is written before any assertion fires. Letting the first
     // mismatch throw left the second backend's snapshot unwritten, so one
     // backend's diff hid the other's and a run only ever fixed one of them.
     Prover.values.toSeq
       .map { prover =>
-        val body = s"${line(prover, expect, snippet.unwind, klee)}\n${snippet.render(prover)}"
+        val body = s"${line(prover, expect, snippet.unwind, klee, eva)}\n${snippet.render(prover)}"
         Try(snapshot(label, body, "c", root = prover.root))
       }
       .collectFirst { case Failure(e) => e }
@@ -57,7 +92,8 @@ abstract class KoikaSuite extends SnapshotFunSuite {
       prover: Prover,
       expect: Verdict,
       unwind: Int,
-      klee: Reach
+      klee: Reach,
+      eva: Taint
   ): String = {
     val says = expect match {
       case Verdict.Clean => prover.holds
@@ -78,6 +114,24 @@ abstract class KoikaSuite extends SnapshotFunSuite {
           case Reach.LikelyTimeout =>
             s"// verify: ${expect.word} likely-timeout" +
               s" (KLEE probably does not finish this path space) $budget"
+        }
+
+      // Same bound CBMC unwinds to, spent on Eva's recursive calls. Some demos
+      // stage a loop into a cycle of slots, and Eva declines to unroll one
+      // unless told how far. Left at the default it widens an index to top,
+      // proves the out-of-bounds access that follows, and reduces the state to
+      // bottom, so `main` never reaches the sink and the file answers nothing.
+      case Prover.EVA =>
+        val bound = s"[unroll $unwind]"
+        eva match {
+          case Taint.Agrees =>
+            s"// verify: ${expect.word} (Eva should report $says) $bound"
+          // The word after the verdict is what stops this reading as a flat
+          // disagreement with the other two trees, the way `likely-timeout`
+          // does for KLEE. `verify` parses up to the first space either way.
+          case Taint.Widens =>
+            s"// verify: ${Verdict.Leak.word} widened" +
+              s" (the program is clean; Eva cannot prove it) $bound"
         }
     }
   }
