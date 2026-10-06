@@ -28,7 +28,49 @@ class CCodegenTests extends SnapshotFunSuite {
       def pow(x: Rep[Int], n: Int): Rep[Int] = if n == 0 then 1 else x * pow(x, n - 1)
       def snippet(x: Rep[Int]): Rep[Int] = pow(x, 5)
     }
-    check("pow5", Snippet.code)
+    val code = Snippet.code
+    check("pow5", code)
+    // Nothing here is a `bool`, prints or allocates, so there is no include
+    // block and no blank line where one would have been.
+    assert(code.startsWith("int snippet(int x0);"))
+  }
+
+  // The guard is what tells the two forms apart. It reflects two bindings of its
+  // own between the annotations, so the free-standing one lands above them and
+  // the attached one below, carried by the `if` it was written against. Over a
+  // snippet with nothing in between, either form would look identical.
+  test("both statement forms in one function") {
+    object Snippet extends CSnippetDriver[Int, Int] {
+      def snippet(x: Rep[Int]): Rep[Int] = {
+        val y = x + x
+        comment"@ assert $y >= 0;"
+        attach"@ assert $y != 1;"
+        if (y === 1) then 1 else 0
+      }
+    }
+
+    val code = Snippet.code
+    check("comment", code)
+    assertCommentAgainst(code, "//@ assert x1 >= 0;", "int x3 = 1;")
+    // The declaration and not the `if`: a C `if` that produces a value opens by
+    // declaring the variable it assigns into, so that line is the head of the
+    // statement the note is attached to.
+    assertCommentAgainst(code, "//@ assert x1 != 1;", "int x7;")
+  }
+
+  test("a contract sits above the declaration") {
+    object Snippet extends CSnippetDriver[Int, Int] {
+      def snippet(x: Rep[Int]): Rep[Int] = {
+        contract"@ requires $x > 0;"
+        contract"@ ensures \result > 0;"
+        x + 1
+      }
+    }
+
+    val code = Snippet.code
+    check("contract", code)
+    assertCommentAgainst(code, "//@ requires x0 > 0;", "//@ ensures")
+    assertCommentAgainst(code, "//@ ensures", "int snippet(int x0);")
   }
 
   test("simple if") {
@@ -272,18 +314,146 @@ class CCodegenTests extends SnapshotFunSuite {
     check("static-data", snippet.code)
   }
 
-  // `ArrayInit` has no implementation yet. What this pins is that reaching it
-  // degrades into a reported error rather than throwing out of the pipeline.
-  test("an unimplemented op is reported, not thrown") {
-    val snippet = new CSnippetDriver[Int, Int] {
-      def snippet(x: Rep[Int]): Rep[Int] = {
-        val arr: Rep[Array[Int]] = unsafeReflect(elms.core.Op.ArrayInit(Seq(1, 2, 3)))
-        arr.get(x)
+  // The motivating case. `foreach` reads its bounds back off the range it was
+  // called on, so before `InlineRanges` this emitted three errors and no usable
+  // loop. The `ERROR` assertion is the point of the test: a snapshot on its own
+  // would happily pin the broken output.
+  test("a foreach becomes a for loop") {
+    object Snippet extends CSnippetDriver[Int, Unit] {
+      def snippet(x: Rep[Int]): Rep[Unit] = {
+        val arr = newArray[Int](x)
+        for (i <- (0.until(x)): Rep[Range]) { arr.set(i, i * 2) }
       }
     }
-    // No snapshot: the output is deliberately not valid C, and pinning it would
-    // be a trap for anyone who later compiles every check file.
-    assert(snippet.code.contains("ERROR") && snippet.code.contains("ArrayInit"))
+    val code = Snippet.code
+    check("range-foreach", code)
+    assert(!code.contains("ERROR"))
+  }
+
+  test("a foreach over constant bounds") {
+    object Snippet extends CSnippetDriver[Int, Int] {
+      def snippet(x: Rep[Int]): Rep[Int] = {
+        val acc = newVar(unit(0))
+        for (i <- (0.until(unit(10))): Rep[Range]) { acc := acc.get + i }
+        acc.get
+      }
+    }
+    val code = Snippet.code
+    check("range-foreach-const", code)
+    assert(!code.contains("ERROR"))
+  }
+
+  // Two ranges are in scope at once inside the inner loop, and the inner one is
+  // built from the outer loop variable. A pass that confused them would emit a
+  // loop over the wrong bounds and still produce C that compiles.
+  test("nested foreach loops keep their own bounds") {
+    object Snippet extends CSnippetDriver[Int, Int] {
+      def snippet(x: Rep[Int]): Rep[Int] = {
+        val acc = newVar(unit(0))
+        for (i <- (0.until(x)): Rep[Range]) {
+          for (j <- (0.until(i)): Rep[Range]) { acc := acc.get + j }
+        }
+        acc.get
+      }
+    }
+    val code = Snippet.code
+    check("range-nested", code)
+    assert(!code.contains("ERROR"))
+  }
+
+  // `__ifThenElse[T]` is unconstrained in `T`, which makes this the only way a
+  // range outlives the `foreach` it was written for: nothing else in the DSL
+  // has a `Typable[Range]` to summon. `InlineRanges` cannot see through the
+  // `if`, so this is the shape `elms_range` exists for.
+  test("a range bound by an if gets a struct") {
+    object Snippet extends CSnippetDriver[Int, Int] {
+      def snippet(x: Rep[Int]): Rep[Int] = {
+        val r: Rep[Range] = if x === unit(0) then 0.until(x) else x.until(unit(10))
+        val v = newVar(unit(0))
+        for (i <- r) { v := v.get + i }
+        v.get
+      }
+    }
+    val code = Snippet.code
+    check("range-first-class", code)
+    assert(!code.contains("ERROR"))
+    assert(code.contains("elms_range"))
+    assert(code.contains("#include \"elms_lib.h\""))
+  }
+
+  // With the feature off, the file has to name no part of it: no `elms_range`,
+  // no constructor, no header. Refusing the type while still emitting a call to
+  // `elms_range_mk` would leave the option half-applied, and a file that
+  // includes a header for a feature it was told not to use.
+  test("firstClassRanges off leaves no trace of the struct") {
+    val code = new TunedDriver[Int, Int](
+      CCodegen(opts = CCodegen.Options(firstClassRanges = false))
+    ) {
+      def snippet(x: Rep[Int]): Rep[Int] = {
+        val r: Rep[Range] = if x === unit(0) then 0.until(x) else x.until(unit(10))
+        val v = newVar(unit(0))
+        for (i <- r) { v := v.get + i }
+        v.get
+      }
+    }.code
+
+    assert(!code.contains("elms_range"))
+    assert(!code.contains("elms_lib.h"))
+
+    // Each refused position is a line that does not compile, so each one says
+    // so and each names the option, rather than the first one saying it and
+    // the rest pointing back at it.
+    val refusals = code.linesIterator.filter(_.contains("ERROR")).toVector
+    assert(refusals.nonEmpty)
+    assert(refusals.forall(_.contains("`firstClassRanges` is off")))
+  }
+
+  // Tier 1's whole purpose is that an ordinary loop needs no runtime support.
+  // That is invisible unless something asserts the header is absent.
+  test("only a first-class range asks for elms_lib.h") {
+    object Loop extends CSnippetDriver[Int, Int] {
+      def snippet(x: Rep[Int]): Rep[Int] = {
+        val acc = newVar(unit(0))
+        for (i <- (0.until(x)): Rep[Range]) { acc := acc.get + i }
+        acc.get
+      }
+    }
+
+    assert(!Loop.code.contains("elms_lib.h"))
+  }
+
+  // The flag suppresses the include lines and changes nothing else. Asserting
+  // that by diff is what stops it from quietly disabling the feature the
+  // includes were there for.
+  test("autoIncludes off drops the includes and nothing else") {
+    def build(opts: CCodegen.Options): Vector[String] =
+      new TunedDriver[Boolean, Unit](CCodegen(opts = opts)) {
+        def snippet(x: Rep[Boolean]): Rep[Unit] = Builtins.println(x)
+      }.code.linesIterator.toVector
+
+    val full = build(CCodegen.Options())
+    val bare = build(CCodegen.Options(autoIncludes = false))
+
+    val (includes, rest) = full.span(_.startsWith("#include"))
+    assert(includes == Vector("#include <stdbool.h>", "#include <stdio.h>"))
+    assert(rest.head.isEmpty)
+    assert(rest.tail == bare)
+  }
+
+  // One instance, two programs. The leak this rules out is invisible in every
+  // snapshot, because each of those builds its own driver and its own backend.
+  test("headers do not leak between programs") {
+    val gen = CCodegen()
+
+    val loud = new TunedDriver[Int, Unit](gen) {
+      def snippet(x: Rep[Int]): Rep[Unit] = Builtins.println(x)
+    }
+    val quiet = new TunedDriver[Int, Int](gen) {
+      def snippet(x: Rep[Int]): Rep[Int] = x + 1
+    }
+
+    assert(loud.code.contains("#include <stdio.h>"))
+    assert(!quiet.code.contains("#include"))
   }
 
 }

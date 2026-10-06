@@ -1,6 +1,5 @@
 #include <stdbool.h>
 #include <stdio.h>
-#include <stdlib.h>
 
 bool snippet(int x0);
 bool snippet(int x0) {

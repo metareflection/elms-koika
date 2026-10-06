@@ -1,6 +1,4 @@
-#include <stdbool.h>
 #include <stdio.h>
-#include <stdlib.h>
 
 int snippet(void);
 int snippet(void) {

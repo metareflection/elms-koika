@@ -194,6 +194,75 @@ class VirtualizeTests extends SnapshotFunSuite {
     check("short-circuit", snippet.code)
   }
 
+  test("a free-standing comment lands where it was written") {
+    val snippet = new SimpleSnippetDriver[Int, Int] with DslOps {
+      def snippet(x: Rep[Int]): Rep[Int] = {
+        val y = x + x
+        comment"@ assert $y >= 0;"
+        Builtins.println(y)
+        y * 2
+      }
+    }
+
+    val code = snippet.code
+    check("comment-raw", code)
+    assertCommentAgainst(code, "//@ assert x1 >= 0;", "println")
+  }
+
+  // The guard is what tells the two forms apart. It reflects two bindings of its
+  // own between the annotations, so the free-standing one lands above them and
+  // the attached one below, carried by the `if` it was written against. Over a
+  // snippet with nothing in between, either form would look identical.
+  test("an attached comment sticks to its statement") {
+    val snippet = new SimpleSnippetDriver[Int, Unit] with DslOps {
+      def snippet(x: Rep[Int]): Rep[Unit] = {
+        val y = x + x
+        comment"@ free-standing, above the guard;"
+        attach"@ attached, below it;"
+        Builtins.withComment("@ bracket") {
+          if (y === 1) then Builtins.println(y) else Builtins.println(x)
+        }
+      }
+    }
+
+    val code = snippet.code
+    check("comment-attached", code)
+    assertCommentAgainst(code, "//@ free-standing, above the guard;", "val x3 = 1")
+    assertCommentAgainst(code, "//@ attached, below it;", "//@ bracket")
+    assertCommentAgainst(code, "//@ bracket", "if ")
+  }
+
+  test("an invariant sits against the loop it annotates") {
+    val snippet = new SimpleSnippetDriver[Int, Unit] with DslOps {
+      def snippet(x: Rep[Int]): Rep[Unit] = {
+        attach"@ loop invariant 0 <= i <= $x;"
+        for (i <- (0.until(x)): Rep[Range]) { Builtins.println(i) }
+      }
+    }
+
+    val code = snippet.code
+    check("comment-loop", code)
+    assertCommentAgainst(code, "//@ loop invariant", "for (")
+  }
+
+  // A `while` opens two regions, its guard and its body, so a note raised before
+  // it has to survive both before the loop's own statement adopts it. The range
+  // loop above only opens one.
+  //
+  // A rule that could be written wrong: delete the `pending` save and restore in
+  // `simple.Builder.collect` and this fails.
+  test("a note survives both of a while loop's regions") {
+    val snippet = new SimpleSnippetDriver[Int, Unit] with DslOps {
+      def snippet(x: Rep[Int]): Rep[Unit] = {
+        val v = newVar(x)
+        attach"@ loop invariant $x >= 0;"
+        while v.get > 0 do { v := v.get - 1 }
+      }
+    }
+
+    assertCommentAgainst(snippet.code, "//@ loop invariant", "while")
+  }
+
   test("custom nodes") {
     val snippet = new SimpleSnippetDriver[Int, String] with DslOps {
       def foo(x: Rep[Int]): Rep[String] = {

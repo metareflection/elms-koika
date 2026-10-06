@@ -10,7 +10,6 @@ object __bab_s {
       }
       val x39 = if x6 then {
         var x7: Int = 1
-        val x8 = x7
         var x9: Boolean = true
         var x10: Boolean = false
         val x31 = while {
@@ -40,7 +39,6 @@ object __bab_s {
           val x26 = x7
           val x131 = x26 + 1
           val x27 = x7 = x131
-          val x28 = x7
           val x29 = x9 = true
           ()
         }

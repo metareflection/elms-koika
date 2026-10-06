@@ -1,7 +1,3 @@
-#include <stdbool.h>
-#include <stdio.h>
-#include <stdlib.h>
-
 struct Buffer {
   int xs[16];
   int n;

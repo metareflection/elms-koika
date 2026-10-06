@@ -17,11 +17,16 @@ object Propagate {
   private def inWidth(count: Int): Boolean = 0 <= count && count < 32
 
   def propagateImpl(t: Term, facts: Map[Name, Fact]): Term = t match {
-    case Let(x, e1, e2) => {
+    // A binding that classifies is a `V` or a `Const`, and a note never lands
+    // on one of those, so nothing annotated is dropped here. A note's arguments
+    // do go through, because one of them can name a binding this pass removes,
+    // and leaving that out puts an annotation over a variable that is gone.
+    case Let(x, e1, e2, notes) => {
       val t1 = propagateImpl(e1, facts)
+      val ns = notes.map(propagateNote(_, facts))
       classify(t1, facts) match {
         case Some(fact) => propagateImpl(e2, facts + (x -> fact))
-        case None       => Let(x, t1, propagateImpl(e2, facts))
+        case None       => Let(x, t1, propagateImpl(e2, facts), ns)
       }
     }
     case V(name) => facts.get(name) match {
@@ -29,8 +34,12 @@ object Propagate {
         case Some(FConst(c))    => E(c, Seq())
         case Some(FCopy(other)) => V(other)
       }
-    case Function(arg, inty, outty, body) =>
-      Function(arg, inty, outty, propagateImpl(body, facts))
+    case Function(args, outty, body, notes) => Function(
+        args,
+        outty,
+        propagateImpl(body, facts),
+        notes.map(propagateNote(_, facts))
+      )
     case E(op, args) => {
       val e = E(op, args.map(propagateImpl(_, facts)))
       e match {
@@ -59,6 +68,11 @@ object Propagate {
         case Ext.Gt(Ext.Const[Int](x), Ext.Const[Int](y)) => Ext.mkConst(x > y)
         case Ext.Le(Ext.Const[Int](x), Ext.Const[Int](y)) => Ext.mkConst(x <= y)
         case Ext.Ge(Ext.Const[Int](x), Ext.Const[Int](y)) => Ext.mkConst(x >= y)
+        case Ext.Lt(Ext.Const[Char](x), Ext.Const[Char](y)) => Ext.mkConst(x < y)
+        case Ext.Gt(Ext.Const[Char](x), Ext.Const[Char](y)) => Ext.mkConst(x > y)
+        case Ext.Le(Ext.Const[Char](x), Ext.Const[Char](y)) => Ext.mkConst(x <= y)
+        case Ext.Ge(Ext.Const[Char](x), Ext.Const[Char](y)) => Ext.mkConst(x >= y)
+        case Ext.CharToInt(Ext.Const[Char](c))                     => Ext.mkConst(c.toInt)
         case Ext.And(Ext.Const[Boolean](x), Ext.Const[Boolean](y)) => Ext
             .mkConst(x && y)
         case Ext.And(Ext.Const[Boolean](false), t) => Ext.mkConst(false)
@@ -141,6 +155,9 @@ object Propagate {
       }
     }
   }
+
+  private def propagateNote(note: Note, facts: Map[Name, Fact]): Note =
+    note.copy(args = note.args.map(propagateImpl(_, facts)))
 
   def classify(t: Term, facts: Map[Name, Fact]): Option[Fact] = t match {
     case V(name)                   => Some(facts.get(name).getOrElse(FCopy(name)))

@@ -38,7 +38,6 @@ object _hel_s {
           val x96 = if x63 then {
             val x163 = x51 + 2
             var x64: Int = x163
-            val x65 = x64
             var x66: Boolean = true
             var x67: Boolean = false
             val x88 = while {
@@ -68,7 +67,6 @@ object _hel_s {
               val x83 = x64
               val x179 = x83 + 1
               val x84 = x64 = x179
-              val x85 = x64
               val x86 = x66 = true
               ()
             }

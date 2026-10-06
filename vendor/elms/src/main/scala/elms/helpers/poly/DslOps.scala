@@ -9,6 +9,7 @@ trait DslOps
     with BooleanOps
     with EqualityOps
     with IntegerOps
+    with CharOps
     with RangeOps
     with StringOps
     with ArrayOps

@@ -1,7 +1,3 @@
-#include <stdbool.h>
-#include <stdio.h>
-#include <stdlib.h>
-
 struct Nested {
   struct Bar * b;
   int n;

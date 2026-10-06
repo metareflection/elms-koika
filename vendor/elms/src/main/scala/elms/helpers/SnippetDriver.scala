@@ -7,11 +7,26 @@ import elms.pipeline.eqsat, eqsat.Ruleset
 import elms.pipeline.Propagate
 import elms.codegen.{Backend, ScalaCodegen}
 import elms.util.Plumbing.*
+import elms.util.SourceContext
+import elms.runtime.LMSUnsupportedException
 
 abstract class SnippetDriver[A: Typable, B: Typable] extends Driver {
   val codegen: Backend
 
   def snippet(x: Rep[A]): Rep[B]
+
+  // The only place that holds both a `Driver` and a `Backend`, so the only
+  // place the two can be compared. Refusing here rather than in the backend is
+  // what buys the source location: by the time a `Function` term reaches
+  // `CCodegen` the line that wrote it is gone and only `Fresh(2)` is left.
+  override def lam[X: Typable, Y: Typable](f: Rep[X] => Rep[Y])(using
+      ctx: SourceContext
+  ): Rep[X => Y] =
+    if codegen.supportsLambdas then super.lam(f)
+    else throw LMSUnsupportedException(
+      s"${ctx.render(2)}: `lam` has no representation in this backend; give " +
+        "the function a name with `fun` so it becomes a top-level function"
+    )
 
   def code: String = {
     fun[A, B]("snippet") { x => snippet(x) }

@@ -6,16 +6,43 @@ sealed trait Op derives CanEqual
 
 object Op {
   sealed abstract class Pure extends Op
+
+  // An effect, split by what it does to memory.
+  //
+  // A `Read` observes the store: it has to stay in order relative to a write,
+  // but nothing forces it to be emitted if no one wants its value, and two of
+  // them with no write between are the same value.
+  //
+  // A `Write` changes the store, or does something the compiler cannot see
+  // through such as I/O or a call. Always emitted, always in order.
   sealed abstract class Effectful extends Op
+  sealed abstract class Read extends Effectful
+  sealed abstract class Write extends Effectful
+
   sealed abstract class Control extends Op
 
-  case class Const[T](val v: T)(using val prim: Primitive[T]) extends Pure
+  // The `equals` is not the one a case class would derive, and it has to be
+  // written out. Scala's cooperative equality makes `'A' == 65` true, and a
+  // case class only compares its first parameter list, so `Const('A')` and
+  // `Const(65)` are one value to anything that hashes them. The e-graph does:
+  // the two e-classes merge, extraction picks whichever node it likes, and a
+  // `char` literal lands where the program wanted an `int`.
+  case class Const[T](val v: T)(using val prim: Primitive[T]) extends Pure {
+    override def equals(other: Any): Boolean = other match {
+      // `Objects.equals` and not `==`, because cooperative equality is the
+      // thing being avoided and `==` is how it gets in.
+      case that: Const[?] => prim == that.prim && java.util.Objects.equals(v, that.v)
+      case _              => false
+    }
 
-  case class VarNew(val typ: Type) extends Effectful
-  case object VarGet extends Effectful
-  case object VarSet extends Effectful
+    override def hashCode: Int = (prim, v).##
+  }
 
-  case object App extends Effectful
+  case class VarNew(val typ: Type) extends Write
+  case object VarGet extends Read
+  case object VarSet extends Write
+
+  case object App extends Write
 
   case object Negate extends Pure
   case object Plus extends Pure
@@ -50,8 +77,22 @@ object Op {
   case object Shr extends Pure
   case object UShr extends Pure
 
-  case object Print extends Effectful
-  case object Println extends Effectful
+  case object Print extends Write
+  case object Println extends Write
+
+  // A comment standing on its own, as a statement. The children are the values
+  // the text mentions, interleaved between `parts` the way a `StringContext`
+  // interleaves them.
+  //
+  // `Write` and not `Read`: a comment is always emitted, always in order, never
+  // deduped against another and never dropped for want of a use.
+  case class Comment(val parts: Seq[String], val meta: Option[CommentMeta] = None)
+      extends Write
+
+  // Scala's `Char.toInt`. No narrowing counterpart, because what wants this is
+  // arithmetic on a character that came out of `charAt` and there is nothing
+  // yet that wants to put one back.
+  case object CharToInt extends Pure
 
   case object StringLength extends Pure
   case object StringTake extends Pure
@@ -69,18 +110,17 @@ object Op {
   case object IfThenElse extends Control
   case object While extends Control
 
-  case class ArrayNew(val typ: Type) extends Effectful
-  // The element type is named rather than left to a context bound, so a backend
-  // can read it off the op the way it reads `ArrayNew`'s.
-  case class ArrayInit[T](init: Seq[T])(using val elem: Typable[T]) extends Effectful {
-    def elemTy: Type = elem.identity
-  }
-  case object ArrayGet extends Effectful
-  case object ArraySet extends Effectful
+  case class ArrayNew(val typ: Type) extends Write
+  // A bulk copy between two arrays, which is `memcpy` in C and `Array.copy` on
+  // the JVM. Separate from a loop of `ArraySet`s because a backend can do it in
+  // one call, and because nothing in a loop says the regions do not overlap.
+  case object ArrayCopy extends Write // (dst, src, len)
+  case object ArrayGet extends Read
+  case object ArraySet extends Write
   case object ArrayLength extends Pure
 
-  case class StructGet(val repr: StructRepr, val field: String) extends Effectful
-  case class StructSet(val field: String) extends Effectful
+  case class StructGet(val repr: StructRepr, val field: String) extends Read
+  case class StructSet(val field: String) extends Write
 
-  case class Custom(val name: String, val ty: Type) extends Effectful
+  case class Custom(val name: String, val ty: Type) extends Write
 }

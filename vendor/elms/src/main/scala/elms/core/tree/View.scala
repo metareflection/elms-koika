@@ -1,6 +1,6 @@
 package elms.core.tree
 
-import elms.core.{Type, Primitive, Op, Name, StructRepr}
+import elms.core.{Type, Primitive, Op, Name, StructRepr, CommentMeta}
 import elms.runtime.Log
 
 def view(t: Term): Option[View] = View.view(t)
@@ -44,22 +44,32 @@ object View {
     def into: Term = elms.core.tree.V(name)
   }
 
-  final case class Function(arg: Name, inty: Type, outty: Type, body: Term)
-      extends View {
-    def into: Term = elms.core.tree.Function(arg, inty, outty, body)
+  final case class Function(
+      args: Seq[(Name, Type)],
+      outty: Type,
+      body: Term,
+      notes: Seq[Note]
+  ) extends View {
+    def into: Term = elms.core.tree.Function(args, outty, body, notes)
   }
 
   final case class Const[T](value: T)(using val prim: Primitive[T]) extends View {
     def into: Term = E(Op.Const(value), Seq())
   }
 
-  final case class Let(x: Name, mty: Option[Type], e1: Term, e2: Term) extends View {
+  final case class Let(
+      x: Name,
+      mty: Option[Type],
+      e1: Term,
+      e2: Term,
+      notes: Seq[Note]
+  ) extends View {
     def into: Term = {
       val bound = mty match {
         case Some(ty) => VarNew(ty, e1).into
         case None     => e1
       }
-      elms.core.tree.Let(x, bound, e2)
+      elms.core.tree.Let(x, bound, e2, notes)
     }
   }
 
@@ -200,6 +210,10 @@ object View {
     def into: Term = E(Op.ArrayNew(ty), Seq(t))
   }
 
+  final case class ArrayCopy(dst: Term, src: Term, len: Term) extends View {
+    def into: Term = E(Op.ArrayCopy, Seq(dst, src, len))
+  }
+
   final case class ArrayGet(t1: Term, t2: Term) extends View {
     def into: Term = E(Op.ArrayGet, Seq(t1, t2))
   }
@@ -212,12 +226,23 @@ object View {
     def into: Term = E(Op.ArrayLength, Seq(t))
   }
 
+  // Arity is `parts.length - 1` rather than fixed, so a mismatch is reported
+  // here rather than reaching a backend as a silently short interpolation.
+  final case class Comment(parts: Seq[String], meta: Option[CommentMeta], args: Seq[Term])
+      extends View {
+    def into: Term = E(Op.Comment(parts, meta), args)
+  }
+
   final case class Print(t: Term) extends View {
     def into: Term = E(Op.Print, Seq(t))
   }
 
   final case class Println(t: Term) extends View {
     def into: Term = E(Op.Println, Seq(t))
+  }
+
+  final case class CharToInt(t: Term) extends View {
+    def into: Term = E(Op.CharToInt, Seq(t))
   }
 
   final case class StringLength(t: Term) extends View {
@@ -264,16 +289,16 @@ object View {
   def view(t: Term): Option[View] = t match {
     case elms.core.tree.V(name) => Some(V(name))
 
-    case elms.core.tree.Function(arg, inty, outty, body) =>
-      Some(Function(arg, inty, outty, body))
+    case elms.core.tree.Function(args, outty, body, notes) =>
+      Some(Function(args, outty, body, notes))
 
-    case elms.core.tree.Let(x, me1, e2) =>
+    case elms.core.tree.Let(x, me1, e2, notes) =>
       val (mty, e1) = me1 match {
         case E(Op.VarNew(ty), s) => arity1("VarNew", s).map(e => (Some(ty), e))
             .getOrElse((None, me1))
         case _ => (None, me1)
       }
-      Some(Let(x, mty, e1, e2))
+      Some(Let(x, mty, e1, e2, notes))
 
     case E(c @ Op.Const(_), s) => {
       if s.nonEmpty then warnTooMany("`Const`")
@@ -331,19 +356,24 @@ object View {
     case E(Op.While, s)      => arity2("While", s).map(While(_, _))
 
     case E(Op.ArrayNew(ty), s) => arity1("ArrayNew", s).map(ArrayNew(ty, _))
-    // `ArrayInit` has no `View` yet. Reporting it is what lets a backend log an
-    // unsupported term rather than the whole pipeline dying on it.
-    case E(Op.ArrayInit(_), _) => {
-      Log.error("`ArrayInit` is not implemented")
-      None
-    }
+    case E(Op.ArrayCopy, s)    => arity3("ArrayCopy", s).map(ArrayCopy(_, _, _))
     case E(Op.ArrayGet, s)     => arity2("ArrayGet", s).map(ArrayGet(_, _))
     case E(Op.ArraySet, s)     => arity3("ArraySet", s).map(ArraySet(_, _, _))
     case E(Op.ArrayLength, s)  => arity1("ArrayLength", s).map(ArrayLength(_))
 
+    case E(Op.Comment(parts, meta), s) =>
+      if s.length == parts.length - 1 then Some(Comment(parts, meta, s))
+      else {
+        Log.error(
+          s"BUG: `Comment` with ${s.length} children for ${parts.length} parts"
+        )
+        None
+      }
+
     case E(Op.Print, s)   => arity1("Print", s).map(Print(_))
     case E(Op.Println, s) => arity1("Println", s).map(Println(_))
 
+    case E(Op.CharToInt, s)        => arity1("CharToInt", s).map(CharToInt(_))
     case E(Op.StringLength, s)     => arity1("StringLength", s).map(StringLength(_))
     case E(Op.StringTake, s)       => arity2("StringTake", s).map(StringTake(_, _))
     case E(Op.StringDrop, s)       => arity2("StringDrop", s).map(StringDrop(_, _))
@@ -369,8 +399,17 @@ object View {
     }
 
     object Let {
-      def unapply(t: Term): Option[(Name, Option[Type], Term, Term)] = View.view(t)
-        .collect { case View.Let(x, mty, e1, e2) => (x, mty, e1, e2) }
+      def unapply(t: Term): Option[(Name, Option[Type], Term, Term, Seq[Note])] = View
+        .view(t)
+        .collect { case View.Let(x, mty, e1, e2, notes) => (x, mty, e1, e2, notes) }
+    }
+
+    object Comment {
+      def apply(parts: Seq[String], meta: Option[CommentMeta], args: Seq[Term]): Term =
+        View.Comment(parts, meta, args).into
+      def unapply(t: Term): Option[(Seq[String], Option[CommentMeta], Seq[Term])] = View
+        .view(t)
+        .collect { case View.Comment(parts, meta, args) => (parts, meta, args) }
     }
 
     def mkConst[T: Primitive](x: T): Term = View.mkConst(x)
@@ -588,6 +627,13 @@ object View {
         .collect { case View.ArrayNew(ty, e) => (ty, e) }
     }
 
+    object ArrayCopy {
+      def apply(dst: Term, src: Term, len: Term): Term = View
+        .ArrayCopy(dst, src, len).into
+      def unapply(t: Term): Option[(Term, Term, Term)] = View.view(t)
+        .collect { case View.ArrayCopy(dst, src, len) => (dst, src, len) }
+    }
+
     object ArrayGet {
       def apply(t1: Term, t2: Term): Term = View.ArrayGet(t1, t2).into
       def unapply(t: Term): Option[(Term, Term)] = View.view(t)
@@ -617,6 +663,12 @@ object View {
       def apply(t: Term): Term = View.Println(t).into
       def unapply(t: Term): Option[Term] = View.view(t)
         .collect { case View.Println(e) => e }
+    }
+
+    object CharToInt {
+      def apply(t: Term): Term = View.CharToInt(t).into
+      def unapply(t: Term): Option[Term] = View.view(t)
+        .collect { case View.CharToInt(e) => e }
     }
 
     object StringLength {

@@ -9,7 +9,18 @@ trait Type derives CanEqual
 // type, so `ScalaCodegen` drops it. The two backends therefore disagree on what
 // copying a struct does to the field, and the C one is right.
 case class ARRAY(inner: Type, len: Option[Int] = None) extends Type
-case class ARROW(args: Type, out: Type) extends Type
+case class ARROW(args: Seq[Type], out: Type) extends Type
+
+// A half-open interval with a step of 1 that nothing records.
+//
+// Unlike `STRUCT` this is a value type in C: two ints, copied on assignment,
+// with nothing pointing at it. So a `RANGE` member of a struct is inline
+// storage where a `STRUCT` member is a pointer, and the two copy differently.
+//
+// The step is where the backends will part company if `RangeOps` ever grows a
+// `by`. `scala.Range` carries one and `elms_range` does not, so they agree
+// today only because `until` is the only way to build a range.
+case object RANGE extends Type
 
 sealed trait Primitive[A] extends Type {
   def is[B](other: Primitive[B]): Option[A =:= B]
@@ -66,6 +77,9 @@ given typPrim[A](using prim: Primitive[A]): Typable[A] with
 
 given typArray[A](using inner: Typable[A]): Typable[Array[A]] with
   val identity = ARRAY(inner.identity)
+
+given typRange: Typable[Range] with
+  val identity = RANGE
 
 given typFixedArray[N <: Int, A](using n: ValueOf[N], inner: Typable[A])
     : Typable[FixedArray[N, A]] with

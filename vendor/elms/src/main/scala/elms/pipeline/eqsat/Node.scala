@@ -26,9 +26,9 @@ object ElmsNode {
 
     if byRank != 0 then byRank
     else (a, b) match {
-      // `Const`'s `Primitive` sits in a second parameter list, so `Const(1)` and
-      // `Const(1L)` are already the same node to the graph. This orders on the
-      // pair that would have told them apart.
+      // `Op.Const` compares its `Primitive` as well as its value, so `Const(65)`
+      // and `Const('A')` are two nodes here. This has to order them, and the
+      // value alone cannot: `65` and `'A'` are the pair that motivated it.
       case (Op.Const(x), Op.Const(y)) => Ordering[(String, String)]
           .compare((x.getClass.getName, x.toString), (y.getClass.getName, y.toString))
       case _ => 0
@@ -71,5 +71,6 @@ object ElmsNode {
     case Op.RangeStart        => 29
     case Op.RangeEnd          => 30
     case Op.ArrayLength       => 31
+    case Op.CharToInt         => 32
   }
 }

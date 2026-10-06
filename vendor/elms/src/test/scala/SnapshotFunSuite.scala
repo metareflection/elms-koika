@@ -40,6 +40,24 @@ trait SnapshotFunSuite extends AnyFunSuite {
     out.close()
   }
 
+  // A snapshot only photographs where a comment landed. This checks it, so that
+  // a later `accept = true` cannot re-bless a comment that has drifted.
+  //
+  // `next` is matched anywhere in the following line, because the Scala backend
+  // binds a statement to a name and the C one does not. It is still exactly one
+  // line that has to carry it.
+  def assertCommentAgainst(code: String, comment: String, next: String): Unit = {
+    val lines = code.linesIterator.toVector
+    val i = lines.indexWhere(_.contains(comment))
+
+    assert(i >= 0, s"no line carrying `$comment` in:\n$code")
+    assert(i + 1 < lines.length, s"`$comment` is the last line in:\n$code")
+    assert(
+      lines(i + 1).contains(next),
+      s"`$comment` is followed by `${lines(i + 1)}` rather than `$next` in:\n$code"
+    )
+  }
+
   def check(
       label: String,
       actual: String,
