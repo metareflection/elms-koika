@@ -39,8 +39,6 @@ Emitting C Generated Code
 *******************************************/
 
 #include <stdbool.h>
-#include <stdio.h>
-#include <stdlib.h>
 
 struct StateT {
   int regs[8];
@@ -56,7 +54,7 @@ struct StateT {
 
 struct StateT * snippet(struct StateT * x0);
 struct StateT * slot_1(struct StateT * x19);
-struct StateT * slot_2(struct StateT * x40);
+struct StateT * slot_2(struct StateT * x38);
 struct StateT * slot_0(struct StateT * x2);
 struct StateT * snippet(struct StateT * x0) {
   struct StateT * x1 = slot_0(x0);
@@ -65,30 +63,28 @@ struct StateT * snippet(struct StateT * x0) {
 
 struct StateT * slot_1(struct StateT * x19) {
   int x20 = x19->timer;
-  int x30 = x20 + 1;
-  x19->timer = x30;
+  int x29 = x20 + 1;
+  x19->timer = x29;
   int * x22 = x19->regs;
   int x23 = x22[0];
   int * x24 = x19->mem;
   int x25 = x24[x23];
-  int * x26 = x19->regs;
-  x26[1] = x25;
-  struct StateT * x28 = slot_2(x19);
-  return x28;
+  x22[1] = x25;
+  struct StateT * x27 = slot_2(x19);
+  return x27;
 }
 
-struct StateT * slot_2(struct StateT * x40) {
-  int x41 = x40->timer;
-  int x50 = x41 + 1;
-  x40->timer = x50;
-  int * x43 = x40->regs;
-  int x44 = x43[1];
-  int * x45 = x40->mem;
-  int x54 = x44 + 4;
-  int x46 = x45[x54];
-  int * x47 = x40->regs;
-  x47[2] = x46;
-  return x40;
+struct StateT * slot_2(struct StateT * x38) {
+  int x39 = x38->timer;
+  int x47 = x39 + 1;
+  x38->timer = x47;
+  int * x41 = x38->regs;
+  int x42 = x41[1];
+  int * x43 = x38->mem;
+  int x51 = x42 + 4;
+  int x44 = x43[x51];
+  x41[2] = x44;
+  return x38;
 }
 
 struct StateT * slot_0(struct StateT * x2) {

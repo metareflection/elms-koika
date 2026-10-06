@@ -40,8 +40,6 @@ Emitting C Generated Code
 *******************************************/
 
 #include <stdbool.h>
-#include <stdio.h>
-#include <stdlib.h>
 
 struct StateT {
   int regs[32];
@@ -57,12 +55,11 @@ struct StateT {
 
 struct StateT * snippet(struct StateT * v0);
 struct StateT * slot_1(struct StateT * v15);
-struct StateT * slot_6(struct StateT * v73);
-struct StateT * slot_5(struct StateT * v104);
-struct StateT * slot_4(struct StateT * v86);
-struct StateT * slot_2(struct StateT * v36);
-struct StateT * slot_7(struct StateT * v99);
-struct StateT * slot_3(struct StateT * v49);
+struct StateT * slot_6(struct StateT * v69);
+struct StateT * slot_5(struct StateT * v100);
+struct StateT * slot_4(struct StateT * v82);
+struct StateT * slot_2(struct StateT * v34);
+struct StateT * slot_3(struct StateT * v47);
 struct StateT * slot_0(struct StateT * v2);
 struct StateT * snippet(struct StateT * v0) {
   struct StateT * v1 = slot_0(v0);
@@ -71,81 +68,72 @@ struct StateT * snippet(struct StateT * v0) {
 
 struct StateT * slot_1(struct StateT * v15) {
   int v16 = v15->timer;
-  int v26 = v16 + 1;
-  v15->timer = v26;
+  int v25 = v16 + 1;
+  v15->timer = v25;
   int * v18 = v15->regs;
   int v19 = v18[12];
   int * v20 = v15->mem;
-  int v30 = (int)((unsigned int)v19 >> 2);
-  int v21 = v20[v30];
-  int * v22 = v15->regs;
-  v22[16] = v21;
-  struct StateT * v24 = slot_2(v15);
-  return v24;
+  int v29 = (int)((unsigned int)v19 >> 2);
+  int v21 = v20[v29];
+  v18[16] = v21;
+  struct StateT * v23 = slot_2(v15);
+  return v23;
 }
 
-struct StateT * slot_6(struct StateT * v73) {
-  int v74 = v73->timer;
-  int v80 = v74 + 1;
-  v73->timer = v80;
-  int * v76 = v73->regs;
-  v76[18] = 2;
-  struct StateT * v78 = slot_7(v73);
-  return v78;
+struct StateT * slot_6(struct StateT * v69) {
+  int v70 = v69->timer;
+  int v76 = v70 + 1;
+  v69->timer = v76;
+  int * v72 = v69->regs;
+  v72[18] = 2;
+  struct StateT * v74 = slot_5(v69);
+  return v74;
 }
 
-struct StateT * slot_5(struct StateT * v104) {
-  int v105 = v104->timer;
-  int v108 = v105 + 1;
-  v104->timer = v108;
-  return v104;
+struct StateT * slot_5(struct StateT * v100) {
+  int v101 = v100->timer;
+  int v104 = v101 + 1;
+  v100->timer = v104;
+  return v100;
 }
 
-struct StateT * slot_4(struct StateT * v86) {
-  int v87 = v86->timer;
-  int v93 = v87 + 1;
-  v86->timer = v93;
-  int * v89 = v86->regs;
-  v89[18] = 1;
-  struct StateT * v91 = slot_5(v86);
-  return v91;
+struct StateT * slot_4(struct StateT * v82) {
+  int v83 = v82->timer;
+  int v89 = v83 + 1;
+  v82->timer = v89;
+  int * v85 = v82->regs;
+  v85[18] = 1;
+  struct StateT * v87 = slot_5(v82);
+  return v87;
 }
 
-struct StateT * slot_2(struct StateT * v36) {
-  int v37 = v36->timer;
-  int v43 = v37 + 1;
-  v36->timer = v43;
-  int * v39 = v36->regs;
-  v39[17] = 10;
-  struct StateT * v41 = slot_3(v36);
-  return v41;
+struct StateT * slot_2(struct StateT * v34) {
+  int v35 = v34->timer;
+  int v41 = v35 + 1;
+  v34->timer = v41;
+  int * v37 = v34->regs;
+  v37[17] = 10;
+  struct StateT * v39 = slot_3(v34);
+  return v39;
 }
 
-struct StateT * slot_7(struct StateT * v99) {
-  int v100 = v99->timer;
-  int v103 = v100 + 1;
-  v99->timer = v103;
-  return v99;
-}
-
-struct StateT * slot_3(struct StateT * v49) {
-  int v50 = v49->timer;
-  int v62 = v50 + 1;
-  v49->timer = v62;
-  int * v52 = v49->regs;
-  int v53 = v52[16];
-  int * v54 = v49->regs;
-  int v55 = v54[17];
-  bool v67 = v53 < v55;
-  struct StateT * v60;
-  if (v67) {
-    struct StateT * v56 = slot_6(v49);
-    v60 = v56;
+struct StateT * slot_3(struct StateT * v47) {
+  int v48 = v47->timer;
+  int v59 = v48 + 1;
+  v47->timer = v59;
+  int * v50 = v47->regs;
+  int v51 = v50[16];
+  int v52 = v50[17];
+  bool v63 = v51 < v52;
+  struct StateT * v57;
+  if (v63) {
+    struct StateT * v53 = slot_6(v47);
+    v57 = v53;
   } else {
-    struct StateT * v58 = slot_4(v49);
-    v60 = v58;
+    struct StateT * v55 = slot_4(v47);
+    v57 = v55;
   }
-  return v60;
+  return v57;
 }
 
 struct StateT * slot_0(struct StateT * v2) {

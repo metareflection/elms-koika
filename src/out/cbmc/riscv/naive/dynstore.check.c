@@ -39,8 +39,6 @@ Emitting C Generated Code
 *******************************************/
 
 #include <stdbool.h>
-#include <stdio.h>
-#include <stdlib.h>
 
 struct StateT {
   int regs[32];
@@ -54,45 +52,43 @@ struct StateT {
   int timer;
 };
 
-struct StateT * slot_6(struct StateT * v104);
-struct StateT * slot_5(struct StateT * v83);
+struct StateT * slot_6(struct StateT * v96);
+struct StateT * slot_5(struct StateT * v77);
 struct StateT * slot_2(struct StateT * v28);
-struct StateT * slot_7(struct StateT * v125);
+struct StateT * slot_7(struct StateT * v115);
 struct StateT * slot_3(struct StateT * v41);
 struct StateT * snippet(struct StateT * v0);
 struct StateT * slot_1(struct StateT * v15);
-struct StateT * slot_8(struct StateT * v146);
-struct StateT * slot_4(struct StateT * v62);
-struct StateT * slot_9(struct StateT * v162);
+struct StateT * slot_8(struct StateT * v134);
+struct StateT * slot_4(struct StateT * v60);
+struct StateT * slot_9(struct StateT * v148);
 struct StateT * slot_0(struct StateT * v2);
-struct StateT * slot_6(struct StateT * v104) {
-  int v105 = v104->timer;
-  int v115 = v105 + 1;
-  v104->timer = v115;
-  int * v107 = v104->regs;
-  int v108 = v107[6];
-  int * v109 = v104->regs;
-  int v110 = v109[5];
-  int * v111 = v104->mem;
-  int v121 = (int)((unsigned int)v108 >> 2);
-  v111[v121] = v110;
-  struct StateT * v113 = slot_7(v104);
-  return v113;
+struct StateT * slot_6(struct StateT * v96) {
+  int v97 = v96->timer;
+  int v106 = v97 + 1;
+  v96->timer = v106;
+  int * v99 = v96->regs;
+  int v100 = v99[6];
+  int v101 = v99[5];
+  int * v102 = v96->mem;
+  int v111 = (int)((unsigned int)v100 >> 2);
+  v102[v111] = v101;
+  struct StateT * v104 = slot_7(v96);
+  return v104;
 }
 
-struct StateT * slot_5(struct StateT * v83) {
-  int v84 = v83->timer;
-  int v94 = v84 + 1;
-  v83->timer = v94;
-  int * v86 = v83->regs;
-  int v87 = v86[8];
-  int * v88 = v83->mem;
-  int v98 = (int)((unsigned int)v87 >> 2);
-  int v89 = v88[v98];
-  int * v90 = v83->regs;
-  v90[5] = v89;
-  struct StateT * v92 = slot_6(v83);
-  return v92;
+struct StateT * slot_5(struct StateT * v77) {
+  int v78 = v77->timer;
+  int v87 = v78 + 1;
+  v77->timer = v87;
+  int * v80 = v77->regs;
+  int v81 = v80[8];
+  int * v82 = v77->mem;
+  int v91 = (int)((unsigned int)v81 >> 2);
+  int v83 = v82[v91];
+  v80[5] = v83;
+  struct StateT * v85 = slot_6(v77);
+  return v85;
 }
 
 struct StateT * slot_2(struct StateT * v28) {
@@ -105,38 +101,36 @@ struct StateT * slot_2(struct StateT * v28) {
   return v33;
 }
 
-struct StateT * slot_7(struct StateT * v125) {
-  int v126 = v125->timer;
-  int v136 = v126 + 1;
-  v125->timer = v136;
-  int * v128 = v125->regs;
-  int v129 = v128[6];
-  int * v130 = v125->mem;
-  int v140 = (int)((unsigned int)v129 >> 2);
-  int v131 = v130[v140];
-  int * v132 = v125->regs;
-  v132[11] = v131;
-  struct StateT * v134 = slot_8(v125);
-  return v134;
+struct StateT * slot_7(struct StateT * v115) {
+  int v116 = v115->timer;
+  int v125 = v116 + 1;
+  v115->timer = v125;
+  int * v118 = v115->regs;
+  int v119 = v118[6];
+  int * v120 = v115->mem;
+  int v129 = (int)((unsigned int)v119 >> 2);
+  int v121 = v120[v129];
+  v118[11] = v121;
+  struct StateT * v123 = slot_8(v115);
+  return v123;
 }
 
 struct StateT * slot_3(struct StateT * v41) {
   int v42 = v41->timer;
-  int v53 = v42 + 1;
-  v41->timer = v53;
+  int v52 = v42 + 1;
+  v41->timer = v52;
   int * v44 = v41->regs;
   int v45 = v44[6];
-  int * v46 = v41->regs;
-  int v47 = v46[7];
-  bool v58 = v45 >= v47;
-  struct StateT * v51;
-  if (v58) {
-    v51 = v41;
+  int v46 = v44[7];
+  bool v56 = v45 >= v46;
+  struct StateT * v50;
+  if (v56) {
+    v50 = v41;
   } else {
-    struct StateT * v49 = slot_4(v41);
-    v51 = v49;
+    struct StateT * v48 = slot_4(v41);
+    v50 = v48;
   }
-  return v51;
+  return v50;
 }
 
 struct StateT * snippet(struct StateT * v0) {
@@ -154,40 +148,37 @@ struct StateT * slot_1(struct StateT * v15) {
   return v20;
 }
 
-struct StateT * slot_8(struct StateT * v146) {
-  int v147 = v146->timer;
-  int v155 = v147 + 1;
-  v146->timer = v155;
-  int * v149 = v146->regs;
-  int v150 = v149[6];
-  int * v151 = v146->regs;
-  int v159 = v150 + 4;
-  v151[6] = v159;
-  struct StateT * v153 = slot_9(v146);
-  return v153;
+struct StateT * slot_8(struct StateT * v134) {
+  int v135 = v134->timer;
+  int v142 = v135 + 1;
+  v134->timer = v142;
+  int * v137 = v134->regs;
+  int v138 = v137[6];
+  int v145 = v138 + 4;
+  v137[6] = v145;
+  struct StateT * v140 = slot_9(v134);
+  return v140;
 }
 
-struct StateT * slot_4(struct StateT * v62) {
-  int v63 = v62->timer;
-  int v73 = v63 + 1;
-  v62->timer = v73;
-  int * v65 = v62->regs;
-  int v66 = v65[9];
-  int * v67 = v62->regs;
-  int v68 = v67[6];
-  int * v69 = v62->regs;
-  int v80 = v66 + v68;
-  v69[8] = v80;
-  struct StateT * v71 = slot_5(v62);
-  return v71;
+struct StateT * slot_4(struct StateT * v60) {
+  int v61 = v60->timer;
+  int v69 = v61 + 1;
+  v60->timer = v69;
+  int * v63 = v60->regs;
+  int v64 = v63[9];
+  int v65 = v63[6];
+  int v74 = v64 + v65;
+  v63[8] = v74;
+  struct StateT * v67 = slot_5(v60);
+  return v67;
 }
 
-struct StateT * slot_9(struct StateT * v162) {
-  int v163 = v162->timer;
-  int v167 = v163 + 1;
-  v162->timer = v167;
-  struct StateT * v165 = slot_3(v162);
-  return v165;
+struct StateT * slot_9(struct StateT * v148) {
+  int v149 = v148->timer;
+  int v153 = v149 + 1;
+  v148->timer = v153;
+  struct StateT * v151 = slot_3(v148);
+  return v151;
 }
 
 struct StateT * slot_0(struct StateT * v2) {

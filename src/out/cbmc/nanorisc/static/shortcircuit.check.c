@@ -39,8 +39,6 @@ Emitting C Generated Code
 *******************************************/
 
 #include <stdbool.h>
-#include <stdio.h>
-#include <stdlib.h>
 
 struct StateT {
   int regs[8];
@@ -54,254 +52,229 @@ struct StateT {
   int timer;
 };
 
-struct StateT * slot_12(struct StateT * x655);
-struct StateT * slot_14(struct StateT * x676);
-struct StateT * slot_6(struct StateT * x565);
-struct StateT * slot_5(struct StateT * x306);
+struct StateT * slot_12(struct StateT * x557);
+struct StateT * slot_14(struct StateT * x576);
+struct StateT * slot_6(struct StateT * x469);
+struct StateT * slot_5(struct StateT * x258);
 struct StateT * slot_2(struct StateT * x28);
-struct StateT * slot_7(struct StateT * x601);
+struct StateT * slot_7(struct StateT * x505);
 struct StateT * slot_3(struct StateT * x41);
 struct StateT * snippet(struct StateT * x0);
-struct StateT * slot_10(struct StateT * x619);
+struct StateT * slot_10(struct StateT * x523);
 struct StateT * slot_1(struct StateT * x15);
-struct StateT * slot_8(struct StateT * x611);
+struct StateT * slot_8(struct StateT * x515);
 struct StateT * slot_4(struct StateT * x49);
-struct StateT * slot_13(struct StateT * x671);
-struct StateT * slot_11(struct StateT * x643);
+struct StateT * slot_13(struct StateT * x571);
+struct StateT * slot_11(struct StateT * x545);
 struct StateT * slot_0(struct StateT * x2);
-struct StateT * slot_12(struct StateT * x655) {
-  int x656 = x655->timer;
-  int x664 = x656 + 1;
-  x655->timer = x664;
-  int * x658 = x655->regs;
-  int x659 = x658[4];
-  int * x660 = x655->regs;
-  int x668 = x659 + 1;
-  x660[4] = x668;
-  struct StateT * x662 = slot_14(x655);
-  return x662;
+struct StateT * slot_12(struct StateT * x557) {
+  int x558 = x557->timer;
+  int x565 = x558 + 1;
+  x557->timer = x565;
+  int * x560 = x557->regs;
+  int x561 = x560[4];
+  int x568 = x561 + 1;
+  x560[4] = x568;
+  struct StateT * x563 = slot_14(x557);
+  return x563;
 }
 
-struct StateT * slot_14(struct StateT * x676) {
-  int x677 = x676->timer;
-  int x681 = x677 + 1;
-  x676->timer = x681;
-  struct StateT * x679 = slot_3(x676);
-  return x679;
+struct StateT * slot_14(struct StateT * x576) {
+  int x577 = x576->timer;
+  int x581 = x577 + 1;
+  x576->timer = x581;
+  struct StateT * x579 = slot_3(x576);
+  return x579;
 }
 
-struct StateT * slot_6(struct StateT * x565) {
-  int * x566 = x565->regs;
-  int x567 = x566[4];
-  bool x586 = x567 >= 4;
-  struct StateT * x582;
-  if (x586) {
-    int x568 = x565->timer;
-    int x587 = x568 + 15;
-    x565->timer = x587;
-    int * x570 = x565->saved_regs;
-    int x571 = x570[0];
-    int * x572 = x565->regs;
-    x572[0] = x571;
-    int * x574 = x565->saved_regs;
-    int x575 = x574[1];
-    int * x576 = x565->regs;
-    x576[1] = x575;
-    struct StateT * x578 = slot_7(x565);
-    x582 = x578;
+struct StateT * slot_6(struct StateT * x469) {
+  int * x470 = x469->regs;
+  int x471 = x470[4];
+  bool x490 = x471 >= 4;
+  struct StateT * x486;
+  if (x490) {
+    int x472 = x469->timer;
+    int x491 = x472 + 15;
+    x469->timer = x491;
+    int * x474 = x469->saved_regs;
+    int x475 = x474[0];
+    int * x476 = x469->regs;
+    x476[0] = x475;
+    int * x478 = x469->saved_regs;
+    int x479 = x478[1];
+    int * x480 = x469->regs;
+    x480[1] = x479;
+    struct StateT * x482 = slot_7(x469);
+    x486 = x482;
   } else {
-    struct StateT * x580 = slot_8(x565);
-    x582 = x580;
+    struct StateT * x484 = slot_8(x469);
+    x486 = x484;
   }
-  return x582;
+  return x486;
 }
 
-struct StateT * slot_5(struct StateT * x306) {
-  int * x307 = x306->saved_regs;
-  int * x308 = x306->regs;
-  int x309 = x308[1];
-  x307[1] = x309;
-  int x311 = x306->timer;
-  int x450 = x311 + 1;
-  x306->timer = x450;
-  int * x313 = x306->regs;
-  int x314 = x313[3];
-  int * x315 = x306->regs;
-  int x316 = x315[4];
-  int * x317 = x306->cache_tags;
-  int x456 = (((int)((unsigned int)(x314 + x316) >> 1)) & 1) * 2;
-  int x318 = x317[x456];
-  int * x319 = x306->cache_tags;
-  int x458 = ((((int)((unsigned int)(x314 + x316) >> 1)) & 1) * 2) + 1;
-  int x320 = x319[x458];
-  int * x321 = x306->cache_tags;
-  int x460 = 4 + ((((int)((unsigned int)(x314 + x316) >> 1)) & 3) * 2);
-  int x322 = x321[x460];
-  int * x323 = x306->cache_tags;
-  int x462 = (4 + ((((int)((unsigned int)(x314 + x316) >> 1)) & 3) * 2)) + 1;
-  int x324 = x323[x462];
-  int x325 = x306->timer;
-  int x463 = x325 + ((100 ^ (((~(((x322 ^ ((int)((unsigned int)(x314 + x316) >> 1))) | (-(x322 ^ ((int)((unsigned int)(x314 + x316) >> 1))))) >> 31)) | (~(((x324 ^ ((int)((unsigned int)(x314 + x316) >> 1))) | (-(x324 ^ ((int)((unsigned int)(x314 + x316) >> 1))))) >> 31))) & 104)) ^ (((~(((x318 ^ ((int)((unsigned int)(x314 + x316) >> 1))) | (-(x318 ^ ((int)((unsigned int)(x314 + x316) >> 1))))) >> 31)) | (~(((x320 ^ ((int)((unsigned int)(x314 + x316) >> 1))) | (-(x320 ^ ((int)((unsigned int)(x314 + x316) >> 1))))) >> 31))) & (1 ^ (100 ^ (((~(((x322 ^ ((int)((unsigned int)(x314 + x316) >> 1))) | (-(x322 ^ ((int)((unsigned int)(x314 + x316) >> 1))))) >> 31)) | (~(((x324 ^ ((int)((unsigned int)(x314 + x316) >> 1))) | (-(x324 ^ ((int)((unsigned int)(x314 + x316) >> 1))))) >> 31))) & 104)))));
-  x306->timer = x463;
-  int * x327 = x306->cache_vals;
-  bool x464 = !(((~(((x318 ^ ((int)((unsigned int)(x314 + x316) >> 1))) | (-(x318 ^ ((int)((unsigned int)(x314 + x316) >> 1))))) >> 31)) | (~(((x320 ^ ((int)((unsigned int)(x314 + x316) >> 1))) | (-(x320 ^ ((int)((unsigned int)(x314 + x316) >> 1))))) >> 31))) == 0);
-  int x440;
-  if (x464) {
-    int * x328 = x306->cache_age;
-    int x466 = ((((int)((unsigned int)(x314 + x316) >> 1)) & 1) * 2) + ((~(((x320 ^ ((int)((unsigned int)(x314 + x316) >> 1))) | (-(x320 ^ ((int)((unsigned int)(x314 + x316) >> 1))))) >> 31)) & 1);
-    int x329 = x328[x466];
-    int * x330 = x306->cache_age;
-    int x331 = x330[x456];
-    int * x332 = x306->cache_age;
-    int x469 = x331 + ((int)((unsigned int)(x331 - x329) >> 31));
-    x332[x456] = x469;
-    int * x334 = x306->cache_age;
-    int x335 = x334[x458];
-    int * x336 = x306->cache_age;
-    int x472 = x335 + ((int)((unsigned int)(x335 - x329) >> 31));
-    x336[x458] = x472;
-    int * x338 = x306->cache_age;
-    x338[x466] = 0;
-    x440 = x466;
+struct StateT * slot_5(struct StateT * x258) {
+  int * x259 = x258->saved_regs;
+  int * x260 = x258->regs;
+  int x261 = x260[1];
+  x259[1] = x261;
+  int x263 = x258->timer;
+  int x378 = x263 + 1;
+  x258->timer = x378;
+  int * x265 = x258->regs;
+  int x266 = x265[3];
+  int x267 = x265[4];
+  int * x268 = x258->cache_tags;
+  int x383 = (((int)((unsigned int)(x266 + x267) >> 1)) & 1) * 2;
+  int x269 = x268[x383];
+  int x384 = ((((int)((unsigned int)(x266 + x267) >> 1)) & 1) * 2) + 1;
+  int x270 = x268[x384];
+  int x385 = 4 + ((((int)((unsigned int)(x266 + x267) >> 1)) & 3) * 2);
+  int x271 = x268[x385];
+  int x386 = (4 + ((((int)((unsigned int)(x266 + x267) >> 1)) & 3) * 2)) + 1;
+  int x272 = x268[x386];
+  int x273 = x258->timer;
+  int x387 = x273 + ((100 ^ (((~(((x271 ^ ((int)((unsigned int)(x266 + x267) >> 1))) | (-(x271 ^ ((int)((unsigned int)(x266 + x267) >> 1))))) >> 31)) | (~(((x272 ^ ((int)((unsigned int)(x266 + x267) >> 1))) | (-(x272 ^ ((int)((unsigned int)(x266 + x267) >> 1))))) >> 31))) & 104)) ^ (((~(((x269 ^ ((int)((unsigned int)(x266 + x267) >> 1))) | (-(x269 ^ ((int)((unsigned int)(x266 + x267) >> 1))))) >> 31)) | (~(((x270 ^ ((int)((unsigned int)(x266 + x267) >> 1))) | (-(x270 ^ ((int)((unsigned int)(x266 + x267) >> 1))))) >> 31))) & (1 ^ (100 ^ (((~(((x271 ^ ((int)((unsigned int)(x266 + x267) >> 1))) | (-(x271 ^ ((int)((unsigned int)(x266 + x267) >> 1))))) >> 31)) | (~(((x272 ^ ((int)((unsigned int)(x266 + x267) >> 1))) | (-(x272 ^ ((int)((unsigned int)(x266 + x267) >> 1))))) >> 31))) & 104)))));
+  x258->timer = x387;
+  int * x275 = x258->cache_vals;
+  bool x388 = !(((~(((x269 ^ ((int)((unsigned int)(x266 + x267) >> 1))) | (-(x269 ^ ((int)((unsigned int)(x266 + x267) >> 1))))) >> 31)) | (~(((x270 ^ ((int)((unsigned int)(x266 + x267) >> 1))) | (-(x270 ^ ((int)((unsigned int)(x266 + x267) >> 1))))) >> 31))) == 0);
+  int x368;
+  if (x388) {
+    int * x276 = x258->cache_age;
+    int x390 = ((((int)((unsigned int)(x266 + x267) >> 1)) & 1) * 2) + ((~(((x270 ^ ((int)((unsigned int)(x266 + x267) >> 1))) | (-(x270 ^ ((int)((unsigned int)(x266 + x267) >> 1))))) >> 31)) & 1);
+    int x277 = x276[x390];
+    int x278 = x276[x383];
+    int x391 = x278 + ((int)((unsigned int)(x278 - x277) >> 31));
+    x276[x383] = x391;
+    int * x280 = x258->cache_age;
+    int x281 = x280[x384];
+    int x393 = x281 + ((int)((unsigned int)(x281 - x277) >> 31));
+    x280[x384] = x393;
+    int * x283 = x258->cache_age;
+    x283[x390] = 0;
+    x368 = x390;
   } else {
-    int * x341 = x306->cache_age;
-    int x476 = (((int)((unsigned int)(x314 + x316) >> 1)) & 1) * 2;
-    int x342 = x341[x476];
-    int * x343 = x306->cache_tags;
-    int x344 = x343[x476];
-    int * x345 = x306->cache_age;
-    int x346 = x345[x458];
-    int * x347 = x306->cache_tags;
-    int x348 = x347[x458];
-    bool x480 = !(((~(((x322 ^ ((int)((unsigned int)(x314 + x316) >> 1))) | (-(x322 ^ ((int)((unsigned int)(x314 + x316) >> 1))))) >> 31)) | (~(((x324 ^ ((int)((unsigned int)(x314 + x316) >> 1))) | (-(x324 ^ ((int)((unsigned int)(x314 + x316) >> 1))))) >> 31))) == 0);
-    int x412;
-    if (x480) {
-      int * x349 = x306->cache_age;
-      int x482 = (4 + ((((int)((unsigned int)(x314 + x316) >> 1)) & 3) * 2)) + ((~(((x324 ^ ((int)((unsigned int)(x314 + x316) >> 1))) | (-(x324 ^ ((int)((unsigned int)(x314 + x316) >> 1))))) >> 31)) & 1);
-      int x350 = x349[x482];
-      int * x351 = x306->cache_age;
-      int x352 = x351[x460];
-      int * x353 = x306->cache_age;
-      int x485 = x352 + ((int)((unsigned int)(x352 - x350) >> 31));
-      x353[x460] = x485;
-      int * x355 = x306->cache_age;
-      int x356 = x355[x462];
-      int * x357 = x306->cache_age;
-      int x488 = x356 + ((int)((unsigned int)(x356 - x350) >> 31));
-      x357[x462] = x488;
-      int * x359 = x306->cache_age;
-      x359[x482] = 0;
-      x412 = x482;
+    int * x286 = x258->cache_age;
+    int x397 = (((int)((unsigned int)(x266 + x267) >> 1)) & 1) * 2;
+    int x287 = x286[x397];
+    int * x288 = x258->cache_tags;
+    int x289 = x288[x397];
+    int x290 = x286[x384];
+    int x291 = x288[x384];
+    bool x399 = !(((~(((x271 ^ ((int)((unsigned int)(x266 + x267) >> 1))) | (-(x271 ^ ((int)((unsigned int)(x266 + x267) >> 1))))) >> 31)) | (~(((x272 ^ ((int)((unsigned int)(x266 + x267) >> 1))) | (-(x272 ^ ((int)((unsigned int)(x266 + x267) >> 1))))) >> 31))) == 0);
+    int x345;
+    if (x399) {
+      int * x292 = x258->cache_age;
+      int x401 = (4 + ((((int)((unsigned int)(x266 + x267) >> 1)) & 3) * 2)) + ((~(((x272 ^ ((int)((unsigned int)(x266 + x267) >> 1))) | (-(x272 ^ ((int)((unsigned int)(x266 + x267) >> 1))))) >> 31)) & 1);
+      int x293 = x292[x401];
+      int x294 = x292[x385];
+      int x402 = x294 + ((int)((unsigned int)(x294 - x293) >> 31));
+      x292[x385] = x402;
+      int * x296 = x258->cache_age;
+      int x297 = x296[x386];
+      int x404 = x297 + ((int)((unsigned int)(x297 - x293) >> 31));
+      x296[x386] = x404;
+      int * x299 = x258->cache_age;
+      x299[x401] = 0;
+      x345 = x401;
     } else {
-      int * x362 = x306->cache_age;
-      int x492 = 4 + ((((int)((unsigned int)(x314 + x316) >> 1)) & 3) * 2);
-      int x363 = x362[x492];
-      int * x364 = x306->cache_tags;
-      int x365 = x364[x492];
-      int * x366 = x306->cache_age;
-      int x367 = x366[x462];
-      int * x368 = x306->cache_tags;
-      int x369 = x368[x462];
-      int * x370 = x306->cache_dirty;
-      int x497 = (4 + ((((int)((unsigned int)(x314 + x316) >> 1)) & 3) * 2)) + ((((x363 + ((~(((x365 ^ -1) | (-(x365 ^ -1))) >> 31)) & 2)) - (x367 + ((~(((x369 ^ -1) | (-(x369 ^ -1))) >> 31)) & 2))) >> 31) & 1);
-      int x371 = x370[x497];
-      bool x498 = !(x371 == 0);
-      if (x498) {
-        int * x372 = x306->cache_tags;
-        int x373 = x372[x497];
-        int * x374 = x306->cache_vals;
-        int x501 = ((4 + ((((int)((unsigned int)(x314 + x316) >> 1)) & 3) * 2)) + ((((x363 + ((~(((x365 ^ -1) | (-(x365 ^ -1))) >> 31)) & 2)) - (x367 + ((~(((x369 ^ -1) | (-(x369 ^ -1))) >> 31)) & 2))) >> 31) & 1)) * 2;
-        int x375 = x374[x501];
-        int * x376 = x306->cache_vals;
-        int x503 = (((4 + ((((int)((unsigned int)(x314 + x316) >> 1)) & 3) * 2)) + ((((x363 + ((~(((x365 ^ -1) | (-(x365 ^ -1))) >> 31)) & 2)) - (x367 + ((~(((x369 ^ -1) | (-(x369 ^ -1))) >> 31)) & 2))) >> 31) & 1)) * 2) + 1;
-        int x377 = x376[x503];
-        int * x378 = x306->mem;
-        int x505 = x373 * 2;
-        x378[x505] = x375;
-        int * x380 = x306->mem;
-        int x508 = (x373 * 2) + 1;
-        x380[x508] = x377;
+      int * x302 = x258->cache_age;
+      int x408 = 4 + ((((int)((unsigned int)(x266 + x267) >> 1)) & 3) * 2);
+      int x303 = x302[x408];
+      int * x304 = x258->cache_tags;
+      int x305 = x304[x408];
+      int x306 = x302[x386];
+      int x307 = x304[x386];
+      int * x308 = x258->cache_dirty;
+      int x411 = (4 + ((((int)((unsigned int)(x266 + x267) >> 1)) & 3) * 2)) + ((((x303 + ((~(((x305 ^ -1) | (-(x305 ^ -1))) >> 31)) & 2)) - (x306 + ((~(((x307 ^ -1) | (-(x307 ^ -1))) >> 31)) & 2))) >> 31) & 1);
+      int x309 = x308[x411];
+      bool x412 = !(x309 == 0);
+      if (x412) {
+        int * x310 = x258->cache_tags;
+        int x311 = x310[x411];
+        int * x312 = x258->cache_vals;
+        int x415 = ((4 + ((((int)((unsigned int)(x266 + x267) >> 1)) & 3) * 2)) + ((((x303 + ((~(((x305 ^ -1) | (-(x305 ^ -1))) >> 31)) & 2)) - (x306 + ((~(((x307 ^ -1) | (-(x307 ^ -1))) >> 31)) & 2))) >> 31) & 1)) * 2;
+        int x313 = x312[x415];
+        int x416 = (((4 + ((((int)((unsigned int)(x266 + x267) >> 1)) & 3) * 2)) + ((((x303 + ((~(((x305 ^ -1) | (-(x305 ^ -1))) >> 31)) & 2)) - (x306 + ((~(((x307 ^ -1) | (-(x307 ^ -1))) >> 31)) & 2))) >> 31) & 1)) * 2) + 1;
+        int x314 = x312[x416];
+        int * x315 = x258->mem;
+        int x418 = x311 * 2;
+        x315[x418] = x313;
+        int * x317 = x258->mem;
+        int x421 = (x311 * 2) + 1;
+        x317[x421] = x314;
         ;
       } else {
         ;
       }
-      int * x385 = x306->mem;
-      int x513 = ((int)((unsigned int)(x314 + x316) >> 1)) * 2;
-      int x386 = x385[x513];
-      int * x387 = x306->mem;
-      int x515 = (((int)((unsigned int)(x314 + x316) >> 1)) * 2) + 1;
-      int x388 = x387[x515];
-      int * x389 = x306->cache_vals;
-      int x517 = ((4 + ((((int)((unsigned int)(x314 + x316) >> 1)) & 3) * 2)) + ((((x363 + ((~(((x365 ^ -1) | (-(x365 ^ -1))) >> 31)) & 2)) - (x367 + ((~(((x369 ^ -1) | (-(x369 ^ -1))) >> 31)) & 2))) >> 31) & 1)) * 2;
-      x389[x517] = x386;
-      int * x391 = x306->cache_vals;
-      int x520 = (((4 + ((((int)((unsigned int)(x314 + x316) >> 1)) & 3) * 2)) + ((((x363 + ((~(((x365 ^ -1) | (-(x365 ^ -1))) >> 31)) & 2)) - (x367 + ((~(((x369 ^ -1) | (-(x369 ^ -1))) >> 31)) & 2))) >> 31) & 1)) * 2) + 1;
-      x391[x520] = x388;
-      int * x393 = x306->cache_tags;
-      int x523 = (int)((unsigned int)(x314 + x316) >> 1);
-      x393[x497] = x523;
-      int * x395 = x306->cache_dirty;
-      x395[x497] = 0;
-      int * x397 = x306->cache_age;
-      x397[x497] = 1;
-      int * x399 = x306->cache_age;
-      int x400 = x399[x497];
-      int * x401 = x306->cache_age;
-      int x402 = x401[x460];
-      int * x403 = x306->cache_age;
-      int x530 = x402 + ((int)((unsigned int)(x402 - x400) >> 31));
-      x403[x460] = x530;
-      int * x405 = x306->cache_age;
-      int x406 = x405[x462];
-      int * x407 = x306->cache_age;
-      int x533 = x406 + ((int)((unsigned int)(x406 - x400) >> 31));
-      x407[x462] = x533;
-      int * x409 = x306->cache_age;
-      x409[x497] = 0;
-      x412 = x497;
+      int * x322 = x258->mem;
+      int x426 = ((int)((unsigned int)(x266 + x267) >> 1)) * 2;
+      int x323 = x322[x426];
+      int x427 = (((int)((unsigned int)(x266 + x267) >> 1)) * 2) + 1;
+      int x324 = x322[x427];
+      int * x325 = x258->cache_vals;
+      int x429 = ((4 + ((((int)((unsigned int)(x266 + x267) >> 1)) & 3) * 2)) + ((((x303 + ((~(((x305 ^ -1) | (-(x305 ^ -1))) >> 31)) & 2)) - (x306 + ((~(((x307 ^ -1) | (-(x307 ^ -1))) >> 31)) & 2))) >> 31) & 1)) * 2;
+      x325[x429] = x323;
+      int * x327 = x258->cache_vals;
+      int x432 = (((4 + ((((int)((unsigned int)(x266 + x267) >> 1)) & 3) * 2)) + ((((x303 + ((~(((x305 ^ -1) | (-(x305 ^ -1))) >> 31)) & 2)) - (x306 + ((~(((x307 ^ -1) | (-(x307 ^ -1))) >> 31)) & 2))) >> 31) & 1)) * 2) + 1;
+      x327[x432] = x324;
+      int * x329 = x258->cache_tags;
+      int x435 = (int)((unsigned int)(x266 + x267) >> 1);
+      x329[x411] = x435;
+      int * x331 = x258->cache_dirty;
+      x331[x411] = 0;
+      int * x333 = x258->cache_age;
+      x333[x411] = 1;
+      int * x335 = x258->cache_age;
+      int x336 = x335[x411];
+      int x337 = x335[x385];
+      int x440 = x337 + ((int)((unsigned int)(x337 - x336) >> 31));
+      x335[x385] = x440;
+      int * x339 = x258->cache_age;
+      int x340 = x339[x386];
+      int x442 = x340 + ((int)((unsigned int)(x340 - x336) >> 31));
+      x339[x386] = x442;
+      int * x342 = x258->cache_age;
+      x342[x411] = 0;
+      x345 = x411;
     }
-    int * x413 = x306->cache_vals;
-    int x536 = x412 * 2;
-    int x414 = x413[x536];
-    int * x415 = x306->cache_vals;
-    int x538 = (x412 * 2) + 1;
-    int x416 = x415[x538];
-    int * x417 = x306->cache_vals;
-    int x540 = (((((int)((unsigned int)(x314 + x316) >> 1)) & 1) * 2) + ((((x342 + ((~(((x344 ^ -1) | (-(x344 ^ -1))) >> 31)) & 2)) - (x346 + ((~(((x348 ^ -1) | (-(x348 ^ -1))) >> 31)) & 2))) >> 31) & 1)) * 2;
-    x417[x540] = x414;
-    int * x419 = x306->cache_vals;
-    int x543 = ((((((int)((unsigned int)(x314 + x316) >> 1)) & 1) * 2) + ((((x342 + ((~(((x344 ^ -1) | (-(x344 ^ -1))) >> 31)) & 2)) - (x346 + ((~(((x348 ^ -1) | (-(x348 ^ -1))) >> 31)) & 2))) >> 31) & 1)) * 2) + 1;
-    x419[x543] = x416;
-    int * x421 = x306->cache_tags;
-    int x546 = ((((int)((unsigned int)(x314 + x316) >> 1)) & 1) * 2) + ((((x342 + ((~(((x344 ^ -1) | (-(x344 ^ -1))) >> 31)) & 2)) - (x346 + ((~(((x348 ^ -1) | (-(x348 ^ -1))) >> 31)) & 2))) >> 31) & 1);
-    int x547 = (int)((unsigned int)(x314 + x316) >> 1);
-    x421[x546] = x547;
-    int * x423 = x306->cache_dirty;
-    x423[x546] = 0;
-    int * x425 = x306->cache_age;
-    x425[x546] = 1;
-    int * x427 = x306->cache_age;
-    int x428 = x427[x546];
-    int * x429 = x306->cache_age;
-    int x430 = x429[x456];
-    int * x431 = x306->cache_age;
-    int x554 = x430 + ((int)((unsigned int)(x430 - x428) >> 31));
-    x431[x456] = x554;
-    int * x433 = x306->cache_age;
-    int x434 = x433[x458];
-    int * x435 = x306->cache_age;
-    int x557 = x434 + ((int)((unsigned int)(x434 - x428) >> 31));
-    x435[x458] = x557;
-    int * x437 = x306->cache_age;
-    x437[x546] = 0;
-    x440 = x546;
+    int * x346 = x258->cache_vals;
+    int x445 = x345 * 2;
+    int x347 = x346[x445];
+    int x446 = (x345 * 2) + 1;
+    int x348 = x346[x446];
+    int x447 = (((((int)((unsigned int)(x266 + x267) >> 1)) & 1) * 2) + ((((x287 + ((~(((x289 ^ -1) | (-(x289 ^ -1))) >> 31)) & 2)) - (x290 + ((~(((x291 ^ -1) | (-(x291 ^ -1))) >> 31)) & 2))) >> 31) & 1)) * 2;
+    x346[x447] = x347;
+    int * x350 = x258->cache_vals;
+    int x450 = ((((((int)((unsigned int)(x266 + x267) >> 1)) & 1) * 2) + ((((x287 + ((~(((x289 ^ -1) | (-(x289 ^ -1))) >> 31)) & 2)) - (x290 + ((~(((x291 ^ -1) | (-(x291 ^ -1))) >> 31)) & 2))) >> 31) & 1)) * 2) + 1;
+    x350[x450] = x348;
+    int * x352 = x258->cache_tags;
+    int x453 = ((((int)((unsigned int)(x266 + x267) >> 1)) & 1) * 2) + ((((x287 + ((~(((x289 ^ -1) | (-(x289 ^ -1))) >> 31)) & 2)) - (x290 + ((~(((x291 ^ -1) | (-(x291 ^ -1))) >> 31)) & 2))) >> 31) & 1);
+    int x454 = (int)((unsigned int)(x266 + x267) >> 1);
+    x352[x453] = x454;
+    int * x354 = x258->cache_dirty;
+    x354[x453] = 0;
+    int * x356 = x258->cache_age;
+    x356[x453] = 1;
+    int * x358 = x258->cache_age;
+    int x359 = x358[x453];
+    int x360 = x358[x383];
+    int x459 = x360 + ((int)((unsigned int)(x360 - x359) >> 31));
+    x358[x383] = x459;
+    int * x362 = x258->cache_age;
+    int x363 = x362[x384];
+    int x461 = x363 + ((int)((unsigned int)(x363 - x359) >> 31));
+    x362[x384] = x461;
+    int * x365 = x258->cache_age;
+    x365[x453] = 0;
+    x368 = x453;
   }
-  int x560 = (x440 * 2) + ((x314 + x316) & 1);
-  int x441 = x327[x560];
-  int * x442 = x306->regs;
-  x442[1] = x441;
-  struct StateT * x444 = slot_6(x306);
-  return x444;
+  int x464 = (x368 * 2) + ((x266 + x267) & 1);
+  int x369 = x275[x464];
+  int * x370 = x258->regs;
+  x370[1] = x369;
+  struct StateT * x372 = slot_6(x258);
+  return x372;
 }
 
 struct StateT * slot_2(struct StateT * x28) {
@@ -314,13 +287,13 @@ struct StateT * slot_2(struct StateT * x28) {
   return x33;
 }
 
-struct StateT * slot_7(struct StateT * x601) {
-  int x602 = x601->timer;
-  int x607 = x602 + 1;
-  x601->timer = x607;
-  int * x604 = x601->regs;
-  x604[0] = 1;
-  return x601;
+struct StateT * slot_7(struct StateT * x505) {
+  int x506 = x505->timer;
+  int x511 = x506 + 1;
+  x505->timer = x511;
+  int * x508 = x505->regs;
+  x508[0] = 1;
+  return x505;
 }
 
 struct StateT * slot_3(struct StateT * x41) {
@@ -336,24 +309,23 @@ struct StateT * snippet(struct StateT * x0) {
   return x1;
 }
 
-struct StateT * slot_10(struct StateT * x619) {
-  int * x620 = x619->regs;
-  int x621 = x620[0];
-  int * x622 = x619->regs;
-  int x623 = x622[1];
-  bool x636 = !(x621 == x623);
-  struct StateT * x630;
-  if (x636) {
-    int x624 = x619->timer;
-    int x637 = x624 + 15;
-    x619->timer = x637;
-    struct StateT * x626 = slot_11(x619);
-    x630 = x626;
+struct StateT * slot_10(struct StateT * x523) {
+  int * x524 = x523->regs;
+  int x525 = x524[0];
+  int x526 = x524[1];
+  bool x538 = !(x525 == x526);
+  struct StateT * x533;
+  if (x538) {
+    int x527 = x523->timer;
+    int x539 = x527 + 15;
+    x523->timer = x539;
+    struct StateT * x529 = slot_11(x523);
+    x533 = x529;
   } else {
-    struct StateT * x628 = slot_12(x619);
-    x630 = x628;
+    struct StateT * x531 = slot_12(x523);
+    x533 = x531;
   }
-  return x630;
+  return x533;
 }
 
 struct StateT * slot_1(struct StateT * x15) {
@@ -366,12 +338,12 @@ struct StateT * slot_1(struct StateT * x15) {
   return x20;
 }
 
-struct StateT * slot_8(struct StateT * x611) {
-  int x612 = x611->timer;
-  int x616 = x612 + 1;
-  x611->timer = x616;
-  struct StateT * x614 = slot_10(x611);
-  return x614;
+struct StateT * slot_8(struct StateT * x515) {
+  int x516 = x515->timer;
+  int x520 = x516 + 1;
+  x515->timer = x520;
+  struct StateT * x518 = slot_10(x515);
+  return x518;
 }
 
 struct StateT * slot_4(struct StateT * x49) {
@@ -380,203 +352,179 @@ struct StateT * slot_4(struct StateT * x49) {
   int x52 = x51[0];
   x50[0] = x52;
   int x54 = x49->timer;
-  int x193 = x54 + 1;
-  x49->timer = x193;
+  int x169 = x54 + 1;
+  x49->timer = x169;
   int * x56 = x49->regs;
   int x57 = x56[2];
-  int * x58 = x49->regs;
-  int x59 = x58[4];
-  int * x60 = x49->cache_tags;
-  int x199 = (((int)((unsigned int)(x57 + x59) >> 1)) & 1) * 2;
-  int x61 = x60[x199];
-  int * x62 = x49->cache_tags;
-  int x201 = ((((int)((unsigned int)(x57 + x59) >> 1)) & 1) * 2) + 1;
-  int x63 = x62[x201];
-  int * x64 = x49->cache_tags;
-  int x203 = 4 + ((((int)((unsigned int)(x57 + x59) >> 1)) & 3) * 2);
-  int x65 = x64[x203];
-  int * x66 = x49->cache_tags;
-  int x205 = (4 + ((((int)((unsigned int)(x57 + x59) >> 1)) & 3) * 2)) + 1;
-  int x67 = x66[x205];
-  int x68 = x49->timer;
-  int x206 = x68 + ((100 ^ (((~(((x65 ^ ((int)((unsigned int)(x57 + x59) >> 1))) | (-(x65 ^ ((int)((unsigned int)(x57 + x59) >> 1))))) >> 31)) | (~(((x67 ^ ((int)((unsigned int)(x57 + x59) >> 1))) | (-(x67 ^ ((int)((unsigned int)(x57 + x59) >> 1))))) >> 31))) & 104)) ^ (((~(((x61 ^ ((int)((unsigned int)(x57 + x59) >> 1))) | (-(x61 ^ ((int)((unsigned int)(x57 + x59) >> 1))))) >> 31)) | (~(((x63 ^ ((int)((unsigned int)(x57 + x59) >> 1))) | (-(x63 ^ ((int)((unsigned int)(x57 + x59) >> 1))))) >> 31))) & (1 ^ (100 ^ (((~(((x65 ^ ((int)((unsigned int)(x57 + x59) >> 1))) | (-(x65 ^ ((int)((unsigned int)(x57 + x59) >> 1))))) >> 31)) | (~(((x67 ^ ((int)((unsigned int)(x57 + x59) >> 1))) | (-(x67 ^ ((int)((unsigned int)(x57 + x59) >> 1))))) >> 31))) & 104)))));
-  x49->timer = x206;
-  int * x70 = x49->cache_vals;
-  bool x207 = !(((~(((x61 ^ ((int)((unsigned int)(x57 + x59) >> 1))) | (-(x61 ^ ((int)((unsigned int)(x57 + x59) >> 1))))) >> 31)) | (~(((x63 ^ ((int)((unsigned int)(x57 + x59) >> 1))) | (-(x63 ^ ((int)((unsigned int)(x57 + x59) >> 1))))) >> 31))) == 0);
-  int x183;
-  if (x207) {
+  int x58 = x56[4];
+  int * x59 = x49->cache_tags;
+  int x174 = (((int)((unsigned int)(x57 + x58) >> 1)) & 1) * 2;
+  int x60 = x59[x174];
+  int x175 = ((((int)((unsigned int)(x57 + x58) >> 1)) & 1) * 2) + 1;
+  int x61 = x59[x175];
+  int x176 = 4 + ((((int)((unsigned int)(x57 + x58) >> 1)) & 3) * 2);
+  int x62 = x59[x176];
+  int x177 = (4 + ((((int)((unsigned int)(x57 + x58) >> 1)) & 3) * 2)) + 1;
+  int x63 = x59[x177];
+  int x64 = x49->timer;
+  int x178 = x64 + ((100 ^ (((~(((x62 ^ ((int)((unsigned int)(x57 + x58) >> 1))) | (-(x62 ^ ((int)((unsigned int)(x57 + x58) >> 1))))) >> 31)) | (~(((x63 ^ ((int)((unsigned int)(x57 + x58) >> 1))) | (-(x63 ^ ((int)((unsigned int)(x57 + x58) >> 1))))) >> 31))) & 104)) ^ (((~(((x60 ^ ((int)((unsigned int)(x57 + x58) >> 1))) | (-(x60 ^ ((int)((unsigned int)(x57 + x58) >> 1))))) >> 31)) | (~(((x61 ^ ((int)((unsigned int)(x57 + x58) >> 1))) | (-(x61 ^ ((int)((unsigned int)(x57 + x58) >> 1))))) >> 31))) & (1 ^ (100 ^ (((~(((x62 ^ ((int)((unsigned int)(x57 + x58) >> 1))) | (-(x62 ^ ((int)((unsigned int)(x57 + x58) >> 1))))) >> 31)) | (~(((x63 ^ ((int)((unsigned int)(x57 + x58) >> 1))) | (-(x63 ^ ((int)((unsigned int)(x57 + x58) >> 1))))) >> 31))) & 104)))));
+  x49->timer = x178;
+  int * x66 = x49->cache_vals;
+  bool x179 = !(((~(((x60 ^ ((int)((unsigned int)(x57 + x58) >> 1))) | (-(x60 ^ ((int)((unsigned int)(x57 + x58) >> 1))))) >> 31)) | (~(((x61 ^ ((int)((unsigned int)(x57 + x58) >> 1))) | (-(x61 ^ ((int)((unsigned int)(x57 + x58) >> 1))))) >> 31))) == 0);
+  int x159;
+  if (x179) {
+    int * x67 = x49->cache_age;
+    int x181 = ((((int)((unsigned int)(x57 + x58) >> 1)) & 1) * 2) + ((~(((x61 ^ ((int)((unsigned int)(x57 + x58) >> 1))) | (-(x61 ^ ((int)((unsigned int)(x57 + x58) >> 1))))) >> 31)) & 1);
+    int x68 = x67[x181];
+    int x69 = x67[x174];
+    int x182 = x69 + ((int)((unsigned int)(x69 - x68) >> 31));
+    x67[x174] = x182;
     int * x71 = x49->cache_age;
-    int x209 = ((((int)((unsigned int)(x57 + x59) >> 1)) & 1) * 2) + ((~(((x63 ^ ((int)((unsigned int)(x57 + x59) >> 1))) | (-(x63 ^ ((int)((unsigned int)(x57 + x59) >> 1))))) >> 31)) & 1);
-    int x72 = x71[x209];
-    int * x73 = x49->cache_age;
-    int x74 = x73[x199];
-    int * x75 = x49->cache_age;
-    int x212 = x74 + ((int)((unsigned int)(x74 - x72) >> 31));
-    x75[x199] = x212;
-    int * x77 = x49->cache_age;
-    int x78 = x77[x201];
-    int * x79 = x49->cache_age;
-    int x215 = x78 + ((int)((unsigned int)(x78 - x72) >> 31));
-    x79[x201] = x215;
-    int * x81 = x49->cache_age;
-    x81[x209] = 0;
-    x183 = x209;
+    int x72 = x71[x175];
+    int x184 = x72 + ((int)((unsigned int)(x72 - x68) >> 31));
+    x71[x175] = x184;
+    int * x74 = x49->cache_age;
+    x74[x181] = 0;
+    x159 = x181;
   } else {
-    int * x84 = x49->cache_age;
-    int x218 = (((int)((unsigned int)(x57 + x59) >> 1)) & 1) * 2;
-    int x85 = x84[x218];
-    int * x86 = x49->cache_tags;
-    int x87 = x86[x218];
-    int * x88 = x49->cache_age;
-    int x89 = x88[x201];
-    int * x90 = x49->cache_tags;
-    int x91 = x90[x201];
-    bool x222 = !(((~(((x65 ^ ((int)((unsigned int)(x57 + x59) >> 1))) | (-(x65 ^ ((int)((unsigned int)(x57 + x59) >> 1))))) >> 31)) | (~(((x67 ^ ((int)((unsigned int)(x57 + x59) >> 1))) | (-(x67 ^ ((int)((unsigned int)(x57 + x59) >> 1))))) >> 31))) == 0);
-    int x155;
-    if (x222) {
-      int * x92 = x49->cache_age;
-      int x224 = (4 + ((((int)((unsigned int)(x57 + x59) >> 1)) & 3) * 2)) + ((~(((x67 ^ ((int)((unsigned int)(x57 + x59) >> 1))) | (-(x67 ^ ((int)((unsigned int)(x57 + x59) >> 1))))) >> 31)) & 1);
-      int x93 = x92[x224];
-      int * x94 = x49->cache_age;
-      int x95 = x94[x203];
-      int * x96 = x49->cache_age;
-      int x227 = x95 + ((int)((unsigned int)(x95 - x93) >> 31));
-      x96[x203] = x227;
-      int * x98 = x49->cache_age;
-      int x99 = x98[x205];
-      int * x100 = x49->cache_age;
-      int x230 = x99 + ((int)((unsigned int)(x99 - x93) >> 31));
-      x100[x205] = x230;
-      int * x102 = x49->cache_age;
-      x102[x224] = 0;
-      x155 = x224;
+    int * x77 = x49->cache_age;
+    int x187 = (((int)((unsigned int)(x57 + x58) >> 1)) & 1) * 2;
+    int x78 = x77[x187];
+    int * x79 = x49->cache_tags;
+    int x80 = x79[x187];
+    int x81 = x77[x175];
+    int x82 = x79[x175];
+    bool x189 = !(((~(((x62 ^ ((int)((unsigned int)(x57 + x58) >> 1))) | (-(x62 ^ ((int)((unsigned int)(x57 + x58) >> 1))))) >> 31)) | (~(((x63 ^ ((int)((unsigned int)(x57 + x58) >> 1))) | (-(x63 ^ ((int)((unsigned int)(x57 + x58) >> 1))))) >> 31))) == 0);
+    int x136;
+    if (x189) {
+      int * x83 = x49->cache_age;
+      int x191 = (4 + ((((int)((unsigned int)(x57 + x58) >> 1)) & 3) * 2)) + ((~(((x63 ^ ((int)((unsigned int)(x57 + x58) >> 1))) | (-(x63 ^ ((int)((unsigned int)(x57 + x58) >> 1))))) >> 31)) & 1);
+      int x84 = x83[x191];
+      int x85 = x83[x176];
+      int x192 = x85 + ((int)((unsigned int)(x85 - x84) >> 31));
+      x83[x176] = x192;
+      int * x87 = x49->cache_age;
+      int x88 = x87[x177];
+      int x194 = x88 + ((int)((unsigned int)(x88 - x84) >> 31));
+      x87[x177] = x194;
+      int * x90 = x49->cache_age;
+      x90[x191] = 0;
+      x136 = x191;
     } else {
-      int * x105 = x49->cache_age;
-      int x233 = 4 + ((((int)((unsigned int)(x57 + x59) >> 1)) & 3) * 2);
-      int x106 = x105[x233];
-      int * x107 = x49->cache_tags;
-      int x108 = x107[x233];
-      int * x109 = x49->cache_age;
-      int x110 = x109[x205];
-      int * x111 = x49->cache_tags;
-      int x112 = x111[x205];
-      int * x113 = x49->cache_dirty;
-      int x238 = (4 + ((((int)((unsigned int)(x57 + x59) >> 1)) & 3) * 2)) + ((((x106 + ((~(((x108 ^ -1) | (-(x108 ^ -1))) >> 31)) & 2)) - (x110 + ((~(((x112 ^ -1) | (-(x112 ^ -1))) >> 31)) & 2))) >> 31) & 1);
-      int x114 = x113[x238];
-      bool x239 = !(x114 == 0);
-      if (x239) {
-        int * x115 = x49->cache_tags;
-        int x116 = x115[x238];
-        int * x117 = x49->cache_vals;
-        int x242 = ((4 + ((((int)((unsigned int)(x57 + x59) >> 1)) & 3) * 2)) + ((((x106 + ((~(((x108 ^ -1) | (-(x108 ^ -1))) >> 31)) & 2)) - (x110 + ((~(((x112 ^ -1) | (-(x112 ^ -1))) >> 31)) & 2))) >> 31) & 1)) * 2;
-        int x118 = x117[x242];
-        int * x119 = x49->cache_vals;
-        int x244 = (((4 + ((((int)((unsigned int)(x57 + x59) >> 1)) & 3) * 2)) + ((((x106 + ((~(((x108 ^ -1) | (-(x108 ^ -1))) >> 31)) & 2)) - (x110 + ((~(((x112 ^ -1) | (-(x112 ^ -1))) >> 31)) & 2))) >> 31) & 1)) * 2) + 1;
-        int x120 = x119[x244];
-        int * x121 = x49->mem;
-        int x246 = x116 * 2;
-        x121[x246] = x118;
-        int * x123 = x49->mem;
-        int x249 = (x116 * 2) + 1;
-        x123[x249] = x120;
+      int * x93 = x49->cache_age;
+      int x197 = 4 + ((((int)((unsigned int)(x57 + x58) >> 1)) & 3) * 2);
+      int x94 = x93[x197];
+      int * x95 = x49->cache_tags;
+      int x96 = x95[x197];
+      int x97 = x93[x177];
+      int x98 = x95[x177];
+      int * x99 = x49->cache_dirty;
+      int x200 = (4 + ((((int)((unsigned int)(x57 + x58) >> 1)) & 3) * 2)) + ((((x94 + ((~(((x96 ^ -1) | (-(x96 ^ -1))) >> 31)) & 2)) - (x97 + ((~(((x98 ^ -1) | (-(x98 ^ -1))) >> 31)) & 2))) >> 31) & 1);
+      int x100 = x99[x200];
+      bool x201 = !(x100 == 0);
+      if (x201) {
+        int * x101 = x49->cache_tags;
+        int x102 = x101[x200];
+        int * x103 = x49->cache_vals;
+        int x204 = ((4 + ((((int)((unsigned int)(x57 + x58) >> 1)) & 3) * 2)) + ((((x94 + ((~(((x96 ^ -1) | (-(x96 ^ -1))) >> 31)) & 2)) - (x97 + ((~(((x98 ^ -1) | (-(x98 ^ -1))) >> 31)) & 2))) >> 31) & 1)) * 2;
+        int x104 = x103[x204];
+        int x205 = (((4 + ((((int)((unsigned int)(x57 + x58) >> 1)) & 3) * 2)) + ((((x94 + ((~(((x96 ^ -1) | (-(x96 ^ -1))) >> 31)) & 2)) - (x97 + ((~(((x98 ^ -1) | (-(x98 ^ -1))) >> 31)) & 2))) >> 31) & 1)) * 2) + 1;
+        int x105 = x103[x205];
+        int * x106 = x49->mem;
+        int x207 = x102 * 2;
+        x106[x207] = x104;
+        int * x108 = x49->mem;
+        int x210 = (x102 * 2) + 1;
+        x108[x210] = x105;
         ;
       } else {
         ;
       }
-      int * x128 = x49->mem;
-      int x254 = ((int)((unsigned int)(x57 + x59) >> 1)) * 2;
-      int x129 = x128[x254];
-      int * x130 = x49->mem;
-      int x256 = (((int)((unsigned int)(x57 + x59) >> 1)) * 2) + 1;
-      int x131 = x130[x256];
-      int * x132 = x49->cache_vals;
-      int x258 = ((4 + ((((int)((unsigned int)(x57 + x59) >> 1)) & 3) * 2)) + ((((x106 + ((~(((x108 ^ -1) | (-(x108 ^ -1))) >> 31)) & 2)) - (x110 + ((~(((x112 ^ -1) | (-(x112 ^ -1))) >> 31)) & 2))) >> 31) & 1)) * 2;
-      x132[x258] = x129;
-      int * x134 = x49->cache_vals;
-      int x261 = (((4 + ((((int)((unsigned int)(x57 + x59) >> 1)) & 3) * 2)) + ((((x106 + ((~(((x108 ^ -1) | (-(x108 ^ -1))) >> 31)) & 2)) - (x110 + ((~(((x112 ^ -1) | (-(x112 ^ -1))) >> 31)) & 2))) >> 31) & 1)) * 2) + 1;
-      x134[x261] = x131;
-      int * x136 = x49->cache_tags;
-      int x264 = (int)((unsigned int)(x57 + x59) >> 1);
-      x136[x238] = x264;
-      int * x138 = x49->cache_dirty;
-      x138[x238] = 0;
-      int * x140 = x49->cache_age;
-      x140[x238] = 1;
-      int * x142 = x49->cache_age;
-      int x143 = x142[x238];
-      int * x144 = x49->cache_age;
-      int x145 = x144[x203];
-      int * x146 = x49->cache_age;
-      int x271 = x145 + ((int)((unsigned int)(x145 - x143) >> 31));
-      x146[x203] = x271;
-      int * x148 = x49->cache_age;
-      int x149 = x148[x205];
-      int * x150 = x49->cache_age;
-      int x274 = x149 + ((int)((unsigned int)(x149 - x143) >> 31));
-      x150[x205] = x274;
-      int * x152 = x49->cache_age;
-      x152[x238] = 0;
-      x155 = x238;
+      int * x113 = x49->mem;
+      int x215 = ((int)((unsigned int)(x57 + x58) >> 1)) * 2;
+      int x114 = x113[x215];
+      int x216 = (((int)((unsigned int)(x57 + x58) >> 1)) * 2) + 1;
+      int x115 = x113[x216];
+      int * x116 = x49->cache_vals;
+      int x218 = ((4 + ((((int)((unsigned int)(x57 + x58) >> 1)) & 3) * 2)) + ((((x94 + ((~(((x96 ^ -1) | (-(x96 ^ -1))) >> 31)) & 2)) - (x97 + ((~(((x98 ^ -1) | (-(x98 ^ -1))) >> 31)) & 2))) >> 31) & 1)) * 2;
+      x116[x218] = x114;
+      int * x118 = x49->cache_vals;
+      int x221 = (((4 + ((((int)((unsigned int)(x57 + x58) >> 1)) & 3) * 2)) + ((((x94 + ((~(((x96 ^ -1) | (-(x96 ^ -1))) >> 31)) & 2)) - (x97 + ((~(((x98 ^ -1) | (-(x98 ^ -1))) >> 31)) & 2))) >> 31) & 1)) * 2) + 1;
+      x118[x221] = x115;
+      int * x120 = x49->cache_tags;
+      int x224 = (int)((unsigned int)(x57 + x58) >> 1);
+      x120[x200] = x224;
+      int * x122 = x49->cache_dirty;
+      x122[x200] = 0;
+      int * x124 = x49->cache_age;
+      x124[x200] = 1;
+      int * x126 = x49->cache_age;
+      int x127 = x126[x200];
+      int x128 = x126[x176];
+      int x229 = x128 + ((int)((unsigned int)(x128 - x127) >> 31));
+      x126[x176] = x229;
+      int * x130 = x49->cache_age;
+      int x131 = x130[x177];
+      int x231 = x131 + ((int)((unsigned int)(x131 - x127) >> 31));
+      x130[x177] = x231;
+      int * x133 = x49->cache_age;
+      x133[x200] = 0;
+      x136 = x200;
     }
-    int * x156 = x49->cache_vals;
-    int x277 = x155 * 2;
-    int x157 = x156[x277];
-    int * x158 = x49->cache_vals;
-    int x279 = (x155 * 2) + 1;
-    int x159 = x158[x279];
-    int * x160 = x49->cache_vals;
-    int x281 = (((((int)((unsigned int)(x57 + x59) >> 1)) & 1) * 2) + ((((x85 + ((~(((x87 ^ -1) | (-(x87 ^ -1))) >> 31)) & 2)) - (x89 + ((~(((x91 ^ -1) | (-(x91 ^ -1))) >> 31)) & 2))) >> 31) & 1)) * 2;
-    x160[x281] = x157;
-    int * x162 = x49->cache_vals;
-    int x284 = ((((((int)((unsigned int)(x57 + x59) >> 1)) & 1) * 2) + ((((x85 + ((~(((x87 ^ -1) | (-(x87 ^ -1))) >> 31)) & 2)) - (x89 + ((~(((x91 ^ -1) | (-(x91 ^ -1))) >> 31)) & 2))) >> 31) & 1)) * 2) + 1;
-    x162[x284] = x159;
-    int * x164 = x49->cache_tags;
-    int x287 = ((((int)((unsigned int)(x57 + x59) >> 1)) & 1) * 2) + ((((x85 + ((~(((x87 ^ -1) | (-(x87 ^ -1))) >> 31)) & 2)) - (x89 + ((~(((x91 ^ -1) | (-(x91 ^ -1))) >> 31)) & 2))) >> 31) & 1);
-    int x288 = (int)((unsigned int)(x57 + x59) >> 1);
-    x164[x287] = x288;
-    int * x166 = x49->cache_dirty;
-    x166[x287] = 0;
-    int * x168 = x49->cache_age;
-    x168[x287] = 1;
-    int * x170 = x49->cache_age;
-    int x171 = x170[x287];
-    int * x172 = x49->cache_age;
-    int x173 = x172[x199];
-    int * x174 = x49->cache_age;
-    int x295 = x173 + ((int)((unsigned int)(x173 - x171) >> 31));
-    x174[x199] = x295;
-    int * x176 = x49->cache_age;
-    int x177 = x176[x201];
-    int * x178 = x49->cache_age;
-    int x298 = x177 + ((int)((unsigned int)(x177 - x171) >> 31));
-    x178[x201] = x298;
-    int * x180 = x49->cache_age;
-    x180[x287] = 0;
-    x183 = x287;
+    int * x137 = x49->cache_vals;
+    int x234 = x136 * 2;
+    int x138 = x137[x234];
+    int x235 = (x136 * 2) + 1;
+    int x139 = x137[x235];
+    int x236 = (((((int)((unsigned int)(x57 + x58) >> 1)) & 1) * 2) + ((((x78 + ((~(((x80 ^ -1) | (-(x80 ^ -1))) >> 31)) & 2)) - (x81 + ((~(((x82 ^ -1) | (-(x82 ^ -1))) >> 31)) & 2))) >> 31) & 1)) * 2;
+    x137[x236] = x138;
+    int * x141 = x49->cache_vals;
+    int x239 = ((((((int)((unsigned int)(x57 + x58) >> 1)) & 1) * 2) + ((((x78 + ((~(((x80 ^ -1) | (-(x80 ^ -1))) >> 31)) & 2)) - (x81 + ((~(((x82 ^ -1) | (-(x82 ^ -1))) >> 31)) & 2))) >> 31) & 1)) * 2) + 1;
+    x141[x239] = x139;
+    int * x143 = x49->cache_tags;
+    int x242 = ((((int)((unsigned int)(x57 + x58) >> 1)) & 1) * 2) + ((((x78 + ((~(((x80 ^ -1) | (-(x80 ^ -1))) >> 31)) & 2)) - (x81 + ((~(((x82 ^ -1) | (-(x82 ^ -1))) >> 31)) & 2))) >> 31) & 1);
+    int x243 = (int)((unsigned int)(x57 + x58) >> 1);
+    x143[x242] = x243;
+    int * x145 = x49->cache_dirty;
+    x145[x242] = 0;
+    int * x147 = x49->cache_age;
+    x147[x242] = 1;
+    int * x149 = x49->cache_age;
+    int x150 = x149[x242];
+    int x151 = x149[x174];
+    int x248 = x151 + ((int)((unsigned int)(x151 - x150) >> 31));
+    x149[x174] = x248;
+    int * x153 = x49->cache_age;
+    int x154 = x153[x175];
+    int x250 = x154 + ((int)((unsigned int)(x154 - x150) >> 31));
+    x153[x175] = x250;
+    int * x156 = x49->cache_age;
+    x156[x242] = 0;
+    x159 = x242;
   }
-  int x301 = (x183 * 2) + ((x57 + x59) & 1);
-  int x184 = x70[x301];
-  int * x185 = x49->regs;
-  x185[0] = x184;
-  struct StateT * x187 = slot_5(x49);
-  return x187;
+  int x253 = (x159 * 2) + ((x57 + x58) & 1);
+  int x160 = x66[x253];
+  int * x161 = x49->regs;
+  x161[0] = x160;
+  struct StateT * x163 = slot_5(x49);
+  return x163;
 }
 
-struct StateT * slot_13(struct StateT * x671) {
-  int x672 = x671->timer;
-  int x675 = x672 + 1;
-  x671->timer = x675;
-  return x671;
+struct StateT * slot_13(struct StateT * x571) {
+  int x572 = x571->timer;
+  int x575 = x572 + 1;
+  x571->timer = x575;
+  return x571;
 }
 
-struct StateT * slot_11(struct StateT * x643) {
-  int x644 = x643->timer;
-  int x650 = x644 + 1;
-  x643->timer = x650;
-  int * x646 = x643->regs;
-  x646[0] = 0;
-  struct StateT * x648 = slot_13(x643);
-  return x648;
+struct StateT * slot_11(struct StateT * x545) {
+  int x546 = x545->timer;
+  int x552 = x546 + 1;
+  x545->timer = x552;
+  int * x548 = x545->regs;
+  x548[0] = 0;
+  struct StateT * x550 = slot_13(x545);
+  return x550;
 }
 
 struct StateT * slot_0(struct StateT * x2) {

@@ -39,8 +39,6 @@ Emitting C Generated Code
 *******************************************/
 
 #include <stdbool.h>
-#include <stdio.h>
-#include <stdlib.h>
 
 struct StateT {
   int regs[32];
@@ -56,12 +54,11 @@ struct StateT {
 
 struct StateT * snippet(struct StateT * v0);
 struct StateT * slot_1(struct StateT * v15);
-struct StateT * slot_6(struct StateT * v302);
-struct StateT * slot_5(struct StateT * v333);
-struct StateT * slot_4(struct StateT * v315);
-struct StateT * slot_2(struct StateT * v265);
-struct StateT * slot_7(struct StateT * v328);
-struct StateT * slot_3(struct StateT * v278);
+struct StateT * slot_6(struct StateT * v254);
+struct StateT * slot_5(struct StateT * v285);
+struct StateT * slot_4(struct StateT * v267);
+struct StateT * slot_2(struct StateT * v219);
+struct StateT * slot_3(struct StateT * v232);
 struct StateT * slot_0(struct StateT * v2);
 struct StateT * snippet(struct StateT * v0) {
   struct StateT * v1 = slot_0(v0);
@@ -70,248 +67,217 @@ struct StateT * snippet(struct StateT * v0) {
 
 struct StateT * slot_1(struct StateT * v15) {
   int v16 = v15->timer;
-  int v149 = v16 + 1;
-  v15->timer = v149;
+  int v126 = v16 + 1;
+  v15->timer = v126;
   int * v18 = v15->regs;
   int v19 = v18[12];
   int * v20 = v15->cache_tags;
-  int v153 = (((int)((unsigned int)((int)((unsigned int)v19 >> 2)) >> 1)) & 1) * 2;
-  int v21 = v20[v153];
-  int * v22 = v15->cache_tags;
-  int v155 = ((((int)((unsigned int)((int)((unsigned int)v19 >> 2)) >> 1)) & 1) * 2) + 1;
-  int v23 = v22[v155];
-  int * v24 = v15->cache_tags;
-  int v157 = 4 + ((((int)((unsigned int)((int)((unsigned int)v19 >> 2)) >> 1)) & 3) * 2);
-  int v25 = v24[v157];
-  int * v26 = v15->cache_tags;
-  int v159 = (4 + ((((int)((unsigned int)((int)((unsigned int)v19 >> 2)) >> 1)) & 3) * 2)) + 1;
-  int v27 = v26[v159];
-  int v28 = v15->timer;
-  int v160 = v28 + ((100 ^ (((~(((v25 ^ ((int)((unsigned int)((int)((unsigned int)v19 >> 2)) >> 1))) | (-(v25 ^ ((int)((unsigned int)((int)((unsigned int)v19 >> 2)) >> 1))))) >> 31)) | (~(((v27 ^ ((int)((unsigned int)((int)((unsigned int)v19 >> 2)) >> 1))) | (-(v27 ^ ((int)((unsigned int)((int)((unsigned int)v19 >> 2)) >> 1))))) >> 31))) & 104)) ^ (((~(((v21 ^ ((int)((unsigned int)((int)((unsigned int)v19 >> 2)) >> 1))) | (-(v21 ^ ((int)((unsigned int)((int)((unsigned int)v19 >> 2)) >> 1))))) >> 31)) | (~(((v23 ^ ((int)((unsigned int)((int)((unsigned int)v19 >> 2)) >> 1))) | (-(v23 ^ ((int)((unsigned int)((int)((unsigned int)v19 >> 2)) >> 1))))) >> 31))) & (1 ^ (100 ^ (((~(((v25 ^ ((int)((unsigned int)((int)((unsigned int)v19 >> 2)) >> 1))) | (-(v25 ^ ((int)((unsigned int)((int)((unsigned int)v19 >> 2)) >> 1))))) >> 31)) | (~(((v27 ^ ((int)((unsigned int)((int)((unsigned int)v19 >> 2)) >> 1))) | (-(v27 ^ ((int)((unsigned int)((int)((unsigned int)v19 >> 2)) >> 1))))) >> 31))) & 104)))));
-  v15->timer = v160;
-  int * v30 = v15->cache_vals;
-  bool v161 = !(((~(((v21 ^ ((int)((unsigned int)((int)((unsigned int)v19 >> 2)) >> 1))) | (-(v21 ^ ((int)((unsigned int)((int)((unsigned int)v19 >> 2)) >> 1))))) >> 31)) | (~(((v23 ^ ((int)((unsigned int)((int)((unsigned int)v19 >> 2)) >> 1))) | (-(v23 ^ ((int)((unsigned int)((int)((unsigned int)v19 >> 2)) >> 1))))) >> 31))) == 0);
-  int v143;
-  if (v161) {
-    int * v31 = v15->cache_age;
-    int v163 = ((((int)((unsigned int)((int)((unsigned int)v19 >> 2)) >> 1)) & 1) * 2) + ((~(((v23 ^ ((int)((unsigned int)((int)((unsigned int)v19 >> 2)) >> 1))) | (-(v23 ^ ((int)((unsigned int)((int)((unsigned int)v19 >> 2)) >> 1))))) >> 31)) & 1);
-    int v32 = v31[v163];
-    int * v33 = v15->cache_age;
-    int v34 = v33[v153];
+  int v130 = (((int)((unsigned int)((int)((unsigned int)v19 >> 2)) >> 1)) & 1) * 2;
+  int v21 = v20[v130];
+  int v131 = ((((int)((unsigned int)((int)((unsigned int)v19 >> 2)) >> 1)) & 1) * 2) + 1;
+  int v22 = v20[v131];
+  int v132 = 4 + ((((int)((unsigned int)((int)((unsigned int)v19 >> 2)) >> 1)) & 3) * 2);
+  int v23 = v20[v132];
+  int v133 = (4 + ((((int)((unsigned int)((int)((unsigned int)v19 >> 2)) >> 1)) & 3) * 2)) + 1;
+  int v24 = v20[v133];
+  int v25 = v15->timer;
+  int v134 = v25 + ((100 ^ (((~(((v23 ^ ((int)((unsigned int)((int)((unsigned int)v19 >> 2)) >> 1))) | (-(v23 ^ ((int)((unsigned int)((int)((unsigned int)v19 >> 2)) >> 1))))) >> 31)) | (~(((v24 ^ ((int)((unsigned int)((int)((unsigned int)v19 >> 2)) >> 1))) | (-(v24 ^ ((int)((unsigned int)((int)((unsigned int)v19 >> 2)) >> 1))))) >> 31))) & 104)) ^ (((~(((v21 ^ ((int)((unsigned int)((int)((unsigned int)v19 >> 2)) >> 1))) | (-(v21 ^ ((int)((unsigned int)((int)((unsigned int)v19 >> 2)) >> 1))))) >> 31)) | (~(((v22 ^ ((int)((unsigned int)((int)((unsigned int)v19 >> 2)) >> 1))) | (-(v22 ^ ((int)((unsigned int)((int)((unsigned int)v19 >> 2)) >> 1))))) >> 31))) & (1 ^ (100 ^ (((~(((v23 ^ ((int)((unsigned int)((int)((unsigned int)v19 >> 2)) >> 1))) | (-(v23 ^ ((int)((unsigned int)((int)((unsigned int)v19 >> 2)) >> 1))))) >> 31)) | (~(((v24 ^ ((int)((unsigned int)((int)((unsigned int)v19 >> 2)) >> 1))) | (-(v24 ^ ((int)((unsigned int)((int)((unsigned int)v19 >> 2)) >> 1))))) >> 31))) & 104)))));
+  v15->timer = v134;
+  int * v27 = v15->cache_vals;
+  bool v135 = !(((~(((v21 ^ ((int)((unsigned int)((int)((unsigned int)v19 >> 2)) >> 1))) | (-(v21 ^ ((int)((unsigned int)((int)((unsigned int)v19 >> 2)) >> 1))))) >> 31)) | (~(((v22 ^ ((int)((unsigned int)((int)((unsigned int)v19 >> 2)) >> 1))) | (-(v22 ^ ((int)((unsigned int)((int)((unsigned int)v19 >> 2)) >> 1))))) >> 31))) == 0);
+  int v120;
+  if (v135) {
+    int * v28 = v15->cache_age;
+    int v137 = ((((int)((unsigned int)((int)((unsigned int)v19 >> 2)) >> 1)) & 1) * 2) + ((~(((v22 ^ ((int)((unsigned int)((int)((unsigned int)v19 >> 2)) >> 1))) | (-(v22 ^ ((int)((unsigned int)((int)((unsigned int)v19 >> 2)) >> 1))))) >> 31)) & 1);
+    int v29 = v28[v137];
+    int v30 = v28[v130];
+    int v138 = v30 + ((int)((unsigned int)(v30 - v29) >> 31));
+    v28[v130] = v138;
+    int * v32 = v15->cache_age;
+    int v33 = v32[v131];
+    int v140 = v33 + ((int)((unsigned int)(v33 - v29) >> 31));
+    v32[v131] = v140;
     int * v35 = v15->cache_age;
-    int v166 = v34 + ((int)((unsigned int)(v34 - v32) >> 31));
-    v35[v153] = v166;
-    int * v37 = v15->cache_age;
-    int v38 = v37[v155];
-    int * v39 = v15->cache_age;
-    int v169 = v38 + ((int)((unsigned int)(v38 - v32) >> 31));
-    v39[v155] = v169;
-    int * v41 = v15->cache_age;
-    v41[v163] = 0;
-    v143 = v163;
+    v35[v137] = 0;
+    v120 = v137;
   } else {
-    int * v44 = v15->cache_age;
-    int v173 = (((int)((unsigned int)((int)((unsigned int)v19 >> 2)) >> 1)) & 1) * 2;
-    int v45 = v44[v173];
-    int * v46 = v15->cache_tags;
-    int v47 = v46[v173];
-    int * v48 = v15->cache_age;
-    int v49 = v48[v155];
-    int * v50 = v15->cache_tags;
-    int v51 = v50[v155];
-    bool v177 = !(((~(((v25 ^ ((int)((unsigned int)((int)((unsigned int)v19 >> 2)) >> 1))) | (-(v25 ^ ((int)((unsigned int)((int)((unsigned int)v19 >> 2)) >> 1))))) >> 31)) | (~(((v27 ^ ((int)((unsigned int)((int)((unsigned int)v19 >> 2)) >> 1))) | (-(v27 ^ ((int)((unsigned int)((int)((unsigned int)v19 >> 2)) >> 1))))) >> 31))) == 0);
-    int v115;
-    if (v177) {
-      int * v52 = v15->cache_age;
-      int v179 = (4 + ((((int)((unsigned int)((int)((unsigned int)v19 >> 2)) >> 1)) & 3) * 2)) + ((~(((v27 ^ ((int)((unsigned int)((int)((unsigned int)v19 >> 2)) >> 1))) | (-(v27 ^ ((int)((unsigned int)((int)((unsigned int)v19 >> 2)) >> 1))))) >> 31)) & 1);
-      int v53 = v52[v179];
-      int * v54 = v15->cache_age;
-      int v55 = v54[v157];
-      int * v56 = v15->cache_age;
-      int v182 = v55 + ((int)((unsigned int)(v55 - v53) >> 31));
-      v56[v157] = v182;
-      int * v58 = v15->cache_age;
-      int v59 = v58[v159];
-      int * v60 = v15->cache_age;
-      int v185 = v59 + ((int)((unsigned int)(v59 - v53) >> 31));
-      v60[v159] = v185;
-      int * v62 = v15->cache_age;
-      v62[v179] = 0;
-      v115 = v179;
+    int * v38 = v15->cache_age;
+    int v144 = (((int)((unsigned int)((int)((unsigned int)v19 >> 2)) >> 1)) & 1) * 2;
+    int v39 = v38[v144];
+    int * v40 = v15->cache_tags;
+    int v41 = v40[v144];
+    int v42 = v38[v131];
+    int v43 = v40[v131];
+    bool v146 = !(((~(((v23 ^ ((int)((unsigned int)((int)((unsigned int)v19 >> 2)) >> 1))) | (-(v23 ^ ((int)((unsigned int)((int)((unsigned int)v19 >> 2)) >> 1))))) >> 31)) | (~(((v24 ^ ((int)((unsigned int)((int)((unsigned int)v19 >> 2)) >> 1))) | (-(v24 ^ ((int)((unsigned int)((int)((unsigned int)v19 >> 2)) >> 1))))) >> 31))) == 0);
+    int v97;
+    if (v146) {
+      int * v44 = v15->cache_age;
+      int v148 = (4 + ((((int)((unsigned int)((int)((unsigned int)v19 >> 2)) >> 1)) & 3) * 2)) + ((~(((v24 ^ ((int)((unsigned int)((int)((unsigned int)v19 >> 2)) >> 1))) | (-(v24 ^ ((int)((unsigned int)((int)((unsigned int)v19 >> 2)) >> 1))))) >> 31)) & 1);
+      int v45 = v44[v148];
+      int v46 = v44[v132];
+      int v149 = v46 + ((int)((unsigned int)(v46 - v45) >> 31));
+      v44[v132] = v149;
+      int * v48 = v15->cache_age;
+      int v49 = v48[v133];
+      int v151 = v49 + ((int)((unsigned int)(v49 - v45) >> 31));
+      v48[v133] = v151;
+      int * v51 = v15->cache_age;
+      v51[v148] = 0;
+      v97 = v148;
     } else {
-      int * v65 = v15->cache_age;
-      int v189 = 4 + ((((int)((unsigned int)((int)((unsigned int)v19 >> 2)) >> 1)) & 3) * 2);
-      int v66 = v65[v189];
-      int * v67 = v15->cache_tags;
-      int v68 = v67[v189];
-      int * v69 = v15->cache_age;
-      int v70 = v69[v159];
-      int * v71 = v15->cache_tags;
-      int v72 = v71[v159];
-      int * v73 = v15->cache_dirty;
-      int v194 = (4 + ((((int)((unsigned int)((int)((unsigned int)v19 >> 2)) >> 1)) & 3) * 2)) + ((((v66 + ((~(((v68 ^ -1) | (-(v68 ^ -1))) >> 31)) & 2)) - (v70 + ((~(((v72 ^ -1) | (-(v72 ^ -1))) >> 31)) & 2))) >> 31) & 1);
-      int v74 = v73[v194];
-      bool v195 = !(v74 == 0);
-      if (v195) {
-        int * v75 = v15->cache_tags;
-        int v76 = v75[v194];
-        int * v77 = v15->cache_vals;
-        int v198 = ((4 + ((((int)((unsigned int)((int)((unsigned int)v19 >> 2)) >> 1)) & 3) * 2)) + ((((v66 + ((~(((v68 ^ -1) | (-(v68 ^ -1))) >> 31)) & 2)) - (v70 + ((~(((v72 ^ -1) | (-(v72 ^ -1))) >> 31)) & 2))) >> 31) & 1)) * 2;
-        int v78 = v77[v198];
-        int * v79 = v15->cache_vals;
-        int v200 = (((4 + ((((int)((unsigned int)((int)((unsigned int)v19 >> 2)) >> 1)) & 3) * 2)) + ((((v66 + ((~(((v68 ^ -1) | (-(v68 ^ -1))) >> 31)) & 2)) - (v70 + ((~(((v72 ^ -1) | (-(v72 ^ -1))) >> 31)) & 2))) >> 31) & 1)) * 2) + 1;
-        int v80 = v79[v200];
-        int * v81 = v15->mem;
-        int v202 = v76 * 2;
-        v81[v202] = v78;
-        int * v83 = v15->mem;
-        int v205 = (v76 * 2) + 1;
-        v83[v205] = v80;
+      int * v54 = v15->cache_age;
+      int v155 = 4 + ((((int)((unsigned int)((int)((unsigned int)v19 >> 2)) >> 1)) & 3) * 2);
+      int v55 = v54[v155];
+      int * v56 = v15->cache_tags;
+      int v57 = v56[v155];
+      int v58 = v54[v133];
+      int v59 = v56[v133];
+      int * v60 = v15->cache_dirty;
+      int v158 = (4 + ((((int)((unsigned int)((int)((unsigned int)v19 >> 2)) >> 1)) & 3) * 2)) + ((((v55 + ((~(((v57 ^ -1) | (-(v57 ^ -1))) >> 31)) & 2)) - (v58 + ((~(((v59 ^ -1) | (-(v59 ^ -1))) >> 31)) & 2))) >> 31) & 1);
+      int v61 = v60[v158];
+      bool v159 = !(v61 == 0);
+      if (v159) {
+        int * v62 = v15->cache_tags;
+        int v63 = v62[v158];
+        int * v64 = v15->cache_vals;
+        int v162 = ((4 + ((((int)((unsigned int)((int)((unsigned int)v19 >> 2)) >> 1)) & 3) * 2)) + ((((v55 + ((~(((v57 ^ -1) | (-(v57 ^ -1))) >> 31)) & 2)) - (v58 + ((~(((v59 ^ -1) | (-(v59 ^ -1))) >> 31)) & 2))) >> 31) & 1)) * 2;
+        int v65 = v64[v162];
+        int v163 = (((4 + ((((int)((unsigned int)((int)((unsigned int)v19 >> 2)) >> 1)) & 3) * 2)) + ((((v55 + ((~(((v57 ^ -1) | (-(v57 ^ -1))) >> 31)) & 2)) - (v58 + ((~(((v59 ^ -1) | (-(v59 ^ -1))) >> 31)) & 2))) >> 31) & 1)) * 2) + 1;
+        int v66 = v64[v163];
+        int * v67 = v15->mem;
+        int v165 = v63 * 2;
+        v67[v165] = v65;
+        int * v69 = v15->mem;
+        int v168 = (v63 * 2) + 1;
+        v69[v168] = v66;
         ;
       } else {
         ;
       }
-      int * v88 = v15->mem;
-      int v210 = ((int)((unsigned int)((int)((unsigned int)v19 >> 2)) >> 1)) * 2;
-      int v89 = v88[v210];
-      int * v90 = v15->mem;
-      int v212 = (((int)((unsigned int)((int)((unsigned int)v19 >> 2)) >> 1)) * 2) + 1;
-      int v91 = v90[v212];
-      int * v92 = v15->cache_vals;
-      int v214 = ((4 + ((((int)((unsigned int)((int)((unsigned int)v19 >> 2)) >> 1)) & 3) * 2)) + ((((v66 + ((~(((v68 ^ -1) | (-(v68 ^ -1))) >> 31)) & 2)) - (v70 + ((~(((v72 ^ -1) | (-(v72 ^ -1))) >> 31)) & 2))) >> 31) & 1)) * 2;
-      v92[v214] = v89;
-      int * v94 = v15->cache_vals;
-      int v217 = (((4 + ((((int)((unsigned int)((int)((unsigned int)v19 >> 2)) >> 1)) & 3) * 2)) + ((((v66 + ((~(((v68 ^ -1) | (-(v68 ^ -1))) >> 31)) & 2)) - (v70 + ((~(((v72 ^ -1) | (-(v72 ^ -1))) >> 31)) & 2))) >> 31) & 1)) * 2) + 1;
-      v94[v217] = v91;
-      int * v96 = v15->cache_tags;
-      int v220 = (int)((unsigned int)((int)((unsigned int)v19 >> 2)) >> 1);
-      v96[v194] = v220;
-      int * v98 = v15->cache_dirty;
-      v98[v194] = 0;
-      int * v100 = v15->cache_age;
-      v100[v194] = 1;
-      int * v102 = v15->cache_age;
-      int v103 = v102[v194];
-      int * v104 = v15->cache_age;
-      int v105 = v104[v157];
-      int * v106 = v15->cache_age;
-      int v228 = v105 + ((int)((unsigned int)(v105 - v103) >> 31));
-      v106[v157] = v228;
-      int * v108 = v15->cache_age;
-      int v109 = v108[v159];
-      int * v110 = v15->cache_age;
-      int v231 = v109 + ((int)((unsigned int)(v109 - v103) >> 31));
-      v110[v159] = v231;
-      int * v112 = v15->cache_age;
-      v112[v194] = 0;
-      v115 = v194;
+      int * v74 = v15->mem;
+      int v173 = ((int)((unsigned int)((int)((unsigned int)v19 >> 2)) >> 1)) * 2;
+      int v75 = v74[v173];
+      int v174 = (((int)((unsigned int)((int)((unsigned int)v19 >> 2)) >> 1)) * 2) + 1;
+      int v76 = v74[v174];
+      int * v77 = v15->cache_vals;
+      int v176 = ((4 + ((((int)((unsigned int)((int)((unsigned int)v19 >> 2)) >> 1)) & 3) * 2)) + ((((v55 + ((~(((v57 ^ -1) | (-(v57 ^ -1))) >> 31)) & 2)) - (v58 + ((~(((v59 ^ -1) | (-(v59 ^ -1))) >> 31)) & 2))) >> 31) & 1)) * 2;
+      v77[v176] = v75;
+      int * v79 = v15->cache_vals;
+      int v179 = (((4 + ((((int)((unsigned int)((int)((unsigned int)v19 >> 2)) >> 1)) & 3) * 2)) + ((((v55 + ((~(((v57 ^ -1) | (-(v57 ^ -1))) >> 31)) & 2)) - (v58 + ((~(((v59 ^ -1) | (-(v59 ^ -1))) >> 31)) & 2))) >> 31) & 1)) * 2) + 1;
+      v79[v179] = v76;
+      int * v81 = v15->cache_tags;
+      int v182 = (int)((unsigned int)((int)((unsigned int)v19 >> 2)) >> 1);
+      v81[v158] = v182;
+      int * v83 = v15->cache_dirty;
+      v83[v158] = 0;
+      int * v85 = v15->cache_age;
+      v85[v158] = 1;
+      int * v87 = v15->cache_age;
+      int v88 = v87[v158];
+      int v89 = v87[v132];
+      int v188 = v89 + ((int)((unsigned int)(v89 - v88) >> 31));
+      v87[v132] = v188;
+      int * v91 = v15->cache_age;
+      int v92 = v91[v133];
+      int v190 = v92 + ((int)((unsigned int)(v92 - v88) >> 31));
+      v91[v133] = v190;
+      int * v94 = v15->cache_age;
+      v94[v158] = 0;
+      v97 = v158;
     }
-    int * v116 = v15->cache_vals;
-    int v234 = v115 * 2;
-    int v117 = v116[v234];
-    int * v118 = v15->cache_vals;
-    int v236 = (v115 * 2) + 1;
-    int v119 = v118[v236];
-    int * v120 = v15->cache_vals;
-    int v238 = (((((int)((unsigned int)((int)((unsigned int)v19 >> 2)) >> 1)) & 1) * 2) + ((((v45 + ((~(((v47 ^ -1) | (-(v47 ^ -1))) >> 31)) & 2)) - (v49 + ((~(((v51 ^ -1) | (-(v51 ^ -1))) >> 31)) & 2))) >> 31) & 1)) * 2;
-    v120[v238] = v117;
-    int * v122 = v15->cache_vals;
-    int v241 = ((((((int)((unsigned int)((int)((unsigned int)v19 >> 2)) >> 1)) & 1) * 2) + ((((v45 + ((~(((v47 ^ -1) | (-(v47 ^ -1))) >> 31)) & 2)) - (v49 + ((~(((v51 ^ -1) | (-(v51 ^ -1))) >> 31)) & 2))) >> 31) & 1)) * 2) + 1;
-    v122[v241] = v119;
-    int * v124 = v15->cache_tags;
-    int v244 = ((((int)((unsigned int)((int)((unsigned int)v19 >> 2)) >> 1)) & 1) * 2) + ((((v45 + ((~(((v47 ^ -1) | (-(v47 ^ -1))) >> 31)) & 2)) - (v49 + ((~(((v51 ^ -1) | (-(v51 ^ -1))) >> 31)) & 2))) >> 31) & 1);
-    int v245 = (int)((unsigned int)((int)((unsigned int)v19 >> 2)) >> 1);
-    v124[v244] = v245;
-    int * v126 = v15->cache_dirty;
-    v126[v244] = 0;
-    int * v128 = v15->cache_age;
-    v128[v244] = 1;
-    int * v130 = v15->cache_age;
-    int v131 = v130[v244];
-    int * v132 = v15->cache_age;
-    int v133 = v132[v153];
-    int * v134 = v15->cache_age;
-    int v253 = v133 + ((int)((unsigned int)(v133 - v131) >> 31));
-    v134[v153] = v253;
-    int * v136 = v15->cache_age;
-    int v137 = v136[v155];
-    int * v138 = v15->cache_age;
-    int v256 = v137 + ((int)((unsigned int)(v137 - v131) >> 31));
-    v138[v155] = v256;
-    int * v140 = v15->cache_age;
-    v140[v244] = 0;
-    v143 = v244;
+    int * v98 = v15->cache_vals;
+    int v193 = v97 * 2;
+    int v99 = v98[v193];
+    int v194 = (v97 * 2) + 1;
+    int v100 = v98[v194];
+    int v195 = (((((int)((unsigned int)((int)((unsigned int)v19 >> 2)) >> 1)) & 1) * 2) + ((((v39 + ((~(((v41 ^ -1) | (-(v41 ^ -1))) >> 31)) & 2)) - (v42 + ((~(((v43 ^ -1) | (-(v43 ^ -1))) >> 31)) & 2))) >> 31) & 1)) * 2;
+    v98[v195] = v99;
+    int * v102 = v15->cache_vals;
+    int v198 = ((((((int)((unsigned int)((int)((unsigned int)v19 >> 2)) >> 1)) & 1) * 2) + ((((v39 + ((~(((v41 ^ -1) | (-(v41 ^ -1))) >> 31)) & 2)) - (v42 + ((~(((v43 ^ -1) | (-(v43 ^ -1))) >> 31)) & 2))) >> 31) & 1)) * 2) + 1;
+    v102[v198] = v100;
+    int * v104 = v15->cache_tags;
+    int v201 = ((((int)((unsigned int)((int)((unsigned int)v19 >> 2)) >> 1)) & 1) * 2) + ((((v39 + ((~(((v41 ^ -1) | (-(v41 ^ -1))) >> 31)) & 2)) - (v42 + ((~(((v43 ^ -1) | (-(v43 ^ -1))) >> 31)) & 2))) >> 31) & 1);
+    int v202 = (int)((unsigned int)((int)((unsigned int)v19 >> 2)) >> 1);
+    v104[v201] = v202;
+    int * v106 = v15->cache_dirty;
+    v106[v201] = 0;
+    int * v108 = v15->cache_age;
+    v108[v201] = 1;
+    int * v110 = v15->cache_age;
+    int v111 = v110[v201];
+    int v112 = v110[v130];
+    int v208 = v112 + ((int)((unsigned int)(v112 - v111) >> 31));
+    v110[v130] = v208;
+    int * v114 = v15->cache_age;
+    int v115 = v114[v131];
+    int v210 = v115 + ((int)((unsigned int)(v115 - v111) >> 31));
+    v114[v131] = v210;
+    int * v117 = v15->cache_age;
+    v117[v201] = 0;
+    v120 = v201;
   }
-  int v259 = (v143 * 2) + (((int)((unsigned int)v19 >> 2)) & 1);
-  int v144 = v30[v259];
-  int * v145 = v15->regs;
-  v145[16] = v144;
-  struct StateT * v147 = slot_2(v15);
-  return v147;
+  int v213 = (v120 * 2) + (((int)((unsigned int)v19 >> 2)) & 1);
+  int v121 = v27[v213];
+  int * v122 = v15->regs;
+  v122[16] = v121;
+  struct StateT * v124 = slot_2(v15);
+  return v124;
 }
 
-struct StateT * slot_6(struct StateT * v302) {
-  int v303 = v302->timer;
-  int v309 = v303 + 1;
-  v302->timer = v309;
-  int * v305 = v302->regs;
-  v305[18] = 2;
-  struct StateT * v307 = slot_7(v302);
-  return v307;
+struct StateT * slot_6(struct StateT * v254) {
+  int v255 = v254->timer;
+  int v261 = v255 + 1;
+  v254->timer = v261;
+  int * v257 = v254->regs;
+  v257[18] = 2;
+  struct StateT * v259 = slot_5(v254);
+  return v259;
 }
 
-struct StateT * slot_5(struct StateT * v333) {
-  int v334 = v333->timer;
-  int v337 = v334 + 1;
-  v333->timer = v337;
-  return v333;
+struct StateT * slot_5(struct StateT * v285) {
+  int v286 = v285->timer;
+  int v289 = v286 + 1;
+  v285->timer = v289;
+  return v285;
 }
 
-struct StateT * slot_4(struct StateT * v315) {
-  int v316 = v315->timer;
-  int v322 = v316 + 1;
-  v315->timer = v322;
-  int * v318 = v315->regs;
-  v318[18] = 1;
-  struct StateT * v320 = slot_5(v315);
-  return v320;
+struct StateT * slot_4(struct StateT * v267) {
+  int v268 = v267->timer;
+  int v274 = v268 + 1;
+  v267->timer = v274;
+  int * v270 = v267->regs;
+  v270[18] = 1;
+  struct StateT * v272 = slot_5(v267);
+  return v272;
 }
 
-struct StateT * slot_2(struct StateT * v265) {
-  int v266 = v265->timer;
-  int v272 = v266 + 1;
-  v265->timer = v272;
-  int * v268 = v265->regs;
-  v268[17] = 10;
-  struct StateT * v270 = slot_3(v265);
-  return v270;
+struct StateT * slot_2(struct StateT * v219) {
+  int v220 = v219->timer;
+  int v226 = v220 + 1;
+  v219->timer = v226;
+  int * v222 = v219->regs;
+  v222[17] = 10;
+  struct StateT * v224 = slot_3(v219);
+  return v224;
 }
 
-struct StateT * slot_7(struct StateT * v328) {
-  int v329 = v328->timer;
-  int v332 = v329 + 1;
-  v328->timer = v332;
-  return v328;
-}
-
-struct StateT * slot_3(struct StateT * v278) {
-  int v279 = v278->timer;
-  int v291 = v279 + 1;
-  v278->timer = v291;
-  int * v281 = v278->regs;
-  int v282 = v281[16];
-  int * v283 = v278->regs;
-  int v284 = v283[17];
-  bool v296 = v282 < v284;
-  struct StateT * v289;
-  if (v296) {
-    struct StateT * v285 = slot_6(v278);
-    v289 = v285;
+struct StateT * slot_3(struct StateT * v232) {
+  int v233 = v232->timer;
+  int v244 = v233 + 1;
+  v232->timer = v244;
+  int * v235 = v232->regs;
+  int v236 = v235[16];
+  int v237 = v235[17];
+  bool v248 = v236 < v237;
+  struct StateT * v242;
+  if (v248) {
+    struct StateT * v238 = slot_6(v232);
+    v242 = v238;
   } else {
-    struct StateT * v287 = slot_4(v278);
-    v289 = v287;
+    struct StateT * v240 = slot_4(v232);
+    v242 = v240;
   }
-  return v289;
+  return v242;
 }
 
 struct StateT * slot_0(struct StateT * v2) {
