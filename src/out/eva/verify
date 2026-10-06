@@ -18,6 +18,17 @@
 # that the disagreement is a declaration rather than a surprise to whoever
 # diffed the trees.
 #
+# The obligation itself is one line of ACSL in `main`,
+#
+#   //@ assert untainted_timer: !\tainted(s1_->timer==s2_->timer);
+#
+# which is a C comment and so rides in the residue every backend reads. CBMC and
+# KLEE preprocess it away. One per file and not one per slot, even where the
+# squared and lockstep towers compare the clocks on the way into every slot:
+# those comparisons prune a search and name the slot a drift began in, which are
+# both worth paying for to a checker that decides whether the timers can differ
+# and worth nothing to one asking whether the secret arrives at all.
+#
 # The bound on the line is `[unroll N]`, off the same
 # `GenericKoikaDriver.unwind` CBMC unwinds to, and spent on recursive calls
 # rather than on loops. Frama-C parses C directly, so there is no bitcode and no
@@ -27,30 +38,36 @@
 # Reading a verdict out of Eva takes two conditions, and the obvious one alone
 # is unsound.
 #
-# Eva reports an unproven precondition on a line of its own, and exits 0 doing
-# it, so that line is condition one. Condition two is that `main` reached its
-# last statement, and it is the one that matters. Some demos stage a loop into a
-# cycle of slots; Eva declines to unroll one past its bound, the imprecision
-# widens an index to top, and the out-of-bounds access that follows is proved
-# invalid and reduces the state to bottom. `main` never reaches the sink, Eva
-# never complains about the precondition, and a reader that takes no complaint
-# for a proof reports one it never had. An early sweep did exactly that and had
-# to be thrown out.
+# Eva reports an unproven assertion on a line of its own, by the label the
+# annotation gave it, and exits 0 doing it, so that line is condition one.
+# Condition two is that `main` reached its last statement. Some demos stage a
+# loop into a cycle of slots; Eva declines to unroll one past its bound, the
+# imprecision widens an index to top, and the out-of-bounds access that follows
+# is proved invalid and reduces the state to bottom. `main` never reaches the
+# sink, Eva never complains about the assertion, and a reader that takes no
+# complaint for a proof reports one it never had. An early sweep did exactly
+# that and had to be thrown out.
+#
+# It catches less than it used to, and the measurement is worth having. Thirty-
+# one of the 214 residues need `[unroll 65]` to answer what the tree claims. At
+# the default bound eight come out non-terminating and the other twenty-three
+# reach the sink in a state too imprecise to prove anything, reporting `leak` on
+# a program the tree calls clean. Both fail, since neither matches the claim, so
+# nothing gets past this either way. What the second kind costs is the
+# diagnostic: `unknown` says the bound is short and `leak` says the secret
+# reached the timer, and only one of those points at the fix.
 #
 # Which is the same shape `src/out/klee/verify` describes for a run that stopped
 # early, where exit 0 with no error files is byte-identical to a residue KLEE
 # genuinely verified.
 #
-# `-report -report-print-properties` prints a per-property table and is the
-# obvious reader. It is not one. The `untainted` row is printed only where Eva
-# has a complaint, so a leak gets `[    -    ] Pre-condition 'untainted'` and a
-# residue Eva proved clean gets no row at all. Which sounds usable until
-# `constant_time` at the default bound, where Eva never reaches the sink and the
-# row is missing in exactly the way a proof's is. So the table tells a leak from
-# everything else and cannot tell a proof from a run that gave up, and that
-# second one is the distinction this script exists to make. Further down it does
-# print `Unreachable call 'koika_check'`, which is worth knowing when debugging
-# one file by hand and is not something to parse.
+# `-report -report-print-properties` prints a per-property table, and with the
+# obligation written as a named assertion it is readable in a way the stub this
+# replaced never was: a proof gets `[  Valid  ] Assertion 'untainted_timer'` and
+# a leak gets the same row at `[    -    ]`. Worth passing when debugging one
+# file. Still not what this script reads, because the table says nothing about
+# whether the state the assertion was evaluated in was worth anything, which is
+# the next paragraph.
 #
 # `unknown` is the third outcome and nothing in the tree produces one, which is
 # exactly why the case is here. The day something does, it has to fail rather
@@ -95,27 +112,32 @@ analyse() {
     local dir=$1 unroll=$2
     frama-c -cpp-extra-args=-DEVA -eva -eva-domains taint \
             -eva-unroll-recursive-calls $unroll \
+            -eva-no-results -report \
             $dir/subject.c >$dir/eva.log 2>&1
     grep -q 'ANALYSIS SUMMARY' $dir/eva.log
 }
 
-# clean, leak or unknown, by the two conditions above.
+# clean, leak or unknown, out of the one row `-report` prints for the one
+# assertion this backend cares about.
+#
+# An absent row is the whole positive check. Eva prints a row for a property it
+# evaluated, so no row means it never got there, and that is the case a reader
+# of the status alone would call clean and be wrong about.
 outcome() {
     local log=$1
-
-    # The line right after the header and not a match anywhere in the log,
-    # because a `NON TERMINATING FUNCTION` under some other function is Eva
-    # saying something true about a helper. Missing outright counts the same as
-    # non-terminating: either way `main` has no end state and the sink was never
-    # evaluated.
-    local ending=$(sed -n '/Values at end of function main:/{n;p;}' $log)
-    if [[ -z $ending || $ending == *'NON TERMINATING'* ]]; then
-        print unknown
-    elif grep -q "precondition 'untainted' got .*status \(unknown\|invalid\)" $log; then
-        print leak
-    else
-        print clean
-    fi
+    local reported=$(
+        sed -n "s/^\[\([^]]*\)\].*Assertion 'untainted_timer'.*/\1/p" $log |
+            head -1 | tr -d ' '
+    )
+    case $reported in
+        # Never reached, so nothing was decided either way.
+        ''|Dead) print unknown ;;
+        Valid)   print clean ;;
+        # `-` is what an unproven one prints. Anything else is a status this
+        # script has not seen, and guessing clean about it is the one mistake
+        # that matters.
+        *)       print leak ;;
+    esac
 }
 
 typeset -i held_back=0

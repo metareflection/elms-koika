@@ -129,6 +129,7 @@ abstract class SquaredKoikaDriver[
        |  $initialize_secret
        |  struct $paired p = { .a = &s1, .b = &s2 };
        |  struct $paired *p_ = snippet(&p);
+       |  //@ assert untainted_timer: !\\tainted(p_->a->timer==p_->b->timer);
        |  koika_assert(p_->a->timer==p_->b->timer, "timing leak");
        |  return 0;
        |}""".stripMargin

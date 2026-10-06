@@ -50,12 +50,11 @@ enum Taint derives CanEqual {
 
   // The program is clean and Eva reports a leak anyway.
   //
-  // Per file rather than per assertion, which is what the squared tower gives
-  // up here. Every `squared_assert` in a residue, 228 of them in the worst one,
-  // expands to the one `koika_check` inside the wrapper, so Eva says the file
-  // leaks and never which slot. Recoverable by putting the contract on
-  // `squared_assert`'s own declaration, at the price of a `prover match` in
-  // `Stage.scala`.
+  // Per file rather than per assertion, because the obligation is one
+  // `//@ assert` in `main` and not one per slot. A squared residue compares the
+  // clocks on the way into every slot, which prunes a search and says where a
+  // drift began, and taint does neither: a timer the secret reaches at slot
+  // nine it reaches at the end as well.
   case Widens
 }
 

@@ -34,6 +34,7 @@ trait Lockstepped[R <: Int: ValueOf, M <: Int: ValueOf, C <: Int: ValueOf, T <: 
        |  $initialize_secret
        |  struct ${paired.name} p = { .a = &s1, .b = &s2 };
        |  struct ${paired.name} *p_ = snippet(&p);
+       |  //@ assert untainted_timer: !\\tainted(p_->a->timer==p_->b->timer);
        |  koika_assert(p_->a->timer==p_->b->timer, "timing leak");
        |  return 0;
        |}""".stripMargin

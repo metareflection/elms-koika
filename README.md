@@ -158,9 +158,12 @@ Twice the work, no difference, and if anything the wrong way. At six probes it
 was 41.2s against 40.4s, and that pair has not been re-taken because the probe
 count lives in the assembly rather than in a flag.
 
-So it currently earns nothing in time, and it is kept for the other thing it
-does: every verdict in that tree has to match its twin next door, which is a
-second opinion on the same program from a differently shaped formula. Its speed
+So it currently earns nothing in time, and costs a little: see
+[what each one charges](#three-ways-to-ask-and-what-each-one-charges) for the
+per-file numbers. It is kept for the other thing it does. Every clock verdict in
+that tree matches its twin next door, which is a second opinion on the same
+program from a differently shaped formula, and where the declared verdicts
+differ it is the control-flow obligation talking rather than the clock. Its speed
 argument is waiting on a demo whose cost is a path space, and the tree does not
 have one at the moment.
 
@@ -1043,16 +1046,14 @@ model checker, and [`src/out/eva/verify`](src/out/eva/verify) is its script:
 
 `./src/out/eva/verify [--full] [file.c ...]`
 
-The main suite comes out in twenty-six minutes:
+The whole tree, held-back subtrees included, comes out in under three minutes:
 
 ```
-skip     7 under lockstep/ and dynamic/ (pass --full to check them)
-all 207 agree (7 held back for --full)
+all 214 agree
 ```
 
-Nearly all of that is the five `salsa20` residues. `riscv/compiled/static` is
-the slowest of everything else at 47 seconds, and a typical residue answers in
-under a second, `riscv/cache/2ctr` in 0.7.
+`fact/naive/salsa20` is the slowest file in it at 11 seconds and a typical
+residue answers in about one.
 
 A default run leaves out the same two trees the other two scripts leave out, and
 `--full` adds them back. The reasons for leaving them out are theirs rather than
@@ -1071,21 +1072,30 @@ and reads like a proof.
 
 `frama-c -cpp-extra-args=-DEVA -eva -eva-domains taint -eva-unroll-recursive-calls <N> <file.c>`
 
-ACSL is a C comment, so no macro can expand to `//@ assert` and the obligation
-cannot be written where the other two backends write theirs. A precondition on
-an uninterpreted stub can be. Eva checks one at every call site, and a call is
-something a macro can expand to, so `koika_assert(b, s)` becomes a call of
+ACSL is a C comment, which was the problem and is now the whole trick. No macro
+expands to `//@ assert`, so the obligation cannot be written where the other two
+backends write theirs. It does not have to be. ELMS writes comments into
+generated code, so the annotation goes into `main` beside the comparison it is
+about:
 
 ```c
-/*@ requires untainted: !\tainted(b);
-    assigns \nothing; */
-void koika_check(int b);
+//@ assert untainted_timer: !\tainted(s1_->timer==s2_->timer);
+koika_assert(s1_->timer==s2_->timer, "timing leak");
 ```
 
-which is declared and never defined. The source end is a contract too, with
-`koika_secret` calling a stub whose `taints *p` clause marks the draw. Both of
-them live in `Prover.intrinsics`, which is what keeps a pair of snapshots
-diffing down to that one block the way the other two backends already do.
+Both lines are the same text in all three trees. CBMC and KLEE preprocess the
+first away and check the second; Eva does the reverse, since `koika_assert` is
+nothing under `-DEVA`. The source end stays a contract, with `koika_secret`
+calling a stub whose `taints *p` clause marks the draw, because `taints` is a
+clause about a function and nothing generated writes one.
+
+One obligation per residue, and not one per slot even under the squared and
+lockstep towers, which compare the clocks on the way into every slot. Those
+comparisons prune the search and name the slot a drift began in, and both are
+worth paying for to a checker deciding whether the timers can actually differ.
+Taint asks whether the secret arrives at all, and the end of the run answers
+that as well as the middle does. The towers are there to be more precise than
+this backend rather than to be read by it.
 
 `koika_assume(b)` becomes `if (!(b)) Frama_C_abort();`. Eva drops the states
 that reach the abort, which is exactly what an assumption does, so
@@ -1106,8 +1116,8 @@ int s = Frama_C_interval(0, 20);
 koika_mark(&s);          // drop this line and both come out untainted
 int implicit = 0;
 if (s > 10) implicit = 1;
-koika_check(implicit);   // tainted: control dependence
-koika_check(arr[s]);     // tainted: through the index
+//@ assert !\tainted(implicit);   // unknown: control dependence
+//@ assert !\tainted(arr[s]);     // unknown: through the index
 ```
 
 ### Telling the secret draw apart from the public one
@@ -1134,57 +1144,72 @@ tainted, which is a true statement about a program nobody wrote.
 
 ### Reading a verdict, which is where this gets sharp
 
-Eva exits 0 whether or not the precondition holds, so the verdict comes out of
-the log, and it takes two conditions rather than one.
+Eva exits 0 whether or not the assertion holds, so the verdict comes out of
+`-report`, which prints one row for the one property this backend cares about:
 
-The first is the status line, `function koika_check: precondition 'untainted'
-got status unknown`, which is a leak. The second is that `main` reached its last
-statement, and that is the one worth having. Some demos stage a loop into a
-cycle of slots. Eva declines to unroll one past its bound, the imprecision
-widens an index to top, and the out-of-bounds access that follows is proved
-invalid and reduces the state to bottom. So `main` never reaches the sink, Eva
-never complains about the precondition, and a reader that takes no complaint for
-a proof reports one it never had. An early sweep here did exactly that and had
-to be thrown out.
+```
+clean       [  Valid  ] Assertion 'untainted_timer' ("subject.c", line 502)
+leak        [    -    ] Assertion 'untainted_timer' ("subject.c", line 251)
+unknown     no row at all
+```
 
-Which is the same shape as KLEE's exit 0 on a run that stopped early. The
-`[eva:final-states] Values at end of function main:` block is the positive
-check, and `NON TERMINATING FUNCTION` under it is the third outcome, `unknown`,
-which never counts as agreement. Nothing in the tree produces one, and the case
-is in the script because the day something does it has to fail rather than pass.
+The absent row is the half worth having. Some demos stage a loop into a cycle of
+slots; Eva declines to unroll one past its bound, the imprecision widens an index
+to top, and the out-of-bounds access that follows is proved invalid and reduces
+the state to bottom. The sink is then never evaluated, Eva never complains about
+the assertion, and a reader that takes no complaint for a proof reports one it
+never had. An early sweep here did exactly that and had to be thrown out.
 
-`-report -report-print-properties` prints a per-property table and is the
-obvious reader. It is not one. The `untainted` row is printed only where Eva has
-a complaint, so `nanorisc/naive/shortcircuit` gets
-`[    -    ] Pre-condition 'untainted'` and `riscv/cache/spectre`, which Eva
-proves, gets no row at all. Which sounds usable until `riscv/cache/constant_time`
-at the default bound, where Eva never reaches the sink and the row is missing in
-exactly the way a proof's is. The table tells a leak from everything else and
-cannot tell a proof from a run that gave up, and the second one is the
-distinction the script exists to make. Neither is the exit code any use, which
-is 0 with an unproven precondition and 1 when the state went to bottom;
-`-report-exit-code` would make it mean something and is deliberately not passed.
+A row says Eva reached the obligation and decided it. No row says it did not get
+there, which is the question, and it is a better question than the one this used
+to ask. The reader before it checked whether `main` reached its last statement,
+which is a proxy: `main` can terminate on a state too imprecise to prove
+anything, and under `-eva-no-results` it does not print an end state at all.
+
+Which is the same shape as KLEE's exit 0 on a run that stopped early. `unknown`
+is the third outcome and never counts as agreement. Nothing in the tree produces
+one at the bound it runs at, and the case is in the script because the day
+something does it has to fail rather than pass.
+
+None of this is the exit code, which is 0 with an unproven assertion and 1 when
+a state went to bottom, so it answers neither question. `-report-exit-code`
+would make it mean something and is deliberately not passed.
+
+Naming the assertion is what makes the table readable at all. An earlier version
+of this backend put the obligation on a precondition of an uninterpreted stub,
+and there the table printed a row only when Eva had a complaint, so a proof and
+a run that never got there were both an absence.
 
 ### The bound
 
 `<N>` is the same `[unwind N]` CBMC gets, spent on recursive calls instead of
-loops, and not giving Eva one produced every vacuous answer above. At the
-default, 31 of the 214 residues report `main` as `NON TERMINATING`, and they are
-exactly three demos, `constant_time` at fourteen models, `dynstore` at twelve
-and `salsa20` at five. Each stages a loop into a cycle of slots deeper than Eva
-will follow.
+loops, and not giving Eva one produced every vacuous answer above. Thirty-one of
+the 214 residues need it to answer what the tree claims, and they are three
+demos, `constant_time` at fourteen models, `dynstore` at twelve and `salsa20` at
+five. Each stages a loop into a cycle of slots deeper than Eva will follow.
+
+At the default bound those thirty-one fail two different ways and only one of
+them is honest. Eight never reach the obligation at all, so `-report` prints no
+row and the answer is `unknown`; every one of those is a model whose memory
+system does not stall. The other twenty-three reach it in a state too imprecise
+to prove anything and report `leak` on a program the tree calls clean. Both are
+mismatches and `verify` fails either way, so a short bound gets past nothing.
+What the second kind costs is the diagnostic: `unknown` says the bound is short,
+`leak` says the secret reached the timer, and only one of those points at the
+fix. Under the stub encoding this replaced, all thirty-one came out the first
+way.
 
 | file | default | `-eva-unroll-recursive-calls 65` |
 |---|---|---|
-| `riscv/cache/spectre` | clean, 0.6s | clean, 0.5s |
-| `riscv/cache/constant_time` | unknown, 0.6s | clean, 0.8s |
-| `riscv/cache/dynstore` | unknown, 0.7s | clean, 0.9s |
-| `lockstep/riscv/cache/constant_time` | unknown, 0.8s | clean, 1.0s |
-| `fact/naive/salsa20` | unknown, 2.5s | clean, 148s |
+| `riscv/cache/spectre` | clean, 0.4s | clean, 0.4s |
+| `riscv/cache/constant_time` | leak, 0.4s | clean, 0.4s |
+| `riscv/cache/dynstore` | leak, 0.4s | clean, 0.5s |
+| `lockstep/riscv/cache/constant_time` | leak, 0.4s | clean, 0.5s |
+| `fact/naive/salsa20` | leak, 0.8s | clean, 7.2s |
 
 Free where there is no recursion and the whole answer where there is.
 `salsa20` is the one file that pays, and it pays the same at any bound that
-covers it, 137s at 16 and 128s at 64 against the 148s above. So what that row
+covers it, 7.2s at 16 and 7.2s at 64 against the 7.3s above. So what that row
 buys is following the recursion at all rather than being told how deep.
 
 The termination check is the cheap half of catching a short bound. `main`
@@ -1193,40 +1218,90 @@ was evaluated in was precise, so the equivalent of `verify --certify` here would
 compare a run at `N` against one at `2N` and fail on any verdict that moves.
 That is not built.
 
-### What it costs, which is not what a weaker question should cost
+### What it costs, which is one flag
 
-The same 207 residues take CBMC four minutes and seven seconds and Eva
-twenty-five minutes and forty-three. Asking less did not buy less work.
+CBMC answers its 207 residues in 247 seconds. Eva answers all 214, the two
+held-back trees included, in 174.
 
-| | CBMC | Eva |
-|---|---|---|
-| the main suite, 207 files | 247s | 1543s |
-| the five `salsa20` residues | 57s | 1170s |
-| everything else, 202 files | 190s | 373s |
+It did not start there. The first working version of this backend took 1543
+seconds over 207 files, six times CBMC's cost for a weaker question, and the
+whole difference is `-eva-no-results`. Eva keeps a state per statement by
+default, which is where the time went and which nothing here reads. The saving
+scales with the size of the residue, so the files that dominated the bill are
+the ones that moved:
 
-So the factor of six is one demo. Take `salsa20` out and Eva is twice CBMC's
-cost rather than six times, and five files out of 207 are three quarters of the
-bill.
+| file | states kept | `-eva-no-results` | |
+|---|---|---|---|
+| `fact/naive/salsa20` | 137.5s | 11.3s | 12.2x |
+| `riscv/compiled/static` | 55.2s | 9.0s | 6.1x |
+| `squared/riscv/forwarding/hidden` | 11.6s | 3.3s | 3.5x |
+| `riscv/cache/branchy` | 1.7s | 1.2s | 1.4x |
+| `fact/naive/guarded` | 0.7s | 0.7s | 1.0x |
 
-Per file it is closer than the total, and level or ahead on three of the four
-rows that are not `salsa20`:
+The five `salsa20` residues were 1170 seconds of that 1543, three quarters of
+the bill on five files out of 214. They are under a minute of the 174 now.
+
+What the flag takes away is the per-statement states, and the only thing here
+that read them was the termination check. `-report` does that job better, which
+is the verdict section above.
+
+The taint domain is nearly free on top, 137.5s against 120.2s with it switched
+off, about fourteen per cent. Switching it off also makes every residue report
+`leak`, since `\tainted` stops being provable, so that doubles as the negative
+control for the whole arrangement.
+
+Against KLEE the margin is the one the model predicts rather than anything a
+flag bought:
 
 | file | CBMC | KLEE | Eva |
 |---|---|---|---|
-| `riscv/cache/branchy` | 1.8s | 814s | 1.1s |
-| `riscv/forwarding/bypass` | 3.2s | 485s | 2.4s |
-| `fact/static/guarded` | 1.2s | 326s | 1.2s |
+| `riscv/cache/branchy` | 1.8s | 814s | 1.2s |
 | `riscv/cache/2ctr` | 0.5s | 36s | 0.7s |
-| `fact/naive/salsa20` | 7.0s | 0.7s | 148s |
+| `fact/naive/salsa20` | 7.0s | 0.7s | 11.3s |
 
-Anything with a set-indexed cache in front of the load costs KLEE every path and
-costs an abstract interpreter nothing, so `cache/branchy` is 814 seconds against
-1.1. `salsa20` reverses it, 0.7 against 148, because 277 instructions of
-straight-line code is what a symbolic executor just runs and what Eva has to
-unroll its way through.
+A set-indexed cache in front of the load costs KLEE every path and costs an
+abstract interpreter nothing. `salsa20` reverses it, because 277 instructions of
+straight-line code is what a symbolic executor just runs. CBMC is cheap on both
+and Eva is now within a factor of two of it on both, which leaves KLEE as the
+only one of the three with a cliff in it.
 
-KLEE and Eva are each expensive on exactly what the other is cheap on, and CBMC
-is cheap on both. Which is why the thing worth having here was never the speed.
+### Three ways to ask, and what each one charges
+
+Sixty-nine demos exist in both the self-composed tree and the squared one, so
+all three backends can be put on the same programs. The largest of them, on an
+otherwise idle machine:
+
+| demo | CBMC self-composed | CBMC squared | Eva |
+|---|---|---|---|
+| `predictive_nb/hidden` | 1.54s | 2.07s | 0.97s |
+| `nonblocking/hidden` | 1.54s | 2.10s | 0.97s |
+| `static/hidden` | 1.15s | 1.95s | 0.81s |
+| `forwarding/hidden` | 1.18s | 1.97s | 0.80s |
+| `predictive_nb/branchy` | 1.68s | 1.65s | 0.54s |
+| `static/branchy` | 1.32s | 1.31s | 0.49s |
+
+The squared column is the expensive one, which is worth saying because the
+construction was built to be the cheap one. Over all sixty-nine pairs its
+residue is 2.04x the lines, and everywhere except `branchy` that width costs
+more than the shared control flow prunes. `branchy` is where it breaks even,
+and `branchy` is the one demo whose bill is a path space rather than a formula.
+The squared section above reports the same thing from the other direction, as a
+whole-tower number on `branchy` rather than a per-file one.
+
+Cost tracks how much is being asked, and the three ask different amounts. The
+squared tower decides whether the clocks can differ and whether the control flow
+can, which is two obligations. Self-composition decides the first alone. Eva
+decides neither, and asks instead whether the secret reaches the timer at all,
+which over-approximates both. So the order is squared, self-composed, Eva,
+descending on what is asked and descending on what it costs, and the two
+orderings agree.
+
+What that costs in answers is not symmetric. The first two give the same verdict
+about the clock on all sixty-nine, and the places they differ are the places the
+squared tower is answering its second question rather than disagreeing about the
+first. Eva differs from self-composition on thirteen of the sixty-nine, and on
+thirty-three of the full 214, always a clean program widened to `leak` and never
+the other way.
 
 ### What it agrees on
 
@@ -1267,14 +1342,20 @@ src/out/eva/riscv/cache/balanced.check.c:// verify: leak widened (the program is
 unsound direction, a leak narrowed to clean, cannot be written down at all.
 Every divergence measured goes the one way.
 
-What the backend gives up is granularity, and the squared tower is where that
-shows. A residue there asserts once per slot rather than once at the end, 228
-`squared_assert` calls in `squared/riscv/forwarding/hidden`, and every one of
-them expands to the same `koika_check`. So Eva says the file leaks and never
-which slot, and it cannot separate `squared_assert`'s "timer drift" from
-`squared_diverged`'s "control flow diverged" either, which CBMC does report by
-name. Putting the contract on `squared_assert`'s own declaration would get both
-back, at the price of a `prover match` in two more files.
+What the backend gives up is granularity, and it gives it up on purpose. A
+squared residue asserts once per slot rather than once at the end, 228
+`squared_assert` calls in `squared/riscv/forwarding/hidden`, and CBMC reports
+which of them fired and whether it was `squared_assert`'s "timer drift" or
+`squared_diverged`'s "control flow diverged". Eva is told none of that. It gets
+the one assertion in `main` and names the file.
+
+Writing an `//@ assert` at each of those sites would get the slot back, and it
+is not worth what it costs. The residue is staged once and all three trees read
+the same text, so every annotation lands in all of them; two hundred of them per
+file would be paid for in three trees to tell one backend something a timer the
+secret reaches at slot nine already tells it at the end. The per-slot
+comparisons are there to prune a search and to make a counterexample readable,
+and this backend does neither.
 
 ## The FaCT suite
 
@@ -1461,4 +1542,4 @@ were measured on.
 - [the Eva manual](https://frama-c.com/download/frama-c-eva-manual.pdf), whose
   taint chapter covers `-eva-domains taint` and the `taints` clause
 - [the ACSL specification](https://frama-c.com/download/acsl.pdf), for
-  `\tainted` and for why a precondition is the only place to write one
+  `\tainted` and for what `taints` means on a declaration

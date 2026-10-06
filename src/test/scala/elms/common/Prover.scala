@@ -30,19 +30,19 @@ enum Prover derives CanEqual {
   // For whoever reads the snapshot. `verify` takes its verdict from an exit
   // code, an error file or a log line, so nothing depends on this text.
   //
-  // Eva's wording is the property's status and not a sentence, because Eva
-  // never reports a leak. It fails to prove one is absent, and `unknown` is
-  // the word it uses for that.
+  // Eva's wording is a property's status and not a sentence, because Eva never
+  // reports a leak. It fails to prove one is absent, and `unknown` is the word
+  // it uses for that.
   def holds: String = this match {
     case CBMC => "VERIFICATION SUCCESSFUL"
     case KLEE => "no failing assertion"
-    case EVA  => "untainted: Valid"
+    case EVA  => "untainted_timer: Valid"
   }
 
   def fails: String = this match {
     case CBMC => "VERIFICATION FAILED"
     case KLEE => "a failing assertion"
-    case EVA  => "untainted: unknown"
+    case EVA  => "untainted_timer: unknown"
   }
 
   // The enabled arm of [prelude]: how this checker spells an assertion, an
@@ -68,13 +68,24 @@ enum Prover derives CanEqual {
         |#define koika_draw(x) klee_make_symbolic(&(x), sizeof(x), #x)
         |#define koika_secret(x) ((void)0)""".stripMargin
 
-    // ACSL is a C comment, so no macro can expand to one and `//@ assert` is
-    // out. A precondition on an uninterpreted stub is the way in. Eva checks
-    // one at every call site, and a call is something a macro can be, so the
-    // obligation goes on `koika_check`, which is declared and never defined.
+    // Nothing here asserts, because the assertion is not a macro's to make.
+    // ACSL is a C comment, and `main` writes the one this backend reads,
+    // `//@ assert untainted_timer:` beside the timer comparison. That is text
+    // every backend gets and only this one treats as more than a comment, so
+    // `koika_assert` is where CBMC and KLEE put a checker and where Eva puts
+    // nothing.
     //
-    // `assigns \nothing` on both stubs only silences the warning Eva prints
-    // when it has to assume a declaration writes everything.
+    // One obligation per residue and not one per slot, even under the squared
+    // and lockstep towers, which assert on the way into every slot. Those
+    // comparisons are there to prune a search and to say which slot a drift
+    // began in, and both are worth paying for only to a checker that decides
+    // whether the timers can differ. Taint asks whether the secret arrives at
+    // all, which the end of the run answers as well as the middle does.
+    //
+    // `koika_mark` is the source and has to stay a declaration, since `taints`
+    // is a clause about a function and nothing generated writes one.
+    // `assigns \nothing` only silences the warning Eva prints when it has to
+    // assume a declaration writes everything.
     //
     // `koika_assume` aborting is the other half. Eva drops the states that
     // reach `Frama_C_abort`, which is what an assumption does, so the shared
@@ -83,13 +94,10 @@ enum Prover derives CanEqual {
     // tainted condition does not taint everything after it either.
     case EVA =>
       """#include "__fc_builtin.h"
-        |/*@ requires untainted: !\tainted(b);
-        |    assigns \nothing; */
-        |void koika_check(int b);
         |/*@ assigns *p \from \nothing;
         |    taints *p; */
         |void koika_mark(int *p);
-        |#define koika_assert(b, s) koika_check(b)
+        |#define koika_assert(b, s) ((void)0)
         |#define koika_assume(b) do { if (!(b)) Frama_C_abort(); } while (0)
         |#define koika_draw(x) ((x) = Frama_C_interval(-2147483647-1, 2147483647))
         |#define koika_secret(x) koika_mark(&(x))""".stripMargin

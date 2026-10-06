@@ -1,4 +1,4 @@
-// verify: leak (Eva should report untainted: unknown) [unroll 65]
+// verify: leak (Eva should report untainted_timer: unknown) [unroll 65]
 #define NUM_REGS 32
 #define MEM_SIZE 64
 #define SECRET_SIZE 10
@@ -8,13 +8,10 @@
 
 #ifdef EVA
 #include "__fc_builtin.h"
-/*@ requires untainted: !\tainted(b);
-    assigns \nothing; */
-void koika_check(int b);
 /*@ assigns *p \from \nothing;
     taints *p; */
 void koika_mark(int *p);
-#define koika_assert(b, s) koika_check(b)
+#define koika_assert(b, s) ((void)0)
 #define koika_assume(b) do { if (!(b)) Frama_C_abort(); } while (0)
 #define koika_draw(x) ((x) = Frama_C_interval(-2147483647-1, 2147483647))
 #define koika_secret(x) koika_mark(&(x))
@@ -1279,6 +1276,7 @@ int main(int argc, char* argv[]) {
   }
   struct StateT2 p = { .a = &s1, .b = &s2 };
   struct StateT2 *p_ = snippet(&p);
+  //@ assert untainted_timer: !\tainted(p_->a->timer==p_->b->timer);
   koika_assert(p_->a->timer==p_->b->timer, "timing leak");
   return 0;
 }

@@ -1718,6 +1718,7 @@ int main(int argc, char* argv[]) {
   }
   struct StateT2 p = { .a = &s1, .b = &s2 };
   struct StateT2 *p_ = snippet(&p);
+  //@ assert untainted_timer: !\tainted(p_->a->timer==p_->b->timer);
   koika_assert(p_->a->timer==p_->b->timer, "timing leak");
   return 0;
 }
