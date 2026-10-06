@@ -3,7 +3,7 @@ package elms.koika.test.common
 import scala.collection.immutable.VectorMap
 
 import elms.core.{Name, Op, STRUCT, StructRepr, Type, UNIT}
-import elms.core.tree.{E, Function, Let, Program, Term, V, View}
+import elms.core.tree.{E, Function, Let, Note, Program, Term, V, View}
 
 // The same product the squared interpreter builds, built the other way: by
 // rewriting a residue after staging rather than by interpreting the program
@@ -123,13 +123,14 @@ object Lockstep {
     private def hasApp(t: Term): Boolean = t match {
       case E(Op.App, _)   => true
       case E(_, cs)       => cs.exists(hasApp)
-      case Let(_, e1, e2) => hasApp(e1) || hasApp(e2)
+      case Let(_, e1, e2, _) => hasApp(e1) || hasApp(e2)
       case _              => false
     }
 
     private def assertAndAssume(cond: Term)(rest: Term): Term =
       Let(anon(), E(Op.Custom("lockstep_assert", UNIT), Seq(cond)),
-        Let(anon(), E(Op.Custom("lockstep_assume", UNIT), Seq(cond)), rest))
+        Let(anon(), E(Op.Custom("lockstep_assume", UNIT), Seq(cond)), rest, Seq()),
+        Seq())
 
     private def clocksAgree(s: Term): Term = View.Equals(
       E(Op.StructGet(state, clock), Seq(half(s, 0))),
@@ -146,9 +147,14 @@ object Lockstep {
     private def project(env: Env, i: Int)(t: Term): Term = t match {
       case V(n) => env.get(n).map(sideOf(_, i)).getOrElse(V(n))
 
-      case Let(x, e1, e2) => {
+      case Let(x, e1, e2, notes) => {
         val y = renamed(x, i)
-        Let(y, project(env, i)(e1), project(env + (x -> Split(V(y), V(y))), i)(e2))
+        Let(
+          y,
+          project(env, i)(e1),
+          project(env + (x -> Split(V(y), V(y))), i)(e2),
+          sided(env, i)(notes)
+        )
       }
 
       case E(Op.StructGet(r, f), Seq(s)) if r.name == state.name =>
@@ -165,16 +171,25 @@ object Lockstep {
       case f: Function => sys.error(s"lockstep: nested function: $f")
     }
 
+    // A note says something about the binding it rides on, so it goes wherever
+    // that binding goes and names the same side of the pair.
+    private def sided(env: Env, i: Int)(notes: Seq[Note]): Seq[Note] =
+      notes.map(n => n.copy(args = n.args.map(project(env, i))))
+
     // [t] is a let-chain. [k] finishes the output once the chain's result is
     // known, which is what lets a binding emit two [Let]s where the original
     // had one.
     private def rewrite(env: Env)(t: Term)(k: Sided => Term): Term = t match {
-      case Let(x, e1, e2) if hasApp(e1) => {
+      case Let(x, e1, e2, notes) if hasApp(e1) => {
         val y = shared(x)
         val next = rewrite(env + (x -> Both(V(y))))(e2)(k)
+        // The binding is shared, so what is written about it has to be too. A
+        // note naming a value the two runs disagree on fails here the same way
+        // the call's own arguments do, and for the same reason.
+        val kept = notes.map(n => n.copy(args = n.args.map(a => bothOf(atom(env)(a)))))
         e1 match {
           case E(Op.App, f +: args) =>
-            Let(y, E(Op.App, f +: args.map(a => bothOf(atom(env)(a)))), next)
+            Let(y, E(Op.App, f +: args.map(a => bothOf(atom(env)(a)))), next, kept)
 
           // A branch. Fusing it is only sound while the two runs agree on where
           // to go, which is what the assertion is for: this is the one place a
@@ -184,7 +199,7 @@ object Lockstep {
             val ca = project(env, 0)(c)
             val cb = project(env, 1)(c)
             assertAndAssume(View.Equals(ca, cb).into) {
-              Let(y, E(Op.IfThenElse, Seq(ca, arm(env)(th), arm(env)(el))), next)
+              Let(y, E(Op.IfThenElse, Seq(ca, arm(env)(th), arm(env)(el))), next, kept)
             }
           }
 
@@ -192,11 +207,13 @@ object Lockstep {
         }
       }
 
-      case Let(x, e1, e2) => {
+      case Let(x, e1, e2, notes) => {
         val (a, b) = (renamed(x, 0), renamed(x, 1))
         Let(a, project(env, 0)(e1),
           Let(b, project(env, 1)(e1),
-            rewrite(env + (x -> Split(V(a), V(b))))(e2)(k)))
+            rewrite(env + (x -> Split(V(a), V(b))))(e2)(k),
+            sided(env, 1)(notes)),
+          sided(env, 0)(notes))
       }
 
       case other => k(atom(env)(other))
@@ -210,14 +227,24 @@ object Lockstep {
       case _    => Split(project(env, 0)(t), project(env, 1)(t))
     }
 
+    // The residue's slots take the state and nothing else, which is what makes
+    // the one shared argument below sound. A second parameter would need its
+    // own answer about whether the two runs agree on it, so it is rejected
+    // here rather than guessed at.
     def function(f: Function): Function = {
-      val arg = shared(f.arg)
-      val env: Env = Map(f.arg -> Both(V(arg)))
+      val (name, inty) = f.args match {
+        case Seq(one) => one
+        case other    => sys.error(s"lockstep: a slot taking ${other.length} arguments")
+      }
+      if f.notes.nonEmpty then
+        sys.error("lockstep: a slot contract, which names a state that is now a pair")
+      val arg = shared(name)
+      val env: Env = Map(name -> Both(V(arg)))
       Function(
-        arg,
-        retype(f.inty),
+        Seq(arg -> retype(inty)),
         retype(f.outty),
-        assertAndAssume(clocksAgree(V(arg)))(rewrite(env)(f.body)(bothOf))
+        assertAndAssume(clocksAgree(V(arg)))(rewrite(env)(f.body)(bothOf)),
+        Seq()
       )
     }
   }
