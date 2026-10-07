@@ -12,9 +12,11 @@
 # A file whose line says `likely-timeout` is one the tree expects KLEE not to
 # finish, and those are skipped unless you pass --slow, or --only-slow to run
 # nothing else. Skipped files are printed, so a default run still says what it
-# did not look at. Fourteen files are in that state. Eleven finish and spend
-# most of a budget doing it, and the other three produce no verdict at all,
-# which is the whole reason for the flag.
+# did not look at. Fourteen files in the main suite are in that state. Eleven
+# finish and spend most of a budget doing it, and the other three produce no
+# verdict at all, which is the whole reason for the flag. Six more carry the
+# label under `probe/`, where the whole subtree is held back anyway, so the two
+# skips never both apply to one file.
 #
 # The claim lives in the file, on the `// verify:` line that `KoikaSuite.check`
 # writes at the top of it, same as `src/out/cbmc/verify` reads. What differs is
@@ -71,7 +73,15 @@ here=${0:a:h}
 # a settled one, and a KLEE budget is the last thing to spend on it for the
 # sharper reason as well: dropping the assumption is dropping the pruning, so a
 # split path is exactly where the search gets expensive.
-full_only='(*/lockstep/*|*/dynamic/*)'
+#
+# `probe/` is the third and the one this script has the strongest reason to
+# skip. It is `riscv/cache/branchy` at one through six probes under both
+# constructions, and KLEE's bill on that demo is the path space itself: 5s, 41s,
+# 222s and 929s self-composed at one through four, with five and six never seen
+# to finish. Twelve files, most of a budget apiece at the top of the dial, and
+# no verdict the tree does not already have. It is here to be measured rather
+# than to be run.
+full_only='(*/lockstep/*|*/dynamic/*|*/probe/*)'
 
 slow=0
 only_slow=0
@@ -151,7 +161,7 @@ if (( ! $#files )); then
     if (( ! full )); then
         held_back=${#${(M)files:#${~full_only}}}
         files=(${files:#${~full_only}})
-        (( held_back )) && print -- "skip     $held_back under lockstep/ and dynamic/ (pass --full to check them)"
+        (( held_back )) && print -- "skip     $held_back under lockstep/, dynamic/ and probe/ (pass --full to check them)"
     fi
 fi
 

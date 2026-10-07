@@ -56,9 +56,17 @@ here=${0:a:h}
 # question, the static tower is the one that ships, and an experiment does not
 # get to slow down or destabilise a default run while the question is open.
 #
-# `sbt testFull` still regenerates both, so the C stays current whether or not
-# anybody checks it.
-full_only='(*/lockstep/*|*/dynamic/*)'
+# `probe/` is the third, and the only one held back purely on cost. It is
+# `riscv/cache/branchy` with the probe count as a dial, twelve files, one per
+# setting per construction, and the point of the subtree is that the last
+# settings are expensive: each probe forks three ways, so the space is 3^k and
+# six probes cost tens of seconds here against a second and a half at four.
+# Nothing in it is a verdict the tree does not already carry at k=4, so a
+# default run has nothing to learn from it and a scaling study has everything.
+#
+# `sbt testFull` still regenerates all three, so the C stays current whether or
+# not anybody checks it.
+full_only='(*/lockstep/*|*/dynamic/*|*/probe/*)'
 
 certify=0
 full=0
@@ -79,7 +87,7 @@ if (( ! $#files )); then
     if (( ! full )); then
         held_back=${#${(M)files:#${~full_only}}}
         files=(${files:#${~full_only}})
-        (( held_back )) && print -- "skip     $held_back under lockstep/ and dynamic/ (pass --full to check them)"
+        (( held_back )) && print -- "skip     $held_back under lockstep/, dynamic/ and probe/ (pass --full to check them)"
     fi
 fi
 

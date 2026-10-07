@@ -89,7 +89,12 @@ here=${0:a:h}
 # back so a default run of all three scripts covers the same files, and a
 # three-way disagreement is then about the backends rather than about which tree
 # somebody remembered to check.
-full_only='(*/lockstep/*|*/dynamic/*)'
+#
+# `probe/` is the third and is held back on the same reasoning. Taint does not
+# care how large a path space is, so Eva answers all twelve in about a second
+# each and would happily carry them; the other two scripts cannot, and a tree
+# the three disagree about covering is worse than a tree none of them covers.
+full_only='(*/lockstep/*|*/dynamic/*|*/probe/*)'
 
 full=0
 while [[ $1 == --* ]]; do
@@ -148,7 +153,7 @@ if (( ! $#files )); then
     if (( ! full )); then
         held_back=${#${(M)files:#${~full_only}}}
         files=(${files:#${~full_only}})
-        (( held_back )) && print -- "skip     $held_back under lockstep/ and dynamic/ (pass --full to check them)"
+        (( held_back )) && print -- "skip     $held_back under lockstep/, dynamic/ and probe/ (pass --full to check them)"
     fi
 fi
 

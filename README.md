@@ -104,14 +104,16 @@ and [`verify`](src/out/cbmc/verify) reads it back out and runs the checker:
 
 `./src/out/cbmc/verify [--certify] [--full] [file.c ...]`
 
-With no arguments it takes the main suite, all 207 snapshots of it. Two trees
-are held back, and for opposite reasons. `lockstep/` is five demos `squared/`
-also answers, by the construction `squared/` replaced, and it is held back
-because it agrees and costs time. `dynamic/` is held back because it is not
-settled. It drops the control-flow assumption rather than making it, which is
-an open question about the construction and not a second opinion on a closed
-one. `sbt testFull` regenerates both either way, so what `--full` buys is the
-check rather than the C. Naming files runs exactly those, main suite or not.
+With no arguments it takes the main suite, all 207 snapshots of it. Three trees
+are held back, for three different reasons. `lockstep/` is five demos
+`squared/` also answers, by the construction `squared/` replaced, and it is
+held back because it agrees and costs time. `dynamic/` is held back because it
+is not settled. It drops the control-flow assumption rather than making it,
+which is an open question about the construction and not a second opinion on a
+closed one. [`probe/`](#the-probe-count-dial) is held back on cost alone: it is
+one demo at six sizes under both towers, and the sizes at the top are the whole
+point. `sbt testFull` regenerates all three either way, so what `--full` buys
+is the check rather than the C. Naming files runs exactly those, main suite or not.
 It prints one line per file and exits non-zero if CBMC says anything other than
 what the file claims, so a model that stops detecting what it used to detect is
 a failing run rather than a stale comment. The claims themselves are greppable
@@ -154,18 +156,33 @@ A set-associative cache moved the cost somewhere the sharing does not reach.
 What is expensive now is array theory over subscripts nobody knows, and running
 two states doubles the updates in flight while pruning none of them. `branchy`
 at the four probes it ships with is 1.43s squared against 1.31s self-composed.
-Twice the work, no difference, and if anything the wrong way. At six probes it
-was 41.2s against 40.4s, and that pair has not been re-taken because the probe
-count lives in the assembly rather than in a flag.
+Twice the work, no difference, and if anything the wrong way.
 
-So it currently earns nothing in time, and costs a little: see
+The probe count is a dial now rather than a line of assembly, which is what
+[`probe/`](#the-probe-count-dial) is, and turning it says the same thing
+louder. CBMC on the two constructions, one through six probes:
+
+| probes | self-composed | squared |
+|---|---|---|
+| 1 | 0.20s | 0.21s |
+| 2 | 0.31s | 0.34s |
+| 3 | 0.57s | 0.61s |
+| 4 | 1.50s | 1.39s |
+| 5 | 5.79s | 7.11s |
+| 6 | 17.25s | **25.80s** |
+
+The gap grows with the space the sharing was supposed to prune. So under this
+backend the construction does not merely fail to pay off, it loses ground
+exactly where its argument was.
+
+So it earns nothing in time here, and costs a little: see
 [what each one charges](#three-ways-to-ask-and-what-each-one-charges) for the
 per-file numbers. It is kept for the other thing it does. Every clock verdict in
 that tree matches its twin next door, which is a second opinion on the same
 program from a differently shaped formula, and where the declared verdicts
-differ it is the control-flow obligation talking rather than the clock. Its speed
-argument is waiting on a demo whose cost is a path space, and the tree does not
-have one at the moment.
+differ it is the control-flow obligation talking rather than the clock. Under a
+symbolic executor the same dial goes the other way, and the section on it says
+why that is not the sharing either.
 
 [`src/out/cbmc/lockstep`](src/out/cbmc/lockstep) is a third answer to five of
 them, and a historical one. `Lockstep` built the product by rewriting the
@@ -952,8 +969,8 @@ No error file is only clean if the run also finished, which is
 `halting execution` on stderr. Drop the last two and an exploration that ran out
 of time reports exactly like a proof.
 
-Fourteen files in the tree are marked for that case, and they say so where
-they call `check`:
+Twenty files in the tree are marked for that case, fourteen in the main suite
+and six more under `probe/`, and they say so where they call `check`:
 
 ```scala
 check("cache/branchy", snippet, Verdict.Clean, klee = Reach.LikelyTimeout)
@@ -1011,9 +1028,9 @@ Each of those costs a full budget or more, so a default run skips them and says
 which it skipped:
 
 ```
-skip     7 under lockstep/ and dynamic/ (pass --full to check them)
+skip     19 under lockstep/, dynamic/ and probe/ (pass --full to check them)
 skip     src/out/klee/riscv/cache/branchy.check.c (likely-timeout; pass --slow to run it)
-all 194 agree (13 skipped, 7 held back for --full)
+all 194 agree (13 skipped, 19 held back for --full)
 ```
 
 Those counts are the tree's arithmetic and not a transcript. 207 snapshots in
@@ -1036,8 +1053,151 @@ KLEE walks one path and beats CBMC on a large one: `fact/naive/salsa20` is 0.68s
 against 4.53s, because CBMC's cost is a formula over 277 instructions and 6536
 generated properties while KLEE just runs it. Put a cache in front of a symbolic
 load and it reverses, from 4x behind on a five-path space to 814s against 1.4s
-on `riscv/cache/branchy`. Both backends finish every residue in the tree; six of
-them need KLEE to be given twenty minutes.
+on `riscv/cache/branchy`. Both backends finish every residue in the main suite;
+six of them need KLEE to be given twenty minutes. Outside it, the top two
+settings of the [probe-count dial](#the-probe-count-dial) are the first files
+here CBMC answers and KLEE does not, which is the same cliff with the dial
+turned far enough to fall off it.
+
+## The probe-count dial
+
+`riscv/cache/branchy` is the one demo here whose bill is a path space rather
+than a formula, and for most of this tree's life its four probes were written
+out in an `.irp` in the assembly. So every claim about how a checker scales was
+a claim about two points somebody had measured months apart.
+[`probe.s`](src/test/asm/riscv/probe.s) is that demo with the count as a
+`--defsym`, one source assembled into `probe1.o` through `probe6.o`, and
+[`probe.scala`](src/test/scala/elms/riscv/probe.scala) stages each of them
+under both towers. Twelve snapshots per backend under `src/out/*/probe`, held
+back from a default `verify` because the settings at the top of the dial are
+the entire point of having one.
+
+Every cell is clean, and that is the arrangement rather than a result. A
+program with nothing to report is a program whose checker has to clear the
+whole space instead of stopping at the first witness, which is what makes the
+pair a measurement of cost. `probe/self/k4` stages into the same 1130 lines as
+`riscv/cache/branchy` and `probe/squared/k4` into the same 2281, which is the
+control saying the dial reproduces the demo it generalises.
+
+KLEE, 1200s budget:
+
+| probes | self-composed | squared | squared/self | completed paths |
+|---|---|---|---|---|
+| 1 | 3.9s | 3.8s | 0.97 | 2 and 2 |
+| 2 | 27.5s | 27.0s | 0.98 | 4 and 4 |
+| 3 | 156.2s | 130.9s | 0.84 | 9 and 9 |
+| 4 | 928.6s | **605.7s** | **0.65** | 23 and 23 |
+| 5 | n/a | n/a | | neither finishes |
+| 6 | n/a | n/a | | neither finishes |
+
+One through three were taken on an idle box and four with one other job on the
+machine, so read 0.65 as the shape rather than as three digits.
+
+That is the squared tower winning, on the one demo it was supposed to win on,
+with the margin growing in the size of the space. And the fourth column says it
+is not winning for the advertised reason. The completed path counts are equal
+at every setting. Nothing is being pruned.
+
+### What is actually cheaper
+
+Self-composition's `main` calls the residue twice:
+
+```c
+struct StateT *s1_ = snippet(&s1);
+struct StateT *s2_ = snippet(&s2);
+```
+
+The squared one calls it once, carrying both states:
+
+```c
+struct StateT2 p = { .a = &s1, .b = &s2 };
+struct StateT2 *p_ = snippet(&p);
+```
+
+Same paths, shorter path. At four probes that is 72,215 instructions against
+146,180 and 1283 solver queries against 2003, which is the 0.65 and all of it.
+The sharing has nothing to do with it, and neither does the residue being twice
+as wide, because the work along a path is the same either way and the number of
+paths it is spent on is halved.
+
+### Why the assumptions cannot help a symbolic executor
+
+Every squared slot emits this pair:
+
+```c
+squared_assert(v1316);
+squared_assume(v1316);
+```
+
+KLEE's `klee_assert(e)` expands to `e ? (void)0 : __assert_fail(...)`. KLEE
+forks on `e`, terminates the false branch with an `assert.err`, and the state
+that survives already carries `e` in its path condition. The `klee_assume` on
+the next line constrains something that is already there. Same for the
+`squared_diverged` pair a few lines down.
+
+So the pruning that makes `__CPROVER_assume` worth emitting, where the assertion
+adds no constraint and the assumption does, is under KLEE subsumed by the
+assertion sitting immediately above it. The paths it would cut are exactly the
+ones KLEE has already terminated as counterexamples: on a clean program there
+are none, and on a leaky one the search stops at the first.
+
+That is an argument rather than a measurement, so here is the measurement.
+Rewriting `squared_assume` to a no-op in five squared residues, two runs each:
+
+| residue | assume on | assume off | completed paths |
+|---|---|---|---|
+| `squared/cache/constant_time` | 0.9s, 0.8s | 0.8s, 0.8s | 4 and 4 |
+| `squared/static/bypass_ct` | 15.9s, 15.7s | 15.2s, 15.0s | 1 and 1 |
+| `squared/predictive_nb/evict` | 14.7s, 14.3s | 13.5s, 13.0s | 4 and 4 |
+| `squared/static/bypass` | 35.2s, 34.9s | 26.7s, 26.0s | 1 and 1 |
+| `probe/squared/k3` | 151.5s, 147.4s | 199.7s, 191.4s | 9 and 9 |
+
+Identical path counts in all five. The times move a quarter in both directions,
+which is the constraint making individual queries easier or harder rather than
+fewer of them.
+
+### What it costs everywhere else
+
+All 76 pairs that exist in both towers, 60 seconds apiece. Of the 61 where both
+settled, 52 have identical completed path counts; the nine that differ are
+`balanced`, where the squared column is answering its second question, and
+leaks, where the search stops at whichever witness the randomised searcher
+reaches first. Among the pairs costing more than five seconds:
+
+| | pairs | median squared/self |
+|---|---|---|
+| clean, so a proof | 16 | 1.55, range 0.94 to 1.66 |
+| leak, so a witness | 14 | 0.94, range 0.78 to 1.12 |
+
+The 6% on leaks is the squared tower asserting at the slot where the drift
+starts rather than after both runs have finished. The 1.55 is the bill for a
+residue twice as wide on a path space the sharing did not shrink.
+
+`hidden` is the worst of it, and it is the most informative file in the
+comparison. On an idle box at a 900s budget it is 54 to 57 seconds
+self-composed against 214 to 229 squared, about four times, the same under
+`static`, `predictive` and `forwarding`. That residue holds 227
+`squared_assert` calls, and the query count goes from 279 to 898. CBMC folds
+227 assertions into one formula and charges once. KLEE pays a solver query per
+fork point. Comparing the clocks at every slot is cheap for a bounded model
+checker and expensive for a symbolic executor, and the tree had no way to see
+that until the two backends were run on the same pairs.
+
+### What this leaves open
+
+The single pass and the per-slot comparison are separable, and the measurements
+point opposite ways: the pass is worth a third of the time at four probes, the
+comparisons cost four times on `hidden`. A construction that interleaves the two
+runs without comparing clocks at every slot would take the first without paying
+the second. It would also stop deciding the stronger property, which is the
+whole reason the comparisons are there, so this is a question about what the
+tower is for rather than a missing optimisation. Nobody has built it.
+
+Sharper, and untested: `squared_assert` demands the clocks agree at *every*
+slot, which is strictly stronger than agreeing at the end. A program whose
+clocks drift and reconverge is clean to self-composition and a leak to the
+squared tower. No demo in this tree has that shape, so the two towers agreeing
+on sixty-nine verdicts is weaker evidence than it looks.
 
 ## Checking with Frama-C
 
@@ -1049,15 +1209,15 @@ model checker, and [`src/out/eva/verify`](src/out/eva/verify) is its script:
 The whole tree, held-back subtrees included, comes out in under three minutes:
 
 ```
-all 214 agree
+all 226 agree
 ```
 
 `fact/naive/salsa20` is the slowest file in it at 11 seconds and a typical
 residue answers in about one.
 
-A default run leaves out the same two trees the other two scripts leave out, and
-`--full` adds them back. The reasons for leaving them out are theirs rather than
-Eva's, which is cheap on both. What the holdback buys here is that a default run
+A default run leaves out the same three trees the other two scripts leave out,
+and `--full` adds them back. The reasons for leaving them out are theirs rather
+than Eva's, which is cheap on all three. What the holdback buys here is that a default run
 of all three scripts covers the same 207 files, so a three-way disagreement is
 about the backends rather than about which tree somebody remembered to check.
 
@@ -1220,7 +1380,7 @@ That is not built.
 
 ### What it costs, which is one flag
 
-CBMC answers its 207 residues in 247 seconds. Eva answers all 214, the two
+CBMC answers its 207 residues in 247 seconds. Eva answers all 226, the three
 held-back trees included, in 174.
 
 It did not start there. The first working version of this backend took 1543
@@ -1283,10 +1443,16 @@ otherwise idle machine:
 The squared column is the expensive one, which is worth saying because the
 construction was built to be the cheap one. Over all sixty-nine pairs its
 residue is 2.04x the lines, and everywhere except `branchy` that width costs
-more than the shared control flow prunes. `branchy` is where it breaks even,
-and `branchy` is the one demo whose bill is a path space rather than a formula.
-The squared section above reports the same thing from the other direction, as a
-whole-tower number on `branchy` rather than a per-file one.
+more than the sharing saves. `branchy` is where it breaks even, and `branchy`
+is the one demo whose bill is a path space rather than a formula.
+
+"Saves" and not "prunes", which is the one word this table used to get wrong.
+The [probe-count dial](#the-probe-count-dial) turns `branchy` into six sizes
+and runs both towers over all of them, and the completed path counts come back
+equal at every size. Whatever the squared column is buying on this row, it is
+not a smaller search. The dial also says which way the row tips once the space
+is bigger than four probes, and under CBMC it tips against the squared tower:
+17.25s self-composed against 25.80s squared at six.
 
 Cost tracks how much is being asked, and the three ask different amounts. The
 squared tower decides whether the clocks can differ and whether the control flow
