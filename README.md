@@ -1072,6 +1072,11 @@ under both towers. Twelve snapshots per backend under `src/out/*/probe`, held
 back from a default `verify` because the settings at the top of the dial are
 the entire point of having one.
 
+[`doc/squared-vs-self-composition.md`](doc/squared-vs-self-composition.md) is
+the measurement record behind this section: the method, the counters, the
+control experiment and what each number was taken under. What follows is the
+conclusions.
+
 Every cell is clean, and that is the arrangement rather than a result. A
 program with nothing to report is a program whose checker has to clear the
 whole space instead of stopping at the first witness, which is what makes the
