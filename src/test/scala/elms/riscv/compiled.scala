@@ -10,16 +10,38 @@ import elms.koika.test.common.{Init, Static, StateT}
 import elms.koika.test.squared.StateT2
 import elf.{Datum, Taint}
 
-private val image = elf.Elf.load("src/test/asm/riscv/cmp.o")
+// How an argument register is drawn, and what the C calls the draw.
+//
+// Two of the three take their bound out of the image rather than from the test
+// site, because both bounds are facts about where the linker put things and a
+// number written down in Scala would be a second copy of one.
+enum Arg derives CanEqual {
+  // As many words as the attacker's own array holds. `cmp`'s argument is how
+  // many to compare, and anything larger walks off the end of a global.
+  case Count(name: String)
+  // An index into the attacker's array, drawn far enough past the end of it to
+  // reach the secret behind it. Anything smaller reads the attacker's own data
+  // back, which is what would make a Spectre gadget leak nothing.
+  case Index(name: String)
+  // A scalar the image says nothing about.
+  case Word(name: String, bound: Int)
+}
 
 // A program that came out of a C compiler rather than out of someone's head.
-// The C, the command that compiled it, and why it is `-O1` are all in
-// `src/test/asm/riscv/cmp.c`.
+// [objectFile] says which one and [args] says what the caller left in a0, a1
+// and so on; everything else is read back out of the image, because the
+// section headers are where the threat model actually lives.
 //
-// At file scope rather than inside the suite, because it is the longest and
-// branchiest demo in the tree and so the one anything measuring a checker wants
-// to reach for.
+// [objectFile] is a `def` and the members derived from it are lazy, because a
+// subclass supplies it from a constructor parameter and the parameter is the
+// only thing set before this trait's body runs. [prog] is the exception and
+// cannot be lazy, since [Common] declares it a `val`, which is what pins the
+// parameter down to a parameter.
 trait CompiledShell[S: StructManifest] extends RiscVShell[64, S] {
+  def objectFile: String
+  def args: List[Arg]
+
+  private lazy val image = elf.Elf.load(objectFile)
   val prog: Vector[RiscV.Instr] = image.prog
 
   private def base(d: Datum): Int = d.addr / 4
@@ -31,17 +53,17 @@ trait CompiledShell[S: StructManifest] extends RiscVShell[64, S] {
   private def tainted(t: Taint): Seq[(String, Datum)] =
     image.globals.toSeq.filter((_, d) => d.taint == t).sortBy((_, d) => d.addr)
 
-  private val secrets = tainted(Taint.Secret)
-  private val attackers = tainted(Taint.Attacker)
+  private lazy val secrets = tainted(Taint.Secret)
+  private lazy val attackers = tainted(Taint.Attacker)
 
   // Words a `bounded(…)` is about to write, so the image's own bytes for them
   // are noise. Emitting them anyway is how the hand-written version came to
   // set `mem[0..3] = 11, 22, 33, 44` and then bury them one line later.
-  private val nondet: Set[Int] =
+  private lazy val nondet: Set[Int] =
     (secrets ++ attackers).flatMap((_, d) => span(d)).toSet
 
   // `init` zeroes `mem`, so only the nonzero words need writing.
-  private val publicData: String = {
+  private lazy val publicData: String = {
     val lines = image.data.zipWithIndex
       .filter((w, i) => w != 0 && !nondet(i))
       .map((w, i) => s"  s1.mem[$i] = $w;\n  s2.mem[$i] = $w;")
@@ -69,29 +91,64 @@ trait CompiledShell[S: StructManifest] extends RiscVShell[64, S] {
        |    s2.mem[${base(d)} + i] = secret(0, 20);
        |  }""".stripMargin
 
-  // `cmp`'s argument is how many words to compare. Both arrays are the same
-  // length, so the attacker's own size is the bound; anything larger walks
-  // off the end of a global.
-  private val bound: Int = attackers.map((_, d) => length(d)).minOption.getOrElse(0)
+  // Both arrays are the same length, so the attacker's own size is the bound.
+  private lazy val count: Int = attackers.map((_, d) => length(d)).minOption.getOrElse(0)
 
-  // `n` in a0 and `guess` in memory are both public, so they are identical in
-  // the two runs and only the secret differs. Folded in here rather than
-  // given its own hook, because `main` already interpolates this string.
-  override lazy val initialize_input: String =
-    s"""$publicData
-       |  int n = bounded(0, $bound);
-       |  s1.regs[10] = n;
-       |  s2.regs[10] = n;${attackers.map(shared).mkString}""".stripMargin
+  // The largest index that still lands inside a secret, counted from whichever
+  // attacker array the linker put closest under one. The `require` is the
+  // demo's premise and not a sanity check: an [Arg.Index] into an array with
+  // nothing secret above it draws a number that cannot leak.
+  private lazy val reach: Int = {
+    val lowest = secrets.map((_, d) => d.addr).minOption
+    val highest = secrets.map((_, d) => d.addr + d.size).maxOption
+    val under = attackers.map((_, d) => d.addr).filter(a => lowest.exists(a < _))
+    require(
+      highest.isDefined && under.nonEmpty,
+      s"$objectFile has no attacker array under a secret, so an index reaches nothing"
+    )
+    (highest.get - under.max) / 4 - 1
+  }
+
+  private def drawn(a: Arg, reg: Int): String = {
+    val (name, hi) = a match {
+      case Arg.Count(n)      => (n, count)
+      case Arg.Index(n)      => (n, reach)
+      case Arg.Word(n, bund) => (n, bund)
+    }
+    s"""
+       |  int $name = bounded(0, $hi);
+       |  s1.regs[$reg] = $name;
+       |  s2.regs[$reg] = $name;""".stripMargin
+  }
+
+  // Arguments and the attacker's arrays are public, so they are identical in
+  // the two runs and only the secret differs. Folded in here rather than given
+  // its own hook, because `main` already interpolates this string.
+  override lazy val initialize_input: String = {
+    val regs = args.zipWithIndex.map((a, i) => drawn(a, 10 + i)).mkString
+    s"$publicData$regs${attackers.map(shared).mkString}"
+  }
 
   override lazy val initialize_secret: String = secrets.map(split).mkString
 }
 
-trait CompiledDriver extends RiscVDriver[64] with CompiledShell[StateT[32, 64, 24, 12]]
+// The C, the command that compiled it, and why it is `-O1` are all in
+// `src/test/asm/riscv/cmp.c`. `cmp`'s argument is how many words to compare.
+//
+// At file scope rather than inside the suite, because it is the longest and
+// branchiest demo in the tree and so the one anything measuring a checker wants
+// to reach for.
+trait CmpShell[S: StructManifest] extends CompiledShell[S] {
+  override def objectFile: String = "src/test/asm/riscv/cmp.o"
+  override def args: List[Arg] = List(Arg.Count("n"))
+}
+
+trait CompiledDriver extends RiscVDriver[64] with CmpShell[StateT[32, 64, 24, 12]]
 
 // The same demo, run in step.
 trait SquaredCompiledDriver
     extends SquaredRiscVDriver[64]
-    with CompiledShell[StateT2[32, 64, 24, 12]]
+    with CmpShell[StateT2[32, 64, 24, 12]]
 
 @virtualize
 class RiscVCompiledTests extends KoikaSuite {
