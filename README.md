@@ -1580,11 +1580,25 @@ Thirty-eight of those 277 instructions are stores, which makes this the one file
 in the tree that really exercises `forwarding`, and it is the reason that model
 is a column rather than a rewrite: it stages, and it still verifies.
 
-It is also the only case study the tower can take. curve25519-donna, poly1305,
-both OpenSSL MEE versions and the Lucky13 fix in `openssl-ssl3/s3_cbc.fact` are
-all multi-function, and `s3_cbc.fact` opens by declaring `extern void
-SHA1_Transform`. One function per object is the whole budget, because a dynamic
-jump cannot be staged against a static program counter.
+It is also the only case study the tower can take, and being multi-function is
+not what stops the others. A direct call to a `static` callee leaves no
+relocation on its `auipc`/`jalr` pair, so the reader computes the target and
+the tower walks in on a staging-time return stack.
+
+What stops them was measured rather than argued. Marking every non-entry
+`define` `alwaysinline` collapses curve25519-donna to one function and
+`crypto_secretbox` to two, which leaves 9957 and 5997 IR instructions against
+the 462 of the salsa20 already ported, and that one already needed `-Xss`
+raised. Under that sits RV32M. `fscalar_product` wants 22 `mul` and 21 `mulhu`,
+and without the extension those are `__mulsi3` and `__muldi3` libcalls, which
+really are the dynamic jump this paragraph used to blame on everything.
+`mulhu` would then have to be synthesized out of 16-bit halves on top, because
+ELMS has no `Rep[Long]`.
+
+`openssl-mee` and the Lucky13 fix in `openssl-ssl3/s3_cbc.fact` are the two
+with no feature that unblocks them. `s3_cbc.fact` opens by declaring `extern
+void SHA1_Transform`, and a symbol outside the object is a target no `auipc`
+inside it computed.
 
 ### `guarded`
 
