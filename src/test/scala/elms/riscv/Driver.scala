@@ -50,7 +50,7 @@ trait RiscVShell[M <: Int: ValueOf, S: StructManifest] extends KoikaDriver[32, M
 // and declaring the function anyway would move every snapshot in the tree for
 // a line nothing calls.
 //
-// Declared from here because both towers will emit the same call.
+// Both towers emit the same call, so both declare it from here.
 def retAssert(prog: Vector[RiscV.Instr]): String =
   if (prog.exists { case RiscV.Instr.Call(_, _) => true; case _ => false }) {
     """void ret_assert(bool c) { koika_assert(c, "return address"); }
@@ -72,4 +72,6 @@ trait RiscVDriver[M <: Int: ValueOf] extends RiscVShell[M, StateT[32, M, 24, 12]
 trait SquaredRiscVDriver[M <: Int: ValueOf]
     extends SquaredKoikaDriver[32, M, 24, 12]
     with RiscVShell[M, StateT2[32, M, 24, 12]]
-    with Flat
+    with Flat {
+  override def helpers: String = retAssert(prog)
+}

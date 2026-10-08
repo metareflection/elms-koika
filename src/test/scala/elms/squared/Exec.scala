@@ -190,15 +190,30 @@ trait Exec extends Squared {
           each(s)(h => storeValue(h, w, read(h, rs1) + unit(imm.i), read(h, rs2)))
           call(pc + 1, s)
         }
-        // A leaf's `ret`, which is every `ret` the tree currently contains:
-        // nothing called this, so returning is halting, and that is what the
-        // reader used to spell as a jump past the end.
-        case Instr.Ret => call(prog.length, s)
-        // The single-run tower carries a return stack and this one does not
-        // yet. [Squared.slot] keys on which runs are live rather than going
-        // through [Common], so the stack has to be interned into that key as
-        // well, and both runs have to be made to agree on where they return.
-        case Instr.Call(_, _) => sys.error(s"squared: no return stack yet, at pc $pc")
+        // The link register really is written, in each run, so a callee that
+        // spills `ra` and reloads it spills the right value. Where control
+        // comes back to is the static stack's business and not this
+        // register's.
+        case Instr.Call(rd, target) => {
+          each(s)(h => write(h, rd, unit(4 * (pc + 1))))
+          withStack(deepen(pc, pc + 1)) { call(target, s) }
+        }
+        // An unconditional jump, like [Jal], except that the target is a
+        // prediction and has to be checked. Each run's `ra` is checked against
+        // the same constant, so the two runs going the same way is a
+        // consequence of the two assertions rather than a third claim:
+        // [sameWay] has nothing left to reconcile here. A program that reaches
+        // this having overwritten `ra` is the ret2spec shape, and the
+        // assertions are where it shows up.
+        case Instr.Ret => retstack match {
+          case r :: rest => {
+            each(s)(h => returnsTo(read(h, RiscV.Reg(1)), r))
+            withStack(rest) { call(r, s) }
+          }
+          // Nothing to return through, which is what a leaf's `ret` means and
+          // what the reader used to encode by hand as a jump past the end.
+          case Nil => call(prog.length, s)
+        }
       }
     } else { s }
 }

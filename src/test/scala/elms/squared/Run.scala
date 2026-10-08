@@ -97,6 +97,13 @@ abstract class Run(val prog: Vector[RiscV.Instr]) extends Exec with Interp {
   override def sameWay(x: Sided[Rep[Boolean]]): Unit =
     if (x.a.v != x.b.v) { throw Stop(Outcome.Diverged(at)) }
 
+  // Not an [Outcome]. The two other obligations are questions about the pair
+  // and a counterexample to either is an answer, but a run that does not come
+  // back where the static stack says is a program this walk models wrong, so
+  // there is nothing left for the walk to report.
+  override def returnsTo(ra: Rep[Int], to: Int): Unit =
+    require(ra.v == 4 * to, s"slot $at returned to pc ${ra.v / 4}, not $to")
+
   override protected def choose(c: Rep[Boolean])(t: => Pair)(e: => Pair): Pair =
     if (c.v) { t } else { e }
 

@@ -70,6 +70,13 @@ abstract class SquaredKoikaDriver[
   override def sameClock(x: Sided[Rep[Int]]): Unit = claim("squared_assert", x.a === x.b)
   override def sameWay(x: Sided[Rep[Boolean]]): Unit = claim("squared_diverged", x.a === x.b)
 
+  // Not a [claim], because the two runs have nothing to compare here and an
+  // assumption would be assuming away the thing being asked. This is the
+  // single-run tower's `ret_assert`, emitted once per run, so the two towers
+  // declare and call the same C function.
+  override def returnsTo(ra: Rep[Int], to: Int): Unit =
+    unsafeReflect[Unit](Op.Custom("ret_assert", UNIT), ra === unit(4 * to))
+
   override protected def choose(c: Rep[Boolean])(t: => Pair)(e: => Pair): Pair =
     __ifThenElse(c, t, e)
 
@@ -117,7 +124,7 @@ abstract class SquaredKoikaDriver[
   // comparison below is what looks at it.
   override def main(prover: Prover): String = {
     val paired = stateManifest.name
-    s"""void squared_assert(bool c) { koika_assert(c, "timer drift"); }
+    s"""${helpers}void squared_assert(bool c) { koika_assert(c, "timer drift"); }
        |void squared_diverged(bool c) { koika_assert(c, "control flow diverged"); }
        |void squared_assume(bool c) { koika_assume(c); }
        |

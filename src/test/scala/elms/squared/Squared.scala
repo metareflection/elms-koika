@@ -4,6 +4,7 @@ import scala.collection.mutable
 
 import elms.prelude.given
 
+import elms.koika.test.common.Returns
 import elms.koika.test.riscv.RiscV
 
 // One value per run.
@@ -40,7 +41,7 @@ final case class Sided[A](a: A, b: A)
 // to keep the bookkeeping outside it. Nothing in [Flat] or [Cached] has any;
 // [Speculative.saveForRollback] is the one place in the tower that does, and
 // it is worth reading before adding a second.
-trait Squared extends Machine {
+trait Squared extends Machine with Returns {
   // Both runs at once: a pointer at a pair of states when this stages, and an
   // ordinary pair when it runs.
   type Pair
@@ -119,6 +120,15 @@ trait Squared extends Machine {
   // question: fusing the branch is only sound while it holds.
   def sameWay(x: Sided[Rep[Boolean]]): Unit
 
+  // One run comes back to [to], which is where the static return stack already
+  // decided it would. [ra] is the link register, so this is the prediction
+  // meeting what a machine would really jump to.
+  //
+  // Per run and so not a [sameWay]: it is the obligation a single run carries
+  // on its own, and the two runs going the same way follows from both being
+  // checked against the same constant rather than being a third claim.
+  def returnsTo(ra: Rep[Int], to: Int): Unit
+
   // One arm, taken once, for both runs.
   protected def choose(c: Rep[Boolean])(t: => Pair)(e: => Pair): Pair
 
@@ -145,36 +155,39 @@ trait Squared extends Machine {
   // `pc < prog.length` instead.
   def live(at: Int): Boolean = pcOf(at) < prog.length
 
-  // Solo slots, in the order they were first asked for. Both runs walking is
-  // the overwhelmingly common case and gets no table at all, so this is empty
-  // for every model in the tower as it ships.
-  private val solos = mutable.ArrayBuffer[(Int, Int)]()
-  private val soloSlots = mutable.Map[(Int, Int), Int]()
+  // What a slot is, once it is more than a pc: which runs are walking it, and
+  // which calls it will come back through. Interned in the order they were
+  // first asked for.
+  private type Where = (Int, Vector[Int], List[Int])
+  private val keys = mutable.ArrayBuffer[Where]()
+  private val numbered = mutable.Map[Where, Int]()
 
-  // One emitted function per slot, and a slot is a pc together with the runs
-  // walking it. [Predictive] needs a third and a fourth component and hands
-  // out its own numbering.
+  // One emitted function per slot. [Predictive] needs two more components and
+  // hands out its own numbering.
   //
-  // A pair keeps the pc as its own slot number, which is what makes this
-  // invisible to everything that never splits. The same functions come out
-  // under the same names they had before [DynamicSquared] existed. A solo walk
-  // is numbered past the end of the program, because the function it emits is
-  // a different function, half the width and with no comparison left in it.
-  def slot(pc: Int): Int = active match {
-    case Vector(i) =>
-      soloBase + soloSlots.getOrElseUpdate((pc, i), { solos += ((pc, i)); solos.length - 1 })
-    case _ => pc
-  }
+  // A pair with nothing in flight keeps the pc as its own slot number, which
+  // is what makes this invisible to everything that never splits and never
+  // calls: the same functions come out under the same names they had before
+  // [DynamicSquared] or [RiscV.Instr.Call] existed. Everything else is
+  // numbered past the end of the program, because the function it emits is a
+  // different function. Half the width, for a solo walk. A different
+  // continuation, for a pc arrived at under a different stack.
+  def slot(pc: Int): Int =
+    if (active.length > 1 && retstack.isEmpty) { pc }
+    else {
+      val w = (pc, active, retstack)
+      keyBase + numbered.getOrElseUpdate(w, { keys += w; keys.length - 1 })
+    }
 
-  // One past the last number a pair can take. [call] asks for `prog.length`
+  // One past the last number a bare pc can take. [call] asks for `prog.length`
   // whenever the program runs off the end, so the pc's own range is closed at
-  // both ends and a solo slot starts above it.
-  private def soloBase: Int = prog.length + 1
+  // both ends and a keyed slot starts above it.
+  private def keyBase: Int = prog.length + 1
 
   // [slot] read backwards. Private because the two callers are both here and
   // [Predictive] overrides them off its own table rather than inverting this.
   private def pcOf(at: Int): Int =
-    if (at < soloBase) { at } else { solos(at - soloBase)._1 }
+    if (at < keyBase) { at } else { keys(at - keyBase)._1 }
 
   // Whether the next [call] really leaves, which is [Common.useCache] under a
   // name that does not collide with [Cached]. Nothing in this tower says no
@@ -185,12 +198,18 @@ trait Squared extends Machine {
   def inlined: Boolean = false
 
   // Staging-time state a slot carries that the worklist will not, and how to
-  // put it back. Which runs are walking is the one piece every model has,
-  // because [enter] compares the clocks before [resume] has decoded anything.
-  // [Predictive] interns the rest of its own into the slot number.
+  // put it back. [Predictive] interns the rest of its own into the slot
+  // number.
+  //
+  // Which runs are walking has to be here rather than in [resume], because
+  // [enter] compares the clocks before [resume] has decoded anything. The
+  // return stack has to be here for a different reason: a model that overrides
+  // [resume] off its own key and forgets to restore it does not fail loudly.
+  // The callee's `ret` finds an empty stack, halts, and what comes out is a
+  // clean program that never ran past its first call.
   def checkpoint(): () => Unit = {
-    val was = walking
-    () => { walking = was }
+    val (wasWalking, wasStack) = (walking, retstack)
+    () => { walking = wasWalking; retstack = wasStack }
   }
 
   // Register traffic that is the tower's rather than the program's: copying a
