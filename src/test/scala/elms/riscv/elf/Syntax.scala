@@ -12,6 +12,11 @@ case class Datum(addr: Int, size: Int, taint: Taint) derives CanEqual
 
 // [data] is word-indexed, so `data(k)` is `mem[k]`. [Datum.addr] and [consts]
 // are byte counts; [entries] and [entry] are indices into [prog].
+//
+// [entry] is where a caller would come in, which is not the same question as
+// where the tower starts: [Common.snippet] begins at index 0 and a driver that
+// wants otherwise has to say so. With two functions in one section those two
+// answers can differ, so the field names the one the object actually carries.
 case class Image(
     prog: Vector[RiscV.Instr],
     data: Vector[Int],

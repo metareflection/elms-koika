@@ -1,10 +1,14 @@
 package elms.koika.test.riscv
 
-// RV32I, minus `JALR`, `FENCE`, `ECALL`, `EBREAK` and the CSR instructions.
-// `JALR` is the interesting omission: its target is a register value, and the
-// tower's program counter is a static `Int`, so a dynamic jump cannot be staged
-// at all. Rather than ship a constructor whose semantics always throw, it is
-// not in the ADT. The others have no meaning in this model.
+// RV32I, minus `FENCE`, `ECALL`, `EBREAK` and the CSR instructions, which have
+// no meaning in this model.
+//
+// `JALR` appears only in the two shapes a compiler emits it in. An
+// `auipc`/`jalr` pair with no relocation left on it has a target the reader can
+// compute, so it arrives here as [Call] with a static index. A `jalr x0, 0(x1)`
+// arrives as [Ret], whose target is whichever [Call] is on the staging-time
+// return stack. Every other `jalr` reads an address the reader cannot predict
+// and is still rejected where it sits.
 object RiscV {
   // x0 reads as zero and swallows writes. Register names are static, so both
   // happen at staging time and the generated C never mentions regs[0].
@@ -29,6 +33,14 @@ object RiscV {
     case Branch(cmp: Cmp, rs1: Reg, rs2: Reg, offset: Imm)
     case Load(w: Width, rd: Reg, rs1: Reg, imm: Imm)
     case Store(w: Width, rs2: Reg, rs1: Reg, imm: Imm)
+    // A direct call. [target] is an index into `prog`, not a byte offset, and
+    // the reader has already done the arithmetic that an `auipc` and a `jalr`
+    // between them encode.
+    case Call(rd: Reg, target: Int)
+    // A return. Where it goes is not in the instruction: it is the top of the
+    // return stack the tower carries at staging time, and `rs1` holding
+    // something else is an assertion in the residue rather than a second edge.
+    case Ret
   }
 
   val x0: Reg = Reg(0)

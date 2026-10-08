@@ -23,7 +23,7 @@ trait Lockstepped[R <: Int: ValueOf, M <: Int: ValueOf, C <: Int: ValueOf, T <: 
   // is a macro and so has to be wrapped in a function rather than named
   // directly at the call sites [Lockstep] emits.
   override def main(prover: Prover): String =
-    s"""void lockstep_assert(bool c) { koika_assert(c, "lockstep drift"); }
+    s"""${helpers}void lockstep_assert(bool c) { koika_assert(c, "lockstep drift"); }
        |void lockstep_assume(bool c) { koika_assume(c); }
        |
        |int main(int argc, char* argv[]) {

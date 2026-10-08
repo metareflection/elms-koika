@@ -1,7 +1,7 @@
-# A fixture, not a demo, and the reader rejects it. `ret` is read as a jump one
-# past the end of the program, where the tower halts, which is only what
-# returning means for a leaf. A callee's `ret` would have to go back to its
-# caller, and there is nothing in the tower to go back through.
+# A fixture, not a demo. Two functions in one `.text` with no call between
+# them, which is what `prog` holding a whole section rather than one function
+# looks like, and the only object in the tree with that shape. Neither `ret`
+# has a caller to go back to, so both halt.
 
 	.text
 	.globl	f

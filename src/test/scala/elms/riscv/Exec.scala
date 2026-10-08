@@ -3,6 +3,8 @@ package elms.koika.test.riscv
 import elms.prelude.*
 import elms.prelude.given
 
+import elms.core.{Op, UNIT}
+
 import elms.koika.test.common.Direct
 
 import RiscV.*
@@ -45,6 +47,9 @@ trait Exec extends Direct {
     case Instr.OpImm(_, rd, _, _) => Some(rd)
     case Instr.Lui(rd, _)        => Some(rd)
     case Instr.Auipc(rd, _)      => Some(rd)
+    // [Call] and [Ret] are control flow, so neither is speculated past and
+    // both close whatever window was open. That is what makes a return stack
+    // safe to key a slot on: at a [Ret] there is nothing in flight.
     case _                       => None
   }
 
@@ -177,6 +182,27 @@ trait Exec extends Direct {
         case Instr.Store(w, rs2, rs1, imm) => {
           storeValue(s, w, read(s, rs1) + unit(imm.i), read(s, rs2))
           call(pc + 1, s)
+        }
+        // The link register really is written, so a callee that spills `ra` and
+        // reloads it spills the right value. Where it goes is the static stack's
+        // business and not this register's.
+        case Instr.Call(rd, target) => {
+          write(s, rd, unit(4 * (pc + 1)))
+          withStack(deepen(pc, pc + 1)) { call(target, s) }
+        }
+        // Two things could say where this returns. The stack is the tower's
+        // prediction and `x1` is what the machine would actually jump to, and
+        // the residue asserts they agree rather than picking one. A program
+        // that reaches here having overwritten `ra` is the ret2spec shape, and
+        // the assertion is where it shows up.
+        case Instr.Ret => retstack match {
+          case r :: rest => {
+            unsafeReflect[Unit](Op.Custom("ret_assert", UNIT), read(s, RiscV.Reg(1)) === unit(4 * r))
+            withStack(rest) { call(r, s) }
+          }
+          // Nothing to return through, which is what a leaf's `ret` means and
+          // what the reader used to encode by hand as a jump past the end.
+          case Nil => call(prog.length, s)
         }
       }
     } else { s }

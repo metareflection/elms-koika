@@ -6,7 +6,7 @@ import elms.prelude.*
 import elms.prelude.given
 
 @virtualize
-trait Common extends Isa {
+trait Common extends Isa with Returns {
   val prog: Vector[Instr]
   def useCache: Boolean
 
@@ -17,9 +17,31 @@ trait Common extends Isa {
   // The number is the function's identity, not a hint: it is what [slotName]
   // spells and what every call site to that slot writes down. Two slots that
   // number the same are one function whether or not they mean the same thing.
-  def slot(pc: Int): Int = pc
-  def resume(at: Int, s: Rep[State]): Rep[State] = step(at, s)
-  def live(at: Int): Boolean = at < prog.length
+  def slot(pc: Int): Int = keyed(pc)
+  def resume(at: Int, s: Rep[State]): Rep[State] = step(pcOf(at), s)
+  def live(at: Int): Boolean = pcOf(at) < prog.length
+
+  // A pc on its own while the stack is empty, which is every program that never
+  // calls anything, so those keep the slot numbers they already had and their
+  // snapshots do not move. Anything deeper is interned above the end of [prog].
+  private val interned = mutable.ArrayBuffer[(Int, List[Int])]()
+  private val numbered = mutable.Map[(Int, List[Int]), Int]()
+
+  private def keyed(pc: Int): Int =
+    if (retstack.isEmpty) { pc }
+    else {
+      numbered.getOrElseUpdate(
+        (pc, retstack), {
+          interned += ((pc, retstack))
+          prog.length + interned.length
+        }
+      )
+    }
+
+  // [slot] read backwards. [Predictive] overrides it off its own table rather
+  // than inverting this.
+  protected def pcOf(at: Int): Int =
+    if (at <= prog.length) { at } else { interned(at - prog.length - 1)._1 }
 
   private val declared = mutable.Set[Int]()
 
@@ -35,8 +57,16 @@ trait Common extends Isa {
   // A slot's body is staged where the worklist reaches it rather than where the
   // [call] that asked for it sits, so a model that carries staging-time state
   // in a `var` between instructions has to send a copy along. [Predictive]
-  // interns all of its into the slot number and so needs nothing here.
-  def checkpoint(): () => Unit = () => ()
+  // interns the rest of its own into the slot number.
+  //
+  // The return stack is here rather than in [resume] because a model that
+  // overrides [resume] off its own key and forgets to put the stack back does
+  // not fail loudly. The callee's `ret` finds an empty stack, halts, and what
+  // comes out is a clean program that never ran past its first call.
+  def checkpoint(): () => Unit = {
+    val was = retstack
+    () => { retstack = was }
+  }
 
   def tick(s: Rep[State]): Rep[Unit] = s.timer = s.timer + 1
 

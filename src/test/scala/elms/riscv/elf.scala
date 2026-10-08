@@ -16,6 +16,7 @@ class RiscVDecodeTests extends AnyFunSuite {
   private def insn(word: Int): Instr = Decode.insn(word) match {
     case Right(Decoded.Insn(i)) => i
     case Right(Decoded.Ret)     => fail(f"0x$word%08x decoded as `ret`")
+    case Right(d: Decoded.Jalr) => fail(f"0x$word%08x decoded as $d")
     case Left(e)                => fail(e)
   }
 
@@ -116,14 +117,17 @@ class RiscVDecodeTests extends AnyFunSuite {
     assert(offset(back) < 0 && offset(fwd) > 0)
   }
 
-  // `ret` is `jalr x0, 0(x1)`, and it is the only `jalr` whose target the reader
-  // can work out without running the program.
-  test("ret is its own thing, and every other jalr is an error") {
+  // `ret` is `jalr x0, 0(x1)` and needs nothing else to be read. Every other
+  // `jalr` comes back with its fields instead of a verdict, because whether it
+  // is a call depends on the `auipc` before it, and that is a word the decoder
+  // never sees. [RiscVElfTests] is where one with no `auipc` beside it is
+  // refused.
+  test("ret is its own thing, and every other jalr comes back undecided") {
     assert(Decode.insn(Decode.ret) == Right(Decoded.Ret))
     // `jalr a0, 0(a1)`, `jalr x0, 4(x1)` and `jr a0`.
-    assert(why(0x00058567).contains("register value"))
-    assert(why(0x00408067).contains("register value"))
-    assert(why(0x00050067).contains("register value"))
+    assert(Decode.insn(0x00058567) == Right(Decoded.Jalr(Reg(10), Reg(11), 0)))
+    assert(Decode.insn(0x00408067) == Right(Decoded.Jalr(Reg(0), Reg(1), 4)))
+    assert(Decode.insn(0x00050067) == Right(Decoded.Jalr(Reg(0), Reg(10), 0)))
   }
 
   test("what the tower does not decode says what to do about it") {
@@ -154,9 +158,6 @@ class RiscVElfTests extends AnyFunSuite {
   // The two byte counts the build script duplicates live on the driver, and
   // nothing here stages, so one bare instance is enough to read them off.
   private val driver = new RiscVDriver[64] { override val init = ""; override val prog = Vector() }
-
-  private def rejects(name: String): List[String] =
-    Elf.read(name, bytes(name)).fold(_.map(_.toString), i => fail(s"read ${i.prog}"))
 
   // A byte-patched copy, with the offsets found rather than hardcoded. Most of
   // what the reader refuses is one field wide, and setting that field is a
@@ -191,9 +192,11 @@ class RiscVElfTests extends AnyFunSuite {
     case Instr.Branch(_, rs1, rs2, _) => Set(rs1, rs2)
     case Instr.Load(_, rd, rs1, _)    => Set(rd, rs1)
     case Instr.Store(_, rs2, rs1, _)  => Set(rs2, rs1)
+    case Instr.Call(rd, _)            => Set(rd)
+    case Instr.Ret                    => Set(Reg(1))
   }
 
-  test("the program is what clang emitted, with both `ret`s pointed past the end") {
+  test("the program is what clang emitted, both `ret`s included") {
     assert(cmp.prog == Vector(
       Instr.OpImm(AluOp.Add, Reg(11), Reg(10), Imm(0)),
       Instr.OpImm(AluOp.Add, Reg(10), Reg(0), Imm(1)),
@@ -209,9 +212,9 @@ class RiscVElfTests extends AnyFunSuite {
       Instr.OpImm(AluOp.Add, Reg(12), Reg(12), Imm(4)),
       Instr.OpImm(AluOp.Add, Reg(13), Reg(13), Imm(4)),
       Instr.Branch(Cmp.Ne, Reg(11), Reg(0), Imm(-24)),
-      Instr.Jal(Reg(0), Imm(12)),
+      Instr.Ret,
       Instr.OpImm(AluOp.Add, Reg(10), Reg(0), Imm(0)),
-      Instr.Jal(Reg(0), Imm(4))
+      Instr.Ret
     ))
   }
 
@@ -278,10 +281,29 @@ class RiscVElfTests extends AnyFunSuite {
     assert(store.data == Vector(0, 0, 0, 7))
   }
 
-  test("two functions in .text say why one is the limit") {
-    val es = rejects("two_functions.o")
-    assert(es.length == 1)
-    assert(es.head.contains("`f`") && es.head.contains("`g`") && es.head.contains("`call`"))
+  // The fixture the reader used to refuse, kept because it is still the only
+  // object in the tree with two functions and no call between them. What it
+  // tests now is that both land in one `prog` and that [Image.entries] says
+  // where each one starts, since a program with two of them has to be told.
+  test("two functions in .text are both read, and both named") {
+    val two = read("two_functions.o", bytes("two_functions.o"))
+    assert(two.prog == Vector(
+      Instr.OpImm(AluOp.Add, Reg(10), Reg(0), Imm(1)),
+      Instr.Ret,
+      Instr.OpImm(AluOp.Add, Reg(10), Reg(0), Imm(2)),
+      Instr.Ret
+    ))
+    assert(two.entries == Map("f" -> 0, "g" -> 2))
+  }
+
+  // `twocall.o`'s symbol table lists `mask` before `victim`, and `mask` is
+  // `static`. Taking the head of it would name the callee as the way in.
+  test("the entry is the global function, not whichever symbol came first") {
+    val two = read("twocall.o", bytes("twocall.o"))
+    assert(two.entries.keySet == Set("victim", "mask"))
+    assert(two.entry == two.entries("victim"))
+    // Two functions at one index would let the old `headOption` pass this.
+    assert(two.entries("victim") != two.entries("mask"))
   }
 
   test("an rv64 object is one byte away and says which flags to use") {
@@ -318,8 +340,11 @@ class RiscVElfTests extends AnyFunSuite {
     // `mul a0, a1, a2` and `jalr a0, 0(a1)`, over the `mv a1, a0` at .text+0.
     assert(patched(text -> 0x33, text + 1 -> 0x85, text + 2 -> 0xc5, text + 3 -> 0x02)
       .mkString.contains("-march=rv32i"))
-    assert(patched(text -> 0x67, text + 1 -> 0x85, text + 2 -> 0x05, text + 3 -> 0x00)
-      .mkString.contains("cmp.o .text+0x0"))
+    val jalr = patched(text -> 0x67, text + 1 -> 0x85, text + 2 -> 0x05, text + 3 -> 0x00)
+    assert(jalr.mkString.contains("cmp.o .text+0x0"))
+    // The reader is where this is refused rather than the decoder, so the
+    // message is about the missing neighbour and not about the opcode.
+    assert(jalr.mkString.contains("no `auipc` beside it"))
   }
 
   test("a missing object says to run the script") {

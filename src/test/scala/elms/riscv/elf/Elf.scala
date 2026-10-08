@@ -1,7 +1,7 @@
 package elms.koika.test.riscv.elf
 
 import elms.koika.test.riscv.RiscV
-import RiscV.{Imm, Instr}
+import RiscV.{Imm, Instr, Reg}
 
 // An ET_REL RISC-V object, read into the shape the tower wants. Reading fields
 // rather than parsing assembly is what buys the three things a text frontend
@@ -48,6 +48,7 @@ object Elf {
   private val STT_NOTYPE = 0
   private val STT_OBJECT = 1
   private val STT_FUNC = 2
+  private val STB_GLOBAL = 1
   private val SHN_ABS = 0xfff1
   private val R_RISCV_HI20 = 26
   private val R_RISCV_LO12_I = 27
@@ -106,6 +107,7 @@ object Elf {
 
   private case class Sym(name: String, value: Int, size: Int, info: Int, shndx: Int) {
     def kind: Int = info & 0xf
+    def bind: Int = info >> 4
   }
 
   private def roundUp(x: Int, to: Int): Int = ((x + to - 1) / to) * to
@@ -208,10 +210,8 @@ object Elf {
           val (patched, relErrors) = relocate(o, secs, code, prog, addresses(syms, base))
 
           val entries = syms.filter(s => s.kind == STT_FUNC && s.shndx == code.i)
-          val entryErrors =
-            entries.toList.flatMap(misplaced(o, code, prog.length)) ++ crowded(o, code, entries)
-
-          val errors = textErrors ++ dataErrors ++ relErrors ++ entryErrors
+          val errors = textErrors ++ dataErrors ++ relErrors ++
+            entries.toList.flatMap(misplaced(o, code, prog.length))
           if (errors.nonEmpty) { Left(errors) }
           else {
             Right(Image(
@@ -221,7 +221,7 @@ object Elf {
               entries = entries.map(s => s.name -> s.value / 4).toMap,
               consts = syms.filter(s => s.kind == STT_NOTYPE && s.shndx == SHN_ABS)
                 .map(s => s.name -> s.value).toMap,
-              entry = entries.headOption.map(_.value / 4).getOrElse(0)
+              entry = starts(entries)
             ))
           }
         }
@@ -240,28 +240,61 @@ object Elf {
       ElfError(o.name, s"`${s.name}` starts at ${locus(o, code, s.value)}, which is no instruction")
     )
 
-  // One `ret` becomes a jump past the end of [prog], which halts. A callee's
-  // `ret` would have to return to its caller instead, and there is nothing in
-  // the tower for it to return through.
-  private def crowded(o: Obj, code: Sec, entries: Vector[Sym]): List[ElfError] =
-    Option.when(entries.length > 1) {
-      val names = entries.map(s => s"`${s.name}`").mkString(", ")
-      val what = s"${entries.length} functions in `${code.name}` ($names)"
-      ElfError(o.name, s"$what; the tower has no `call` to reach them with")
-    }.toList
+  // Where a caller would come in: the first global function, falling back to
+  // the first of any kind.
+  //
+  // With one function in the section this was unambiguous and `headOption`
+  // said it. With two it is not, and symbol table order is the assembler's
+  // business: `twocall.o` lists the `static` callee first, so taking the head
+  // would name `mask` as the way into a program that starts at `victim`. A
+  // `static` function is one nothing outside the object can reach, which is
+  // exactly the symbol an entry point is not.
+  private def starts(entries: Vector[Sym]): Int =
+    entries.find(_.bind == STB_GLOBAL).orElse(entries.headOption).map(_.value / 4).getOrElse(0)
 
+  // Two passes, because a call spans two words. The first decodes each word on
+  // its own; the second is where an `auipc` and the `jalr` that reads it become
+  // one [Instr.Call] with the target already computed.
+  //
+  // The `auipc` stays where it is rather than being folded away. It really does
+  // write its register, the call overwrites that register with the link address
+  // one instruction later, and leaving both in keeps `prog` indexed by the same
+  // numbers the disassembly uses.
   private def text(o: Obj, s: Sec): (Vector[Instr], List[ElfError]) =
     if (s.size % 4 != 0) {
       val msg = s"`${s.name}` is ${s.size} bytes, not a whole number of instructions"
       (Vector.empty, List(ElfError(o.name, msg)))
     } else {
       val n = s.size / 4
+      val words = (0 until n).map(at => Decode.insn(o.i32(s.off + 4 * at))).toVector
+
+      // Where an `auipc rd, u` sits, and what it puts in `rd`. Read back by the
+      // `jalr` after it, which is the only consumer that matters here.
+      def auipcAt(at: Int): Option[(Reg, Int)] = words.lift(at) match {
+        case Some(Right(Decoded.Insn(Instr.Auipc(rd, u)))) => Some((rd, 4 * at + (u.i << 12)))
+        case _                                             => None
+      }
+
       val decoded = (0 until n).map { at =>
-        Decode.insn(o.i32(s.off + 4 * at)) match {
-          // [Common.call] hands the state back unchanged one past the end,
-          // which is how the tower halts. For a leaf function with its result
-          // in a0 that is exactly what returning does.
-          case Right(Decoded.Ret)     => Right(Instr.Jal(RiscV.x0, Imm(4 * (n - at))))
+        words(at) match {
+          // The return stack decides where this goes, and at the bottom of it
+          // there is nothing to return to, so [Exec] halts the way it always
+          // did for a leaf.
+          case Right(Decoded.Ret) => Right(Instr.Ret)
+
+          case Right(Decoded.Jalr(rd, rs1, imm)) =>
+            auipcAt(at - 1) match {
+              case Some((w, base)) if w == rs1 && (base + imm) % 4 == 0 =>
+                val target = (base + imm) / 4
+                if (target >= 0 && target < n) { Right(Instr.Call(rd, target)) }
+                else {
+                  Left(ElfError(locus(o, s, 4 * at), s"call target $target is outside `${s.name}`"))
+                }
+              case _ =>
+                val why = "`jalr` reads an address no `auipc` beside it computed"
+                Left(ElfError(locus(o, s, 4 * at), why))
+            }
+
           case Right(Decoded.Insn(i)) => Right(i)
           case Left(e)                => Left(ElfError(locus(o, s, 4 * at), e))
         }

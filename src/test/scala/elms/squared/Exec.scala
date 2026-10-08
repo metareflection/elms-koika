@@ -190,6 +190,15 @@ trait Exec extends Squared {
           each(s)(h => storeValue(h, w, read(h, rs1) + unit(imm.i), read(h, rs2)))
           call(pc + 1, s)
         }
+        // A leaf's `ret`, which is every `ret` the tree currently contains:
+        // nothing called this, so returning is halting, and that is what the
+        // reader used to spell as a jump past the end.
+        case Instr.Ret => call(prog.length, s)
+        // The single-run tower carries a return stack and this one does not
+        // yet. [Squared.slot] keys on which runs are live rather than going
+        // through [Common], so the stack has to be interned into that key as
+        // well, and both runs have to be made to agree on where they return.
+        case Instr.Call(_, _) => sys.error(s"squared: no return stack yet, at pc $pc")
       }
     } else { s }
 }

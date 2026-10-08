@@ -9,6 +9,10 @@ import RiscV.{AluOp, Cmp, Imm, Instr, Reg, Width}
 enum Decoded derives CanEqual {
   case Insn(i: Instr)
   case Ret
+  // Every other `jalr`, with its fields rather than a verdict. Whether it is a
+  // call depends on the `auipc` before it, which is one more word than the
+  // decoder gets to see.
+  case Jalr(rd: Reg, rs1: Reg, imm: Int)
 }
 
 // RV32I encodings, back to [RiscV.Instr]. No files, no ELF and no state, so the
@@ -19,7 +23,10 @@ object Decode {
   val ret: Int = 0x00008067
 
   def insn(word: Int): Either[String, Decoded] =
-    if (word == ret) { Right(Decoded.Ret) } else { form(word).map(Decoded.Insn(_)) }
+    if (word == ret) { Right(Decoded.Ret) }
+    else if ((word & 0x7f) == 0x67 && ((word >>> 12) & 0x7) == 0) {
+      Right(Decoded.Jalr(Reg((word >>> 7) & 0x1f), Reg((word >>> 15) & 0x1f), word >> 20))
+    } else { form(word).map(Decoded.Insn(_)) }
 
   private def bits(w: Int, hi: Int, lo: Int): Int = (w >>> lo) & ((1 << (hi - lo + 1)) - 1)
 
@@ -96,9 +103,9 @@ object Decode {
       case 0x13 => pick(alu, (funct3, 0x00), "op-imm").map(Instr.OpImm(_, rd, rs1, Imm(iImm(w))))
       case 0x33 if funct7 == 0x01 => Left("RV32M is out of scope; rebuild with -march=rv32i")
       case 0x33 => pick(alu, (funct3, funct7), "op").map(Instr.Op(_, rd, rs1, rs2))
-      // Every other `jalr` reads its target out of a register, and the tower's
-      // program counter is a static `Int`, so there is nothing to stage.
-      case 0x67 => Left("`jalr` jumps to a register value, which a static pc cannot follow")
+      // Reached only for a malformed `jalr`; the well-formed ones are taken in
+      // [insn], which is where [Decoded] is in scope.
+      case 0x67 => Left(f"0x$w%08x is not a well-formed `jalr`")
       case 0x0f => Left("`fence` has nothing to order in this model")
       case 0x73 => Left("`ecall`, `ebreak` and the CSRs are out of scope")
       case _    => Left(f"no RV32I instruction encodes as 0x$w%08x")

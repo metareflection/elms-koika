@@ -40,7 +40,11 @@ trait Predictive extends Cached {
   // [learned] is keyed by branch pc and holds each branch's last outcome. A
   // branch missing from it has not run yet and predicts not-taken, which is the
   // cold start [Static] never leaves.
-  case class Key(pc: Int, window: Option[Window], learned: Map[Int, Boolean])
+  // [stack] is [Common.retstack] at the point the slot was asked for. It has to
+  // be part of the key for the same reason [window] is: two arrivals at one pc
+  // under different return stacks are two different continuations, and sharing
+  // a slot between them silently returns to the wrong place.
+  case class Key(pc: Int, window: Option[Window], learned: Map[Int, Boolean], stack: List[Int])
 
   private val interned = mutable.ArrayBuffer[Key]()
   private val numbered = mutable.Map[Key, Int]()
@@ -71,16 +75,20 @@ trait Predictive extends Cached {
       s: Rep[State]
   ): Rep[State] = under(w, l) { call(pc, s) }
 
-  override def slot(pc: Int): Int = intern(Key(pc, window, learned))
+  override def slot(pc: Int): Int = intern(Key(pc, window, learned, retstack))
 
   override def live(at: Int): Boolean = interned(at) match {
     // Running off the end of [prog] with a branch still in flight is a real
     // slot: something has to resolve it.
-    case Key(pc, w, _) => pc < prog.length || w.isDefined
+    case Key(pc, w, _, _) => pc < prog.length || w.isDefined
   }
 
+  override protected def pcOf(at: Int): Int = interned(at).pc
+
+  // [stack] is put back by [Common.checkpoint] rather than here, so that this
+  // does not have to remember three of the four.
   override def resume(at: Int, s: Rep[State]): Rep[State] = interned(at) match {
-    case Key(pc, w, l) => under(w, l) { run(pc, w, s) }
+    case Key(pc, w, l, _) => under(w, l) { run(pc, w, s) }
   }
 
   private def opening(at: Int, cond: Cond, recovery: Int, guess: Boolean): Option[Window] =

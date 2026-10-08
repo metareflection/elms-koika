@@ -115,10 +115,15 @@ abstract class KoikaDriver[
       |    s2.mem[SECRET_OFFSET+i] = secret(0, 20);
       |  }""".stripMargin
 
+  // Helper functions the residue calls and the generated code only declares.
+  // Empty unless a model puts something here, so a program that needs none
+  // emits exactly the C it emitted before any of them existed.
+  def helpers: String = ""
+
   // Takes the prover only so [SquaredKoikaDriver] can, which needs it for the
   // helpers it declares. Nothing here does.
   def main(prover: Prover): String =
-    s"""int main(int argc, char* argv[]) {
+    s"""${helpers}int main(int argc, char* argv[]) {
        |  struct $stateT s1, s2;
        |  init(&s1);
        |  init(&s2);

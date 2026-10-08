@@ -45,7 +45,22 @@ trait RiscVShell[M <: Int: ValueOf, S: StructManifest] extends KoikaDriver[32, M
   def demo(name: String): Vector[RiscV.Instr] = elf.Elf.load(s"src/test/asm/riscv/$name.o").prog
 }
 
-trait RiscVDriver[M <: Int: ValueOf] extends RiscVShell[M, StateT[32, M, 24, 12]] with Exec
+// What a `ret` asserts, declared only where a [RiscV.Instr.Ret] has somewhere
+// to return through. A program with no call in it never reaches the assertion,
+// and declaring the function anyway would move every snapshot in the tree for
+// a line nothing calls.
+//
+// Declared from here because both towers will emit the same call.
+def retAssert(prog: Vector[RiscV.Instr]): String =
+  if (prog.exists { case RiscV.Instr.Call(_, _) => true; case _ => false }) {
+    """void ret_assert(bool c) { koika_assert(c, "return address"); }
+      |
+      |""".stripMargin
+  } else { "" }
+
+trait RiscVDriver[M <: Int: ValueOf] extends RiscVShell[M, StateT[32, M, 24, 12]] with Exec {
+  override def helpers: String = retAssert(prog)
+}
 
 // The same demos, run in step. Everything above is unchanged; what differs is
 // that a slot takes both states and the clocks are compared on the way into
