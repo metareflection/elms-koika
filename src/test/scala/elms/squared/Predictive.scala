@@ -124,11 +124,10 @@ trait Predictive extends Cached with Exec {
 
     case Some(Window(p, saved)) =>
       // Off the end of [prog], or an instruction that cannot run
-      // speculatively, or one that would clobber an input to the condition
-      // still waiting to be evaluated. [evalCond] runs against the live
-      // register file at resolution rather than at the branch, which is what
-      // makes that last case matter.
-      prog.lift(pc).flatMap(speculable).filter(rd => !reads(p.cond).contains(rd)) match {
+      // speculatively. A write to one of the condition's own inputs used to
+      // end a window too, and no longer does: [asOfBranch] resolves against
+      // what [save] set aside.
+      prog.lift(pc).flatMap(speculable) match {
         case Some(rd) => under(Some(Window(p, save(s, saved, rd))), learned) { step(pc, s) }
         case None     => resolve(pc, p, saved, s)
       }
@@ -145,9 +144,9 @@ trait Predictive extends Cached with Exec {
   // the same way or there is nothing left to compare.
   private def resolve(pc: Int, p: Pending, saved: Vector[Reg], s: Pair): Pair = {
     // The branch ticked where it was staged, several instructions back. This
-    // is that same read moved to where the answer is wanted, and [run]
-    // excludes [reads] from the window so that it is the same read.
-    val taken = each(s)(h => untimed { evalCond(h, p.cond) })
+    // is that same read moved to where the answer is wanted, and [asOfBranch]
+    // is what keeps it the same read.
+    val taken = each(s)(h => untimed { evalCond(asOfBranch(h, saved), p.cond) })
     agree(taken) {
       settle(pc, p, saved, taken = true, s)
     } {
@@ -174,6 +173,12 @@ trait Predictive extends Cached with Exec {
       goto(None, next, p.recovery, s)
     }
   }
+
+  // A condition operand as the branch saw it, in one run. A window that
+  // overwrote one left the old value in `saved_regs` on its way past, which is
+  // the same copy [rollback] would put back.
+  private def asOfBranch(h: Half, saved: Vector[Reg])(r: Reg): Rep[Int] =
+    if (saved.contains(r)) { h.saved_regs(unit(r.i)) } else { readReg(h, r) }
 
   // [rd]'s value on the way into the window, recorded once. Saving it a
   // second time would overwrite the architectural value with a speculative

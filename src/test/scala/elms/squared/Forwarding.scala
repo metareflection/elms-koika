@@ -176,12 +176,9 @@ trait Forwarding extends Predictive {
     if (pc >= prog.length || pc >= o.at + 1 + storeWindow) { close(o, pc, s) }
     else {
       speculable(prog(pc)) match {
-        // No [reads] check, unlike [Predictive]'s window. A branch condition
-        // is evaluated against the live register file at the join point, so a
-        // speculated write to one of its inputs corrupts it; the store's
-        // address and the bypassing loads' are [Rep]s captured where they were
-        // computed, and a later write to the register they came from cannot
-        // reach them.
+        // No check on which register this writes. The store's address and
+        // the bypassing loads' are [Rep]s captured where they were computed,
+        // so a later write to the register they came from cannot reach them.
         case Some(rd) => {
           opening = Some(o.copy(saved = save(s, o.saved, rd)))
           current = pc

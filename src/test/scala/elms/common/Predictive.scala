@@ -118,11 +118,14 @@ trait Predictive extends Cached {
         case None => step(pc, s)
       }
     case Some(Window(p, saved)) =>
-      // Off the end of [prog], or an instruction that cannot run speculatively,
-      // or one that would clobber an input to the condition still waiting to be
-      // evaluated. [evalCond] runs against the live register file at resolution
-      // rather than at the branch, which is what makes that last case matter.
-      prog.lift(pc).flatMap(speculable).filter(rd => !reads(p.cond).contains(rd)) match {
+      // Off the end of [prog], or an instruction that cannot run speculatively.
+      // A write to one of the condition's own inputs used to end a window too,
+      // and no longer does: [asOfBranch] resolves against what [save] set
+      // aside. A register allocator puts a bounds check's index and the body's
+      // scaled copy of it in the same register, so that rule cost a
+      // compiler's Spectre gadget its whole window. `riscv/pht` is the corpus
+      // that showed it.
+      prog.lift(pc).flatMap(speculable) match {
         case Some(rd) => under(Some(Window(p, save(s, saved, rd))), learned) { step(pc, s) }
         case None => resolve(pc, p, saved, s)
       }
@@ -135,10 +138,10 @@ trait Predictive extends Cached {
   // straight line that ends here or at [prog]'s end.
   private def resolve(pc: Int, p: Pending, saved: Vector[Reg], s: Rep[State]): Rep[State] = {
     // The branch ticked where it was staged, several instructions back. This is
-    // that same read moved to where the answer is wanted, and [run] excludes
-    // [reads] from the window so that it is the same read; a model that times
-    // register accesses must not charge it twice, or to whatever is staging now.
-    val taken = untimed { evalCond(s, p.cond) }
+    // that same read moved to where the answer is wanted, and [asOfBranch] is
+    // what keeps it the same read; a model that times register accesses must
+    // not charge it twice, or to whatever is staging now.
+    val taken = untimed { evalCond(asOfBranch(s, saved), p.cond) }
     if (taken) { settle(pc, p, saved, taken = true, s) }
     else { settle(pc, p, saved, taken = false, s) }
   }
@@ -162,6 +165,16 @@ trait Predictive extends Cached {
       goto(None, next, p.recovery, s)
     }
   }
+
+  // A condition operand as the branch saw it. A window that overwrote one left
+  // the old value in `saved_regs` on its way past, which is the same copy
+  // [rollback] would put back, so resolution costs no extra bookkeeping.
+  //
+  // Hardware reads a branch's operands when the branch issues and renames the
+  // architectural name out from under anything written afterwards. This is
+  // that, spelled for a model whose condition is evaluated late.
+  private def asOfBranch(s: Rep[State], saved: Vector[Reg])(r: Reg): Rep[Int] =
+    if (saved.contains(r)) { s.saved_regs(regIndex(r)) } else { readReg(s, r) }
 
   // [rd]'s value on the way into the window, recorded once. Saving it a second
   // time would overwrite the architectural value with a speculative one, and

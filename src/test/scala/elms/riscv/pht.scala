@@ -47,33 +47,18 @@ object Variant {
   // nothing here repeats.
   private val index: List[Arg] = List(Arg.Index("x"))
 
-  // Four of the six are clean on every model, the speculative ones included,
-  // and that is a fact about the tower rather than about them.
+  // Three of the six are clean on every model, the speculative ones included,
+  // and each is clean for a reason of its own. The reasons are one shape: a
+  // window is a straight line of [speculable] instructions from the branch, so
+  // whatever control flow a compiler left between the guard and the gadget
+  // ends the window before the gadget runs. Each variant below says which
+  // piece of control flow it was, which is what the corpus is for.
   //
-  // [Predictive.run] closes a window on any instruction that writes a register
-  // the pending condition reads, because [evalCond] runs at resolution against
-  // the live register file. A bounds check compares the index, and the first
-  // thing a body does with an index is scale it, so a register allocator
-  // writes the scaled value back into the register the compare just read:
-  //
-  //   bgeu a0, a1, .exit
-  //   slli a0, a0, 2
-  //
-  // The window closes on that second line with nothing saved and nothing
-  // speculated. `v21` gets four instructions further and still stops two short
-  // of the load. Identical at -O1, -O2, -Os and -O3, so it is the shape of the
-  // gadget and not a choice of flags.
-  //
-  // `spectre.s` is the same gadget by hand and it leaks, because the hand that
-  // wrote it branched on x10 and x15 and then touched x5, x11 and x12. That is
-  // the difference these six are here to show: a gadget written for this model
-  // against a gadget written by a compiler that cannot see it.
-  //
-  // A machine reads a branch's operands when the branch issues, so the rule
-  // costs leaks rather than inventing them, and every `leak` already in the
-  // tree stands. Fixing it moves snapshots in seven other suites, so it is its
-  // own change rather than this one.
-  private val windowCloses: Expect = Expect.uniform(Verdict.Clean)
+  // It used to be four. A window also ended on a write to one of the
+  // condition's own registers, and since a bounds check compares the index and
+  // the body's first move is to scale it, that ended every one of these at the
+  // first instruction. `v20` is the row that came back when it stopped.
+  private val stopsShort: Expect = Expect.uniform(Verdict.Clean)
 
   val all: List[Variant] = List(
     // The index is computed branchlessly, so there is no bounds check to run
@@ -93,15 +78,42 @@ object Variant {
         predictive_nb = Verdict.Leak
       )
     ),
+    // The leak is the inner branch, and a window cannot open inside a window.
+    // The secret does arrive in a0 speculatively, and the only thing left in
+    // the window to do with it is the test that closes the window.
+    //
     // `k` is the attacker's guess at the byte, so it is public and drawn the
     // way the other demos draw an attacker's word.
-    Variant("v10", index :+ Arg.Word("k", 20), windowCloses),
+    Variant("v10", index :+ Arg.Word("k", 20), stopsShort),
     // The guard reads the array it is guarding, so the out-of-bounds load is
     // architectural and `naive` already has it.
     Variant("v17", index, Expect.uniform(Verdict.Leak)),
-    Variant("v20", index, windowCloses),
-    Variant("v21", index, windowCloses),
-    Variant("v25", index, windowCloses)
+    // Nothing on the architectural path and a straight run from the guard to
+    // the probe, so this is the row a Spectre-PHT variant is supposed to have.
+    // It is `riscv/spectre`'s row cell for cell, which is the control these
+    // six were ported to get: the gadget somebody wrote by hand for this model
+    // and the gadget clang emitted answer the same under all seven models.
+    Variant(
+      "v20",
+      index,
+      Expect(
+        naive = Verdict.Clean,
+        cache = Verdict.Clean,
+        static = Verdict.Leak,
+        predictive = Verdict.Leak,
+        forwarding = Verdict.Leak,
+        nonblocking = Verdict.Clean,
+        predictive_nb = Verdict.Clean
+      )
+    ),
+    // The secret-dependent address is the second iteration's, and reaching it
+    // means going round the loop's backward branch. The first iteration reads
+    // the secret and ands it into an accumulator, which is a value and not an
+    // address, so the window ends holding something no timer can see.
+    Variant("v21", index, stopsShort),
+    // The `j` that joins the switch's two arms sits between the guard and the
+    // gadget, and an unconditional jump is not [speculable] either.
+    Variant("v25", index, stopsShort)
   )
 }
 
@@ -121,25 +133,26 @@ abstract class PhtDriver(val variant: Variant)
 }
 
 // Eva's answer where it is not [Verdict]'s. A may-analysis over one run taints
-// a load it cannot bound and never untaints it, so a secret that reaches an
-// address or a branch at all is a leak to Eva whether or not the arithmetic
+// a load it cannot bound and never untaints it, so a secret that reaches a
+// branch or an address at all is a leak to Eva whether or not the arithmetic
 // can tell the two runs apart.
 //
-// The four [Variant.windowCloses] variants are exactly the four it widens,
-// which is the shape to expect: a window closing is a fact about the model,
-// and where a program's values go is not. `v08` and `v17` leak outright, so
-// there is nothing left for Eva to widen.
+// Which it does split on is where the secret went. `v10` and `v21` put it in a
+// branch condition, and taint follows that whether or not the model has a
+// cache. `v20` and `v25` put it in an address, which can only move a clock
+// that has a cache behind it, so under `naive` those two come back clean to
+// Eva as well. `v08` and `v17` leak, and a leak has nothing to widen.
 //
-// A map rather than a test on the name, because `@virtualize` claims any `if`
-// in a suite body and then cannot find a `unit` to build one out of.
-private val widens: Map[String, Taint] =
-  Map("v10" -> Taint.Widens, "v20" -> Taint.Widens, "v21" -> Taint.Widens, "v25" -> Taint.Widens)
+// At file scope rather than in the suites, because `@virtualize` claims any
+// `if` in the class it annotates and then cannot find a `unit` to build one
+// out of.
+private val branchers = Set("v10", "v21")
+private val addressers = Set("v20", "v25")
 
-// Two of them rather than four, because without a cache the probe's address
-// cannot move the clock at all. `v10` and `v21` branch on the loaded value,
-// which is the one thing taint does follow.
-private val widensNaive: Map[String, Taint] =
-  Map("v10" -> Taint.Widens, "v21" -> Taint.Widens)
+private def eva(v: Variant, says: Verdict, cached: Boolean): Taint =
+  if (says == Verdict.Leak) { Taint.Agrees }
+  else if (branchers(v.name) || (cached && addressers(v.name))) { Taint.Widens }
+  else { Taint.Agrees }
 
 // Six of Kocher's Spectre v1 variants, ported in `src/test/asm/riscv/pht`, run
 // against every model the tree has.
@@ -160,7 +173,8 @@ class PhtNaiveTests extends KoikaSuite {
   for (v <- Variant.all) {
     test(s"pht naive ${v.name}") {
       val snippet = new PhtDriver(v) {}
-      check(v.name, snippet, v.expect.naive, eva = widensNaive.getOrElse(v.name, Taint.Agrees))
+      val says = v.expect.naive
+      check(v.name, snippet, says, eva = eva(v, says, cached = false))
     }
   }
 }
@@ -172,7 +186,8 @@ class PhtCacheTests extends KoikaSuite {
   for (v <- Variant.all) {
     test(s"pht cache ${v.name}") {
       val snippet = new PhtDriver(v) with Cached {}
-      check(v.name, snippet, v.expect.cache, eva = widens.getOrElse(v.name, Taint.Agrees))
+      val says = v.expect.cache
+      check(v.name, snippet, says, eva = eva(v, says, cached = true))
     }
   }
 }
@@ -184,7 +199,8 @@ class PhtStaticTests extends KoikaSuite {
   for (v <- Variant.all) {
     test(s"pht static ${v.name}") {
       val snippet = new PhtDriver(v) with Static {}
-      check(v.name, snippet, v.expect.static, eva = widens.getOrElse(v.name, Taint.Agrees))
+      val says = v.expect.static
+      check(v.name, snippet, says, eva = eva(v, says, cached = true))
     }
   }
 }
@@ -196,7 +212,8 @@ class PhtPredictiveTests extends KoikaSuite {
   for (v <- Variant.all) {
     test(s"pht predictive ${v.name}") {
       val snippet = new PhtDriver(v) with Predictive {}
-      check(v.name, snippet, v.expect.predictive, eva = widens.getOrElse(v.name, Taint.Agrees))
+      val says = v.expect.predictive
+      check(v.name, snippet, says, eva = eva(v, says, cached = true))
     }
   }
 }
@@ -208,7 +225,8 @@ class PhtForwardingTests extends KoikaSuite {
   for (v <- Variant.all) {
     test(s"pht forwarding ${v.name}") {
       val snippet = new PhtDriver(v) with Forwarding {}
-      check(v.name, snippet, v.expect.forwarding, eva = widens.getOrElse(v.name, Taint.Agrees))
+      val says = v.expect.forwarding
+      check(v.name, snippet, says, eva = eva(v, says, cached = true))
     }
   }
 }
@@ -220,7 +238,8 @@ class PhtNonBlockingTests extends KoikaSuite {
   for (v <- Variant.all) {
     test(s"pht nonblocking ${v.name}") {
       val snippet = new PhtDriver(v) with NonBlocking {}
-      check(v.name, snippet, v.expect.nonblocking, eva = widens.getOrElse(v.name, Taint.Agrees))
+      val says = v.expect.nonblocking
+      check(v.name, snippet, says, eva = eva(v, says, cached = true))
     }
   }
 }
@@ -232,7 +251,8 @@ class PhtPredictiveNonBlockingTests extends KoikaSuite {
   for (v <- Variant.all) {
     test(s"pht predictive_nb ${v.name}") {
       val snippet = new PhtDriver(v) with PredictiveNonBlocking {}
-      check(v.name, snippet, v.expect.predictive_nb, eva = widens.getOrElse(v.name, Taint.Agrees))
+      val says = v.expect.predictive_nb
+      check(v.name, snippet, says, eva = eva(v, says, cached = true))
     }
   }
 }

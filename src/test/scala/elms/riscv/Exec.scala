@@ -58,14 +58,10 @@ trait Exec extends Direct {
     case _                       => false
   }
 
-  override def reads(c: Cond): Set[Reg] = c match {
-    case (_, rs1, rs2) => Set(rs1, rs2)
-  }
-
-  override def evalCond(s: Rep[State], c: Cond): Rep[Boolean] = c match {
+  override def evalCond(of: Reg => Rep[Int], c: Cond): Rep[Boolean] = c match {
     case (cmp, rs1, rs2) => {
-      val a = read(s, rs1)
-      val b = read(s, rs2)
+      val a = of(rs1)
+      val b = of(rs2)
       cmp match {
         case Cmp.Eq  => a === b
         case Cmp.Ne  => a !== b
@@ -85,7 +81,7 @@ trait Exec extends Direct {
   // resolve at staging time: reading it is the literal 0, and writing it emits
   // nothing at all. No branch in the generated C, and no override of
   // [set_reg] that would make the mixin order load-bearing again.
-  private def read(s: Rep[State], rs: Reg): Rep[Int] = rs match {
+  override def readReg(s: Rep[State], rs: Reg): Rep[Int] = rs match {
     case RiscV.Reg(0) => unit(0)
     case _            => get_reg(s, rs.i)
   }
@@ -153,11 +149,11 @@ trait Exec extends Direct {
       tick(s)
       prog(pc) match {
         case Instr.Op(op, rd, rs1, rs2) => {
-          write(s, rd, alu(op, read(s, rs1), read(s, rs2)))
+          write(s, rd, alu(op, readReg(s, rs1), readReg(s, rs2)))
           call(pc + 1, s)
         }
         case Instr.OpImm(op, rd, rs1, imm) => {
-          write(s, rd, alu(op, read(s, rs1), unit(imm.i)))
+          write(s, rd, alu(op, readReg(s, rs1), unit(imm.i)))
           call(pc + 1, s)
         }
         case Instr.Lui(rd, imm) => {
@@ -173,14 +169,14 @@ trait Exec extends Direct {
           call(target(pc, off), s)
         }
         case Instr.Branch(cmp, rs1, rs2, off) =>
-          if (evalCond(s, (cmp, rs1, rs2))) { call(target(pc, off), s) }
+          if (evalCond(readReg(s, _), (cmp, rs1, rs2))) { call(target(pc, off), s) }
           else { call(pc + 1, s) }
         case Instr.Load(w, rd, rs1, imm) => {
-          write(s, rd, loadValue(s, w, read(s, rs1) + unit(imm.i)))
+          write(s, rd, loadValue(s, w, readReg(s, rs1) + unit(imm.i)))
           call(pc + 1, s)
         }
         case Instr.Store(w, rs2, rs1, imm) => {
-          storeValue(s, w, read(s, rs1) + unit(imm.i), read(s, rs2))
+          storeValue(s, w, readReg(s, rs1) + unit(imm.i), readReg(s, rs2))
           call(pc + 1, s)
         }
         // The link register really is written, so a callee that spills `ra` and
@@ -197,7 +193,8 @@ trait Exec extends Direct {
         // the assertion is where it shows up.
         case Instr.Ret => retstack match {
           case r :: rest => {
-            unsafeReflect[Unit](Op.Custom("ret_assert", UNIT), read(s, RiscV.Reg(1)) === unit(4 * r))
+            val ra = readReg(s, RiscV.Reg(1))
+            unsafeReflect[Unit](Op.Custom("ret_assert", UNIT), ra === unit(4 * r))
             withStack(rest) { call(r, s) }
           }
           // Nothing to return through, which is what a leaf's `ret` means and

@@ -60,17 +60,15 @@ trait Exec extends Squared {
     case _                       => false
   }
 
-  // Every register [c] depends on. Over-approximating is safe; missing one
-  // silently corrupts branch resolution, because [evalCond] runs against the
-  // live register file at the join point rather than at the branch.
-  def reads(c: Cond): Set[Reg] = c match { case (_, rs1, rs2) => Set(rs1, rs2) }
-
   private def flip(x: Rep[Int]): Rep[Int] = x ^ unit(Int.MinValue)
 
-  def evalCond(h: Half, c: Cond): Rep[Boolean] = {
+  // [c]'s truth in one run, with [of] supplying each operand. The reader is
+  // what lets [Predictive] resolve a branch against the values that were in
+  // the file when it was staged; everywhere else passes `readReg(h, _)`.
+  def evalCond(of: Reg => Rep[Int], c: Cond): Rep[Boolean] = {
     val (cmp, rs1, rs2) = c
-    val a = read(h, rs1)
-    val b = read(h, rs2)
+    val a = of(rs1)
+    val b = of(rs2)
     cmp match {
       case Cmp.Eq => a === b
       case Cmp.Ne => a !== b
@@ -86,7 +84,7 @@ trait Exec extends Squared {
   // x0 is hardwired, and register names are static, so both halves of that
   // resolve before anything runs: reading it is the literal 0, and writing it
   // emits nothing at all.
-  private def read(h: Half, rs: Reg): Rep[Int] = rs match {
+  def readReg(h: Half, rs: Reg): Rep[Int] = rs match {
     case RiscV.Reg(0) => unit(0)
     case _            => get_reg(h, unit(rs.i))
   }
@@ -157,11 +155,11 @@ trait Exec extends Squared {
       each(s)(tick)
       prog(pc) match {
         case Instr.Op(op, rd, rs1, rs2) => {
-          each(s)(h => write(h, rd, alu(op, read(h, rs1), read(h, rs2))))
+          each(s)(h => write(h, rd, alu(op, readReg(h, rs1), readReg(h, rs2))))
           call(pc + 1, s)
         }
         case Instr.OpImm(op, rd, rs1, imm) => {
-          each(s)(h => write(h, rd, alu(op, read(h, rs1), unit(imm.i))))
+          each(s)(h => write(h, rd, alu(op, readReg(h, rs1), unit(imm.i))))
           call(pc + 1, s)
         }
         case Instr.Lui(rd, imm) => {
@@ -177,17 +175,17 @@ trait Exec extends Squared {
           call(target(pc, off), s)
         }
         case Instr.Branch(cmp, rs1, rs2, off) =>
-          agree(each(s)(h => evalCond(h, (cmp, rs1, rs2)))) {
+          agree(each(s)(h => evalCond(readReg(h, _), (cmp, rs1, rs2)))) {
             call(target(pc, off), s)
           } {
             call(pc + 1, s)
           }
         case Instr.Load(w, rd, rs1, imm) => {
-          each(s)(h => write(h, rd, loadValue(h, w, read(h, rs1) + unit(imm.i))))
+          each(s)(h => write(h, rd, loadValue(h, w, readReg(h, rs1) + unit(imm.i))))
           call(pc + 1, s)
         }
         case Instr.Store(w, rs2, rs1, imm) => {
-          each(s)(h => storeValue(h, w, read(h, rs1) + unit(imm.i), read(h, rs2)))
+          each(s)(h => storeValue(h, w, readReg(h, rs1) + unit(imm.i), readReg(h, rs2)))
           call(pc + 1, s)
         }
         // The link register really is written, in each run, so a callee that
@@ -207,7 +205,7 @@ trait Exec extends Squared {
         // assertions are where it shows up.
         case Instr.Ret => retstack match {
           case r :: rest => {
-            each(s)(h => returnsTo(read(h, RiscV.Reg(1)), r))
+            each(s)(h => returnsTo(readReg(h, RiscV.Reg(1)), r))
             withStack(rest) { call(r, s) }
           }
           // Nothing to return through, which is what a leaf's `ret` means and

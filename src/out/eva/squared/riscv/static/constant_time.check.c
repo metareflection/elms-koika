@@ -65,9 +65,8 @@ void squared_assume(bool);
 void squared_diverged(bool);
 
 struct StateT2 * slot_12(struct StateT2 * v1321);
-struct StateT2 * slot_14(struct StateT2 * v1513);
+struct StateT2 * slot_14(struct StateT2 * v1535);
 struct StateT2 * slot_6(struct StateT2 * v206);
-struct StateT2 * slot_16(struct StateT2 * v1552);
 struct StateT2 * slot_5(struct StateT2 * v182);
 struct StateT2 * slot_2(struct StateT2 * v74);
 struct StateT2 * slot_7(struct StateT2 * v267);
@@ -77,7 +76,8 @@ struct StateT2 * slot_10(struct StateT2 * v1200);
 struct StateT2 * slot_1(struct StateT2 * v38);
 struct StateT2 * slot_8(struct StateT2 * v703);
 struct StateT2 * slot_4(struct StateT2 * v146);
-struct StateT2 * slot_13(struct StateT2 * v1460);
+struct StateT2 * slot_13(struct StateT2 * v1378);
+struct StateT2 * slot_15(struct StateT2 * v1588);
 struct StateT2 * slot_9(struct StateT2 * v764);
 struct StateT2 * slot_11(struct StateT2 * v1261);
 struct StateT2 * slot_0(struct StateT2 * v2);
@@ -86,116 +86,82 @@ struct StateT2 * slot_12(struct StateT2 * v1321) {
   int v1323 = v1322->timer;
   struct StateT * v1324 = v1321->b;
   int v1325 = v1324->timer;
-  bool v1400 = v1323 == v1325;
-  squared_assert(v1400);
-  squared_assume(v1400);
+  bool v1356 = v1323 == v1325;
+  squared_assert(v1356);
+  squared_assume(v1356);
   struct StateT * v1328 = v1321->a;
-  int * v1329 = v1328->regs;
-  int v1330 = v1329[14];
-  int v1331 = v1329[15];
-  struct StateT * v1332 = v1321->b;
-  int * v1333 = v1332->regs;
-  int v1334 = v1333[14];
-  int v1335 = v1333[15];
-  bool v1407 = (v1330 >= v1331) == (v1334 >= v1335);
-  squared_diverged(v1407);
-  squared_assume(v1407);
-  bool v1408 = v1330 >= v1331;
-  struct StateT2 * v1396;
-  if (v1408) {
-    struct StateT * v1338 = v1321->a;
-    int v1339 = v1338->timer;
-    int v1410 = v1339 + 15;
-    v1338->timer = v1410;
-    int * v1341 = v1338->saved_regs;
-    int v1342 = v1341[6];
-    int * v1343 = v1338->regs;
-    v1343[6] = v1342;
-    int * v1345 = v1338->saved_regs;
-    int v1346 = v1345[7];
-    int * v1347 = v1338->regs;
-    v1347[7] = v1346;
-    int * v1349 = v1338->saved_regs;
-    int v1350 = v1349[8];
-    int * v1351 = v1338->regs;
-    v1351[8] = v1350;
-    int * v1353 = v1338->saved_regs;
-    int v1354 = v1353[9];
-    int * v1355 = v1338->regs;
-    v1355[9] = v1354;
-    int * v1357 = v1338->saved_regs;
-    int v1358 = v1357[16];
-    int * v1359 = v1338->regs;
-    v1359[16] = v1358;
-    int * v1361 = v1338->saved_regs;
-    int v1362 = v1361[5];
-    int * v1363 = v1338->regs;
-    v1363[5] = v1362;
-    struct StateT * v1365 = v1321->b;
-    int v1366 = v1365->timer;
-    int v1436 = v1366 + 15;
-    v1365->timer = v1436;
-    int * v1368 = v1365->saved_regs;
-    int v1369 = v1368[6];
-    int * v1370 = v1365->regs;
-    v1370[6] = v1369;
-    int * v1372 = v1365->saved_regs;
-    int v1373 = v1372[7];
-    int * v1374 = v1365->regs;
-    v1374[7] = v1373;
-    int * v1376 = v1365->saved_regs;
-    int v1377 = v1376[8];
-    int * v1378 = v1365->regs;
-    v1378[8] = v1377;
-    int * v1380 = v1365->saved_regs;
-    int v1381 = v1380[9];
-    int * v1382 = v1365->regs;
-    v1382[9] = v1381;
-    int * v1384 = v1365->saved_regs;
-    int v1385 = v1384[16];
-    int * v1386 = v1365->regs;
-    v1386[16] = v1385;
-    int * v1388 = v1365->saved_regs;
-    int v1389 = v1388[5];
-    int * v1390 = v1365->regs;
-    v1390[5] = v1389;
-    struct StateT2 * v1392 = slot_13(v1321);
-    v1396 = v1392;
-  } else {
-    struct StateT2 * v1394 = slot_14(v1321);
-    v1396 = v1394;
-  }
-  return v1396;
+  int * v1329 = v1328->saved_regs;
+  int * v1330 = v1328->regs;
+  int v1331 = v1330[14];
+  v1329[14] = v1331;
+  struct StateT * v1333 = v1321->b;
+  int * v1334 = v1333->saved_regs;
+  int * v1335 = v1333->regs;
+  int v1336 = v1335[14];
+  v1334[14] = v1336;
+  struct StateT * v1338 = v1321->a;
+  int v1339 = v1338->timer;
+  int v1367 = v1339 + 1;
+  v1338->timer = v1367;
+  struct StateT * v1341 = v1321->b;
+  int v1342 = v1341->timer;
+  int v1369 = v1342 + 1;
+  v1341->timer = v1369;
+  struct StateT * v1344 = v1321->a;
+  int * v1345 = v1344->regs;
+  int v1346 = v1345[14];
+  int v1372 = v1346 + 4;
+  v1345[14] = v1372;
+  struct StateT * v1348 = v1321->b;
+  int * v1349 = v1348->regs;
+  int v1350 = v1349[14];
+  int v1375 = v1350 + 4;
+  v1349[14] = v1375;
+  struct StateT2 * v1352 = slot_13(v1321);
+  return v1352;
 }
 
-struct StateT2 * slot_14(struct StateT2 * v1513) {
-  struct StateT * v1514 = v1513->a;
-  int v1515 = v1514->timer;
-  struct StateT * v1516 = v1513->b;
-  int v1517 = v1516->timer;
-  bool v1538 = v1515 == v1517;
-  squared_assert(v1538);
-  squared_assume(v1538);
-  struct StateT * v1520 = v1513->a;
-  int v1521 = v1520->timer;
-  int v1540 = v1521 + 1;
-  v1520->timer = v1540;
-  struct StateT * v1523 = v1513->b;
-  int v1524 = v1523->timer;
-  int v1542 = v1524 + 1;
-  v1523->timer = v1542;
-  struct StateT * v1526 = v1513->a;
-  int * v1527 = v1526->regs;
-  int v1528 = v1527[14];
-  int v1546 = v1528 + 4;
-  v1527[14] = v1546;
-  struct StateT * v1530 = v1513->b;
-  int * v1531 = v1530->regs;
-  int v1532 = v1531[14];
-  int v1549 = v1532 + 4;
-  v1531[14] = v1549;
-  struct StateT2 * v1534 = slot_16(v1513);
-  return v1534;
+struct StateT2 * slot_14(struct StateT2 * v1535) {
+  struct StateT * v1536 = v1535->a;
+  int v1537 = v1536->timer;
+  struct StateT * v1538 = v1535->b;
+  int v1539 = v1538->timer;
+  bool v1567 = v1537 == v1539;
+  squared_assert(v1567);
+  squared_assume(v1567);
+  struct StateT * v1542 = v1535->a;
+  int v1543 = v1542->timer;
+  int v1569 = v1543 + 1;
+  v1542->timer = v1569;
+  struct StateT * v1545 = v1535->b;
+  int v1546 = v1545->timer;
+  int v1571 = v1546 + 1;
+  v1545->timer = v1571;
+  struct StateT * v1548 = v1535->a;
+  int * v1549 = v1548->regs;
+  int v1550 = v1549[5];
+  bool v1575 = (v1550 ^ -2147483648) < -2147483647;
+  int v1553;
+  if (v1575) {
+    v1553 = 1;
+  } else {
+    v1553 = 0;
+  }
+  int * v1554 = v1548->regs;
+  v1554[11] = v1553;
+  struct StateT * v1556 = v1535->b;
+  int * v1557 = v1556->regs;
+  int v1558 = v1557[5];
+  bool v1583 = (v1558 ^ -2147483648) < -2147483647;
+  int v1561;
+  if (v1583) {
+    v1561 = 1;
+  } else {
+    v1561 = 0;
+  }
+  int * v1562 = v1556->regs;
+  v1562[11] = v1561;
+  return v1535;
 }
 
 struct StateT2 * slot_6(struct StateT2 * v206) {
@@ -238,26 +204,6 @@ struct StateT2 * slot_6(struct StateT2 * v206) {
   v235[6] = v264;
   struct StateT2 * v239 = slot_7(v206);
   return v239;
-}
-
-struct StateT2 * slot_16(struct StateT2 * v1552) {
-  struct StateT * v1553 = v1552->a;
-  int v1554 = v1553->timer;
-  struct StateT * v1555 = v1552->b;
-  int v1556 = v1555->timer;
-  bool v1571 = v1554 == v1556;
-  squared_assert(v1571);
-  squared_assume(v1571);
-  struct StateT * v1559 = v1552->a;
-  int v1560 = v1559->timer;
-  int v1573 = v1560 + 1;
-  v1559->timer = v1573;
-  struct StateT * v1562 = v1552->b;
-  int v1563 = v1562->timer;
-  int v1575 = v1563 + 1;
-  v1562->timer = v1575;
-  struct StateT2 * v1567 = slot_5(v1552);
-  return v1567;
 }
 
 struct StateT2 * slot_5(struct StateT2 * v182) {
@@ -807,47 +753,121 @@ struct StateT2 * slot_4(struct StateT2 * v146) {
   return v165;
 }
 
-struct StateT2 * slot_13(struct StateT2 * v1460) {
-  struct StateT * v1461 = v1460->a;
-  int v1462 = v1461->timer;
-  struct StateT * v1463 = v1460->b;
-  int v1464 = v1463->timer;
-  bool v1492 = v1462 == v1464;
-  squared_assert(v1492);
-  squared_assume(v1492);
-  struct StateT * v1467 = v1460->a;
-  int v1468 = v1467->timer;
-  int v1494 = v1468 + 1;
-  v1467->timer = v1494;
-  struct StateT * v1470 = v1460->b;
-  int v1471 = v1470->timer;
-  int v1496 = v1471 + 1;
-  v1470->timer = v1496;
-  struct StateT * v1473 = v1460->a;
-  int * v1474 = v1473->regs;
-  int v1475 = v1474[5];
-  bool v1500 = (v1475 ^ -2147483648) < -2147483647;
-  int v1478;
-  if (v1500) {
-    v1478 = 1;
+struct StateT2 * slot_13(struct StateT2 * v1378) {
+  struct StateT * v1379 = v1378->a;
+  int v1380 = v1379->timer;
+  struct StateT * v1381 = v1378->b;
+  int v1382 = v1381->timer;
+  bool v1467 = v1380 == v1382;
+  squared_assert(v1467);
+  squared_assume(v1467);
+  struct StateT * v1385 = v1378->a;
+  int * v1386 = v1385->saved_regs;
+  int v1387 = v1386[14];
+  int * v1388 = v1385->regs;
+  int v1389 = v1388[15];
+  struct StateT * v1390 = v1378->b;
+  int * v1391 = v1390->saved_regs;
+  int v1392 = v1391[14];
+  int * v1393 = v1390->regs;
+  int v1394 = v1393[15];
+  bool v1476 = (v1387 >= v1389) == (v1392 >= v1394);
+  squared_diverged(v1476);
+  squared_assume(v1476);
+  bool v1477 = v1387 >= v1389;
+  struct StateT2 * v1463;
+  if (v1477) {
+    struct StateT * v1397 = v1378->a;
+    int v1398 = v1397->timer;
+    int v1479 = v1398 + 15;
+    v1397->timer = v1479;
+    int * v1400 = v1397->saved_regs;
+    int v1401 = v1400[6];
+    int * v1402 = v1397->regs;
+    v1402[6] = v1401;
+    int * v1404 = v1397->saved_regs;
+    int v1405 = v1404[7];
+    int * v1406 = v1397->regs;
+    v1406[7] = v1405;
+    int * v1408 = v1397->saved_regs;
+    int v1409 = v1408[8];
+    int * v1410 = v1397->regs;
+    v1410[8] = v1409;
+    int * v1412 = v1397->saved_regs;
+    int v1413 = v1412[9];
+    int * v1414 = v1397->regs;
+    v1414[9] = v1413;
+    int * v1416 = v1397->saved_regs;
+    int v1417 = v1416[16];
+    int * v1418 = v1397->regs;
+    v1418[16] = v1417;
+    int * v1420 = v1397->saved_regs;
+    int v1421 = v1420[5];
+    int * v1422 = v1397->regs;
+    v1422[5] = v1421;
+    int * v1424 = v1397->saved_regs;
+    int v1425 = v1424[14];
+    int * v1426 = v1397->regs;
+    v1426[14] = v1425;
+    struct StateT * v1428 = v1378->b;
+    int v1429 = v1428->timer;
+    int v1508 = v1429 + 15;
+    v1428->timer = v1508;
+    int * v1431 = v1428->saved_regs;
+    int v1432 = v1431[6];
+    int * v1433 = v1428->regs;
+    v1433[6] = v1432;
+    int * v1435 = v1428->saved_regs;
+    int v1436 = v1435[7];
+    int * v1437 = v1428->regs;
+    v1437[7] = v1436;
+    int * v1439 = v1428->saved_regs;
+    int v1440 = v1439[8];
+    int * v1441 = v1428->regs;
+    v1441[8] = v1440;
+    int * v1443 = v1428->saved_regs;
+    int v1444 = v1443[9];
+    int * v1445 = v1428->regs;
+    v1445[9] = v1444;
+    int * v1447 = v1428->saved_regs;
+    int v1448 = v1447[16];
+    int * v1449 = v1428->regs;
+    v1449[16] = v1448;
+    int * v1451 = v1428->saved_regs;
+    int v1452 = v1451[5];
+    int * v1453 = v1428->regs;
+    v1453[5] = v1452;
+    int * v1455 = v1428->saved_regs;
+    int v1456 = v1455[14];
+    int * v1457 = v1428->regs;
+    v1457[14] = v1456;
+    struct StateT2 * v1459 = slot_14(v1378);
+    v1463 = v1459;
   } else {
-    v1478 = 0;
+    struct StateT2 * v1461 = slot_15(v1378);
+    v1463 = v1461;
   }
-  int * v1479 = v1473->regs;
-  v1479[11] = v1478;
-  struct StateT * v1481 = v1460->b;
-  int * v1482 = v1481->regs;
-  int v1483 = v1482[5];
-  bool v1508 = (v1483 ^ -2147483648) < -2147483647;
-  int v1486;
-  if (v1508) {
-    v1486 = 1;
-  } else {
-    v1486 = 0;
-  }
-  int * v1487 = v1481->regs;
-  v1487[11] = v1486;
-  return v1460;
+  return v1463;
+}
+
+struct StateT2 * slot_15(struct StateT2 * v1588) {
+  struct StateT * v1589 = v1588->a;
+  int v1590 = v1589->timer;
+  struct StateT * v1591 = v1588->b;
+  int v1592 = v1591->timer;
+  bool v1607 = v1590 == v1592;
+  squared_assert(v1607);
+  squared_assume(v1607);
+  struct StateT * v1595 = v1588->a;
+  int v1596 = v1595->timer;
+  int v1609 = v1596 + 1;
+  v1595->timer = v1609;
+  struct StateT * v1598 = v1588->b;
+  int v1599 = v1598->timer;
+  int v1611 = v1599 + 1;
+  v1598->timer = v1611;
+  struct StateT2 * v1603 = slot_5(v1588);
+  return v1603;
 }
 
 struct StateT2 * slot_9(struct StateT2 * v764) {

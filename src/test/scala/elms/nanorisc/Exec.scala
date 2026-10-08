@@ -33,20 +33,17 @@ trait Exec extends Direct with NanoRisc.Ops {
     case _              => false
   }
 
-  override def reads(c: Cond): Set[Reg] = c match {
-    case (_, src1, src2) => Set(src1) ++ (src2 match {
-        case r: NanoRisc.Reg => Set(r)
-        case _               => Set.empty
-      })
+  override def evalCond(of: Reg => Rep[Int], c: Cond): Rep[Boolean] = c match {
+    case (cmp, src1, src2) => cmp.eval(of(src1), operand(of, src2))
   }
 
-  override def evalCond(s: Rep[State], c: Cond): Rep[Boolean] = c match {
-    case (cmp, src1, src2) => cmp.eval(operand(s, src1), operand(s, src2))
-  }
+  override def readReg(s: Rep[State], r: Reg): Rep[Int] = get_reg(s, r.unReg)
 
-  def operand(s: Rep[State], vl: Operand): Rep[Int] = vl match {
-    case Imm(i) => i
-    case Reg(i) => get_reg(s, i)
+  def operand(s: Rep[State], vl: Operand): Rep[Int] = operand(readReg(s, _), vl)
+
+  private def operand(of: Reg => Rep[Int], vl: Operand): Rep[Int] = vl match {
+    case Imm(i)          => i
+    case r: NanoRisc.Reg => of(r)
   }
 
   override def step(pc: Int, s: Rep[State]): Rep[State] =

@@ -52,11 +52,19 @@ trait Isa extends StateTOps {
   // that stages, verifies, and silently never speculates about a store.
   def isStore(i: Instr): Boolean
 
-  // Every register [c] depends on. Over-approximating is safe; missing one
-  // silently corrupts branch resolution, because [evalCond] runs against the
-  // live register file at the join point rather than at the branch.
-  def reads(c: Cond): Set[Reg]
-  def evalCond(s: Rep[State], c: Cond): Rep[Boolean]
+  // [r]'s contents. Apart from [get_reg] because a register name is static, so
+  // an ISA can answer some of them without reading anything: RISC-V's x0 is the
+  // literal zero wherever it appears.
+  def readReg(s: Rep[State], r: Reg): Rep[Int]
+
+  // [c]'s truth, with [of] supplying each operand.
+  //
+  // A reader and not a state, because [Predictive] resolves a branch several
+  // instructions after staging it and the window in between is free to have
+  // overwritten one of the condition's own inputs. What the branch read is what
+  // [Predictive.save] set aside, and the reader is how that gets substituted
+  // back in. Everywhere else passes `readReg(s, _)`.
+  def evalCond(of: Reg => Rep[Int], c: Cond): Rep[Boolean]
 
   // Non-speculative semantics for one instruction. Recurses through
   // [Common.call], never through [step].
