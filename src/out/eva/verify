@@ -94,7 +94,12 @@ here=${0:a:h}
 # care how large a path space is, so Eva answers all twelve in about a second
 # each and would happily carry them; the other two scripts cannot, and a tree
 # the three disagree about covering is worse than a tree none of them covers.
-full_only='(*/lockstep/*|*/dynamic/*|*/probe/*)'
+#
+# `pht/` is the fourth and is held back for the coverage reason above rather
+# than for any of its own. Eva is as cheap on 42 Spectre variants as on
+# anything else here; what it must not do is answer a tree the other two
+# scripts are not looking at.
+full_only='(*/lockstep/*|*/dynamic/*|*/probe/*|*/pht/*)'
 
 full=0
 while [[ $1 == --* ]]; do
@@ -153,7 +158,7 @@ if (( ! $#files )); then
     if (( ! full )); then
         held_back=${#${(M)files:#${~full_only}}}
         files=(${files:#${~full_only}})
-        (( held_back )) && print -- "skip     $held_back under lockstep/, dynamic/ and probe/ (pass --full to check them)"
+        (( held_back )) && print -- "skip     $held_back under lockstep/, dynamic/, probe/ and pht/ (pass --full to check them)"
     fi
 fi
 

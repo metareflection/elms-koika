@@ -40,7 +40,7 @@
 
 here=${0:a:h}
 
-# What the main suite leaves out. Two trees, held back for opposite reasons.
+# What the main suite leaves out. Four trees, held back for four reasons.
 #
 # `lockstep/` is five of the demos `squared/` answers, built by rewriting a
 # residue rather than by interpreting the program over two states, and it is
@@ -64,9 +64,16 @@ here=${0:a:h}
 # Nothing in it is a verdict the tree does not already carry at k=4, so a
 # default run has nothing to learn from it and a scaling study has everything.
 #
-# `sbt testFull` still regenerates all three, so the C stays current whether or
+# `pht/` is the fourth, and held back on volume rather than on per-file cost.
+# Six of Kocher's Spectre v1 variants against all seven models is 42 files
+# here, which is a fifth again on top of the main suite for one family, and
+# every verdict in it is a shape the tree already states somewhere else. A
+# default run is for noticing that a model stopped detecting what it detected;
+# a corpus is for reading across.
+#
+# `sbt testFull` still regenerates all four, so the C stays current whether or
 # not anybody checks it.
-full_only='(*/lockstep/*|*/dynamic/*|*/probe/*)'
+full_only='(*/lockstep/*|*/dynamic/*|*/probe/*|*/pht/*)'
 
 certify=0
 full=0
@@ -87,7 +94,7 @@ if (( ! $#files )); then
     if (( ! full )); then
         held_back=${#${(M)files:#${~full_only}}}
         files=(${files:#${~full_only}})
-        (( held_back )) && print -- "skip     $held_back under lockstep/, dynamic/ and probe/ (pass --full to check them)"
+        (( held_back )) && print -- "skip     $held_back under lockstep/, dynamic/, probe/ and pht/ (pass --full to check them)"
     fi
 fi
 

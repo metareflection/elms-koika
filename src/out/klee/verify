@@ -81,7 +81,14 @@ here=${0:a:h}
 # to finish. Twelve files, most of a budget apiece at the top of the dial, and
 # no verdict the tree does not already have. It is here to be measured rather
 # than to be run.
-full_only='(*/lockstep/*|*/dynamic/*|*/probe/*)'
+#
+# `pht/` is the fourth. Six of Kocher's Spectre v1 variants against all seven
+# models, 42 files, each of them a sixteen to twenty-three instruction demo
+# that KLEE answers quickly. So the reason is not cost but coverage per
+# second: none of the 42 is a verdict the main suite cannot already state, and
+# all three scripts holding the same trees back is what makes a disagreement
+# between them mean something.
+full_only='(*/lockstep/*|*/dynamic/*|*/probe/*|*/pht/*)'
 
 slow=0
 only_slow=0
@@ -161,7 +168,7 @@ if (( ! $#files )); then
     if (( ! full )); then
         held_back=${#${(M)files:#${~full_only}}}
         files=(${files:#${~full_only}})
-        (( held_back )) && print -- "skip     $held_back under lockstep/, dynamic/ and probe/ (pass --full to check them)"
+        (( held_back )) && print -- "skip     $held_back under lockstep/, dynamic/, probe/ and pht/ (pass --full to check them)"
     fi
 fi
 
