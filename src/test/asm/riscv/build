@@ -36,6 +36,21 @@ assemble() {
         -c $1 -o $2 || exit 1
 }
 
+# `pht/` is the one family that arrives as C rather than as assembly, so the
+# same driver compiles instead of assembling. Everything else in the tree keeps
+# its `.s` checked in.
+#
+# `-enable-global-merge=false` is load bearing and clang-only. With merging on,
+# the pass re-emits every global and `.secret` comes out ahead of `.attacker`,
+# so reading past `publicarray` reaches `probe` instead of the key and six
+# gadgets quietly stop being gadgets. gcc has no such pass and wants no flag.
+merge=()
+[[ ${as[1]} == clang ]] && merge=(-mllvm -enable-global-merge=false)
+
+compile() {
+    $as -march=rv32i -mabi=ilp32 -mno-relax -O1 $merge -c $1 -o $2 || exit 1
+}
+
 for src in $here/*.s; do
     # `probe.s` is a family and not a demo, so it is assembled below instead.
     [[ ${src:t} == probe.s ]] && continue
@@ -49,4 +64,9 @@ PROBE_COUNTS=(1 2 3 4 5 6)
 for k in $PROBE_COUNTS; do
     echo "Assembling probe.s at $k probe(s)"
     assemble $here/probe.s $here/probe$k.o -Wa,--defsym,PROBES=$k
+done
+
+for src in $here/pht/*.c; do
+    echo "Compiling pht/${src:t}"
+    compile $src ${src:r}.o
 done

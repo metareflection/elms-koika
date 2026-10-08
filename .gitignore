@@ -39,6 +39,7 @@ src/out/**/*.actual.*
 
 # RISC-V test fixtures, assembled by src/test/asm/riscv/build
 src/test/asm/riscv/*.o
+src/test/asm/riscv/pht/*.o
 
 # FaCT test fixtures, built by src/test/fact/build
 src/test/fact/*.o

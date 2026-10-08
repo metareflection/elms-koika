@@ -347,6 +347,41 @@ class RiscVElfTests extends AnyFunSuite {
     assert(jalr.mkString.contains("no `auipc` beside it"))
   }
 
+  // The PHT variants are the only demos whose gadget is a property of the
+  // layout rather than of the instructions. `publicarray[x]` past the end has
+  // to land in `secretarray`, and what decides that is clang's emission order
+  // and the global-merge pass, neither of which anything in Scala can ask for.
+  //
+  // `src/test/asm/riscv/pht/pht.h` says how the order is forced. This is where
+  // it is read back.
+  test("the PHT variants put the key directly above the attacker's array") {
+    val images = Vector("v08", "v10", "v17", "v20", "v21", "v25")
+      .map(n => (n, read(s"pht/$n.o", bytes(s"pht/$n.o"))))
+
+    def wrong(why: ((String, Image)) => Boolean): Vector[String] =
+      images.filter(why).map((n, _) => n)
+
+    assert(wrong { (_, i) =>
+      val pub = i.globals("publicarray")
+      pub.addr + pub.size != i.globals("secretarray").addr
+    } == Vector())
+
+    // `probe` and `temp` are the attacker's as well and are what an unforced
+    // order puts in the gap, so a run that stopped emitting in declaration
+    // order would pass the line above with the key somewhere else entirely.
+    assert(wrong((_, i) =>
+      i.globals("probe").addr > i.globals("publicarray").addr
+    ) == Vector())
+
+    // The bound every variant branches on is a load, the way the originals
+    // wrote it. The image is where `publicarray_size = 8` and `publicarray[8]`
+    // have to agree.
+    assert(wrong { (_, i) =>
+      val size = i.data(i.globals("publicarray_size").addr / 4)
+      size != i.globals("publicarray").size / 4
+    } == Vector())
+  }
+
   test("a missing object says to run the script") {
     val e = intercept[elf.ElfException](Elf.load(dir + "nope.o"))
     assert(e.getMessage.contains("src/test/asm/riscv/build"))
