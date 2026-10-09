@@ -109,9 +109,8 @@ trait NonBlocking extends Cached {
     s
   }
 
-  // Nothing survives a squash, so nothing is still on its way either. Every
-  // register is available at the clock and the misses the window had
-  // outstanding are never charged to anyone.
+  // The window's registers are available at the clock again, and the misses it
+  // had outstanding against them are never charged to anyone.
   //
   // That is a claim, and it is the one place this model asserts something a
   // real machine only approximately does. A miss the squash discards still
@@ -120,8 +119,13 @@ trait NonBlocking extends Cached {
   // structural hazard and nothing else in this tower has one. What survives a
   // squash here is the cache, which is where the speculative channel lives
   // anyway.
-  override def squash(s: Rep[State]): Rep[Unit] = {
-    for (i <- 0 until num_regs) { s.reg_ready(unit(i)) = s.timer }
+  //
+  // [saved] and not the whole file. A load from before the branch can still be
+  // on its way, [finish] is what charges one nobody waited for, and clearing
+  // every register would hand a mispredict the power to cancel work it never
+  // speculated on.
+  override def squash(s: Rep[State], saved: Vector[Reg]): Rep[Unit] = {
+    for (rd <- saved) { s.reg_ready(unit(regIndex(rd))) = s.timer }
     unit(())
   }
 }

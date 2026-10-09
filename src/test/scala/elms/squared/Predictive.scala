@@ -201,7 +201,7 @@ trait Predictive extends Cached with Exec {
       h.timer = h.timer + unit(mispredictPenalty)
       untimed { for (rd <- saved) { set_reg(h, unit(rd.i), h.saved_regs(unit(rd.i))) } }
     }
-    squash(s)
+    squash(s, saved)
   }
 
   // One bit of history per branch, its last outcome, and no aliasing between

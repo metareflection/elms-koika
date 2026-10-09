@@ -4,6 +4,8 @@ import elms.core.macros.virtualize
 
 import elms.prelude.given
 
+import elms.koika.test.riscv.RiscV
+
 // A load the instructions behind it can hide, over a pair of runs.
 //
 // The model is [elms.koika.test.common.NonBlocking]'s and that file is where
@@ -116,15 +118,17 @@ trait NonBlocking extends Cached with Squared {
     s
   }
 
-  // Nothing survives a squash, so nothing is still on its way either. Every
-  // register is available at the clock and the misses the window had
-  // outstanding are never charged to anyone.
+  // The window's registers are available at the clock again, and the misses it
+  // had outstanding against them are never charged to anyone.
   //
   // That is a claim, and it is the one place this model asserts something a
   // real machine only approximately does. What survives a squash here is the
   // cache, which is where the speculative channel lives anyway.
-  override def squash(s: Pair): Unit =
-    each(s)(h => for (i <- 0 until num_regs) { h.reg_ready(unit(i)) = h.timer })
+  //
+  // [saved] and not the whole file, so that a mispredict cannot cancel a load
+  // issued before the branch that is still on its way.
+  override def squash(s: Pair, saved: Vector[RiscV.Reg]): Unit =
+    each(s)(h => for (rd <- saved) { h.reg_ready(unit(rd.i)) = h.timer })
 }
 
 // Non-blocking loads behind a branch predictor, which is the first model here

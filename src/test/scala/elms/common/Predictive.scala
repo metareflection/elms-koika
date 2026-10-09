@@ -200,7 +200,7 @@ trait Predictive extends Cached {
   protected def rollback(s: Rep[State], saved: Vector[Reg]): Rep[Unit] = {
     s.timer += mispredictPenalty
     untimed { for (rd <- saved) { set_reg(s, regIndex(rd), s.saved_regs(regIndex(rd))) } }
-    squash(s)
+    squash(s, saved)
   }
 
   // One bit of history per branch, its last outcome, and no aliasing between

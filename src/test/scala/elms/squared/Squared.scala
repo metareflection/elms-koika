@@ -218,10 +218,14 @@ trait Squared extends Machine with Returns {
   // for a model that times none of them.
   def untimed[A](body: => A): A = body
 
-  // A squash, after the penalty has been charged. What this must not undo is
-  // the cache, which is the channel every model that speculates exists to
-  // expose.
-  def squash(s: Pair): Unit = ()
+  // A squash, after the penalty has been charged. [saved] is what the window
+  // wrote, and the bound is the point: a load issued before the branch is
+  // still on its way, and a mispredict it had nothing to do with does not get
+  // to make the model forget it.
+  //
+  // What this must not undo is the cache, which is the channel every model
+  // that speculates exists to expose.
+  def squash(s: Pair, saved: Vector[RiscV.Reg]): Unit = ()
 
   // A slot's body. The clocks are compared here and nowhere else, because a
   // slot boundary is the only place the two runs have provably done the same

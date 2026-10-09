@@ -331,7 +331,7 @@ is the main suite.
 | `bypass_late` | clean | clean | clean | clean | leak | clean | clean |
 | `dynstore` | clean | clean | clean | clean | clean | clean | clean |
 | `bypass_alias` | clean | clean | clean | clean | leak | clean | clean |
-| `balanced` | clean | clean | leak | leak | leak | clean | leak |
+| `balanced` | clean | clean | leak | leak | leak | clean | clean |
 | `v08` | clean | leak | leak | leak | leak | leak | leak |
 | `v10` | clean | clean | clean | clean | clean | clean | clean |
 | `v17` | leak | leak | leak | leak | leak | leak | leak |
@@ -380,10 +380,17 @@ instructions after it into different slots. Eight are in the main suite,
 `balanced` is a row about the predictor and nothing else. A secret word decides
 a branch whose two arms are the same length, so a machine that does not
 speculate runs two instructions either way and the clocks come back together.
-Three columns report that. The four with a predictor in them do not: the branch
-is cold in both runs, so both guess not-taken, and only the run that takes it
-pays the fifteen. A balanced branch is a constant-time idiom for exactly as
-long as nobody is predicting it.
+Three columns report that. The three with a predictor and a blocking cache do
+not: the branch is cold in both runs, so both guess not-taken, and only the run
+that takes it pays the fifteen. A balanced branch is a constant-time idiom for
+exactly as long as nobody is predicting it.
+
+`predictive_nb` is the fourth column with a predictor and it reads clean, which
+is the penalty being real and unobservable rather than absent. The secret the
+branch tests arrives by a load that has not landed yet, so the fifteen is spent
+inside the shadow of a hundred-cycle miss and in-order retirement floors both
+runs at the cycle the load completes. Lengthen the arms past the miss and the
+row should come back.
 
 It is in the tree for a second reason, which is what it does to the squared
 tower. `Squared.agree` asserts that the two runs take each conditional the same
@@ -438,9 +445,9 @@ gadget.
 
 `predictive_nb` is the join of the two either side of it, and it exists because
 neither alone settles what speculation leaks. It agrees with `nonblocking` on
-every row but `reload`, which is `spectre` with the probe an attacker would
-actually perform, and that row is the one that says the speculative channel is
-the cache line rather than the stall.
+every row but `reload` and `v20r`, which are `spectre` and `v20` with the probe
+an attacker would actually perform, and those two rows are the ones that say the
+speculative channel is the cache line rather than the stall.
 
 So the traits are a lattice rather than a line: naive, then cache, then
 `static`, `predictive` and `forwarding` in a chain on top of it, with
@@ -1258,7 +1265,7 @@ model checker, and [`src/out/eva/verify`](src/out/eva/verify) is its script:
 The whole tree, held-back subtrees included, comes out in under three minutes:
 
 ```
-all 226 agree
+all 275 agree
 ```
 
 `fact/naive/salsa20` is the slowest file in it at 11 seconds and a typical
@@ -1429,8 +1436,8 @@ That is not built.
 
 ### What it costs, which is one flag
 
-CBMC answers its 207 residues in 247 seconds. Eva answers all 226, the three
-held-back trees included, in 174.
+CBMC answers its 207 residues in 247 seconds. Eva answers all 275, the four
+held-back trees included, in 210.
 
 It did not start there. The first working version of this backend took 1543
 seconds over 207 files, six times CBMC's cost for a weaker question, and the
@@ -1515,28 +1522,36 @@ What that costs in answers is not symmetric. The first two give the same verdict
 about the clock on all sixty-nine, and the places they differ are the places the
 squared tower is answering its second question rather than disagreeing about the
 first. Eva differs from self-composition on thirteen of the sixty-nine, and on
-thirty-three of the full 214, always a clean program widened to `leak` and never
+fifty-nine of the full 263, always a clean program widened to `leak` and never
 the other way.
 
 ### What it agrees on
 
-181 of the 214 residues come out matching `Verdict`, and all 33 that do not are
+204 of the 263 residues come out matching `Verdict`, and all 59 that do not are
 a `clean` widened to a `leak`. None goes the other way, which is the direction
 that would matter. Nothing in the tree answers `unknown` and nothing errors.
 
-Six demos account for the 33. `bypass` and `bypass_late` are nine each, one per
-model with a cache in front of the load that also commits its store the instant
-it runs. The load takes a secret address and then costs the same either way, so
-the dependence is real and the difference is not. Under `forwarding`, which
-queues the store, both are genuine leaks and Eva agrees with the other two.
+Eleven demos account for the 59. `bypass` and `bypass_late` are nine each, one
+per model with a cache in front of the load that also commits its store the
+instant it runs. The load takes a secret address and then costs the same either
+way, so the dependence is real and the difference is not. Under `forwarding`,
+which queues the store, both are genuine leaks and Eva agrees with the other
+two.
 
-`balanced` is five and is the clearest of them, since both arms of the branch
+`balanced` is six and is the clearest of them, since both arms of the branch
 cost exactly the same. `evict` is five, four where the memory system does not
 stall and one where the cache has a single set and so cannot have a conflict at
 all, and `hidden` is four, the same non-stalling models. In all of those the
 secret reaches `cache_age` through the `if` that writes it, and nothing Eva
-tracks says the eviction it decides costs nothing here. The last of the 33 is
-`fact/cache/guarded`.
+tracks says the eviction it decides costs nothing here.
+
+The Kocher ports are twenty-five between them: `v10` and `v21` seven each, `v25`
+six, `v20` three and `v20r` two. That is every clean cell they have except the
+`naive` ones belonging to the three whose channel is an address, because without
+a cache an address cannot move a clock and Eva has nothing to over-approximate.
+`v10` and `v21` put the secret in a branch condition instead, which taint
+follows whether or not a model has a cache, so their `naive` cells widen too.
+The last of the 59 is `fact/cache/guarded`.
 
 Each says so where it calls `check`:
 

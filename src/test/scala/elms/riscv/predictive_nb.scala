@@ -119,13 +119,19 @@ class RiscVPredictiveNonBlockingTests extends KoikaSuite {
     check("reload", snippet, Verdict.Leak)
   }
 
-  // The predictor is back, so the misprediction is back. A machine that hides
-  // its misses still pays in full for a branch it got wrong, because a squash
-  // is not a miss.
+  // The predictor is back and the misprediction is not, which is the one place
+  // this model takes a row away from [Predictive] rather than from [Cached].
+  // The branch reads a secret the load before it has not delivered yet, so the
+  // fifteen falls inside the shadow of that miss and in-order retirement floors
+  // both runs at the cycle the load lands on. A machine that hides its misses
+  // hides a squash that happens under one.
+  //
+  // `balanced.s` has the rest of it, including what the row used to read and
+  // why that was the squash rather than the penalty.
   test("riscv predictive_nb balanced") {
     val snippet = new PredNbDriver {
       override val prog = demo("balanced")
     }
-    check("balanced", snippet, Verdict.Leak)
+    check("balanced", snippet, Verdict.Clean, eva = Taint.Widens)
   }
 }

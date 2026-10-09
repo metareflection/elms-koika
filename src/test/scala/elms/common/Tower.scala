@@ -90,13 +90,17 @@ trait Common extends Isa with Returns {
   def untimed[A](body: => A): A = body
 
   // A squash, after the penalty has been charged. A machine that has just
-  // thrown away everything it was working on has nothing in flight, so a model
-  // carrying in-flight state clears it here.
+  // thrown away what it was speculating on has that much less in flight, so a
+  // model carrying in-flight state clears it here.
+  //
+  // [saved] is what the window wrote, and the bound is the point. A load issued
+  // before the branch is still on its way, and a mispredict it had nothing to
+  // do with does not get to make the model forget it.
   //
   // What this must not undo is the cache. A load that missed has already moved
   // the line, a re-executed load to that address hits, and that is the channel
   // every model that speculates exists to expose.
-  def squash(s: Rep[State]): Rep[Unit] = unit(())
+  def squash(s: Rep[State], saved: Vector[Reg]): Rep[Unit] = unit(())
 
   def call(i: Int, s: Rep[State]): Rep[State] = {
     require(i >= 0, s"jump to negative pc $i")
