@@ -1,6 +1,6 @@
 #!/usr/bin/env zsh
 
-# usage: ./verify [--full] [files...]
+# usage: ./verify [--corpus] [--full] [files...]
 #
 # Checks every Eva residue against the verdict its test declared. With no
 # arguments that is the main suite: every snapshot under this directory except
@@ -75,36 +75,37 @@
 
 here=${0:a:h}
 
-# What the main suite leaves out, and the other two `verify` scripts leave out
-# the same two trees.
+# What the main suite leaves out, which is two groups, and the other two
+# `verify` scripts leave out the same ones under the same two flags.
 #
-# `lockstep/` is five of the demos `squared/` answers, built by rewriting a
-# residue rather than by interpreting the program over two states, and it is
-# kept for the day the two constructions disagree rather than for coverage it
-# adds, which is none. `dynamic/` is those demos again with the control-flow
-# assumption dropped, so a conditional comes out two ways, which is an open
-# question rather than a second opinion on a settled one.
-#
-# Neither reason is about cost here, since Eva is cheap on both. They are held
-# back so a default run of all three scripts covers the same files, and a
-# three-way disagreement is then about the backends rather than about which tree
-# somebody remembered to check.
-#
-# `probe/` is the third and is held back on the same reasoning. Taint does not
-# care how large a path space is, so Eva answers all twelve in about a second
-# each and would happily carry them; the other two scripts cannot, and a tree
-# the three disagree about covering is worse than a tree none of them covers.
-#
-# `pht/` is the fourth and is held back for the coverage reason above rather
-# than for any of its own. Eva is as cheap on 49 Spectre variants as on
-# anything else here; what it must not do is answer a tree the other two
-# scripts are not looking at.
-full_only='(*/lockstep/*|*/dynamic/*|*/probe/*|*/pht/*)'
+# `pht/` and `stl/` are the ported litmus corpora, 109 files here, and
+# `--corpus` adds them back. Eva is as cheap on a Spectre variant as on
+# anything else in the tree and would happily carry all 109 on every run; what
+# it must not do is answer a group the other two scripts are not looking at, so
+# the grouping is theirs and the holdback is for matching it.
+corpus_only='(*/pht/*|*/stl/*)'
 
+# The other three are `--full`'s. `lockstep/` is five of the demos `squared/`
+# answers, built by rewriting a residue rather than by interpreting the program
+# over two states, and it is kept for the day the two constructions disagree
+# rather than for coverage it adds, which is none. `dynamic/` is those demos
+# again with the control-flow assumption dropped, so a conditional comes out
+# two ways, which is an open question rather than a second opinion on a settled
+# one. `probe/` is `riscv/cache/branchy` at six probe counts under both towers,
+# where the point is that the last settings are expensive.
+#
+# None of those three reasons is Eva's either, and the answer is the same one:
+# a default run of all three scripts covering the same files is what makes a
+# three-way disagreement mean something about the backends rather than about
+# which tree somebody remembered to check.
+full_only='(*/lockstep/*|*/dynamic/*|*/probe/*)'
+
+corpus=0
 full=0
 while [[ $1 == --* ]]; do
     case $1 in
-        --full) full=1 ;;
+        --corpus) corpus=1 ;;
+        --full) full=1; corpus=1 ;;
         *) print -u2 -- "unknown flag $1"; exit 2 ;;
     esac
     shift
@@ -155,11 +156,18 @@ typeset -i held_back=0
 files=($@)
 if (( ! $#files )); then
     files=(${here}/**/*.check.c(N))
-    if (( ! full )); then
-        held_back=${#${(M)files:#${~full_only}}}
-        files=(${files:#${~full_only}})
-        (( held_back )) && print -- "skip     $held_back under lockstep/, dynamic/, probe/ and pht/ (pass --full to check them)"
+    typeset -i corpus_held=0 deep_held=0
+    if (( ! corpus )); then
+        corpus_held=${#${(M)files:#${~corpus_only}}}
+        files=(${files:#${~corpus_only}})
     fi
+    if (( ! full )); then
+        deep_held=${#${(M)files:#${~full_only}}}
+        files=(${files:#${~full_only}})
+    fi
+    (( corpus_held )) && print -- "skip     $corpus_held under pht/ and stl/ (pass --corpus to check them)"
+    (( deep_held )) && print -- "skip     $deep_held under lockstep/, dynamic/ and probe/ (pass --full to check them)"
+    held_back=$(( corpus_held + deep_held ))
 fi
 
 if (( ! $#files )); then
@@ -208,7 +216,7 @@ for file in $files; do
 done
 
 note=""
-(( held_back )) && note=" ($held_back held back for --full)"
+(( held_back )) && note=" ($held_back held back)"
 
 if (( failures )); then
     print -- "$failures of $#files disagree$note"

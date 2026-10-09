@@ -183,9 +183,10 @@ private def eva(v: Variant, says: Verdict, cached: Boolean): Taint =
 // secret-dependent branch variant 8 arrives at through a ternary. `reload.s`
 // is `spectre.s` probed, which is what `v20r` is to `v20`.
 //
-// Held back from a default `verify` on cost: 147 files for one family, none of
-// which is a verdict the tree cannot already state. `src/out/*/verify --full`
-// is what checks them.
+// Held back from a default `verify` on volume: 147 files for one family, none
+// of which is a verdict the tree cannot already state. `src/out/*/verify
+// --corpus` is what checks them, alongside the Spectre-STL ports under `stl/`,
+// which are held back for the same reason.
 
 @virtualize
 class PhtNaiveTests extends KoikaSuite {

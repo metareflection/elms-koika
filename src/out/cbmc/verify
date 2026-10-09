@@ -1,6 +1,6 @@
 #!/usr/bin/env zsh
 
-# usage: ./verify [--certify] [--full] [files...]
+# usage: ./verify [--certify] [--corpus] [--full] [files...]
 #
 # Checks every residue against the verdict its test declared. With no arguments
 # that is the main suite: every snapshot under this directory except the ones
@@ -40,7 +40,20 @@
 
 here=${0:a:h}
 
-# What the main suite leaves out. Four trees, held back for four reasons.
+# What the main suite leaves out, which is two groups and not one list.
+#
+# `pht/` and `stl/` are the ported litmus corpora and `--corpus` is what adds
+# them back. Six of Kocher's Spectre v1 variants plus one of them again with
+# the attacker's probe on the end, against all seven models, is 49 files here;
+# the five Haunted Spectre-STL shapes across both towers are 60. Held back on
+# volume rather than on any one file's cost: that is half the main suite again
+# for two families, and every verdict in them is a shape the tree states
+# somewhere else. A default run is for noticing that a model stopped detecting
+# what it detected, and a corpus is for reading across. The flag is so that
+# reading across does not mean running everything.
+corpus_only='(*/pht/*|*/stl/*)'
+
+# The other three are `--full`'s, and not one of them is about volume.
 #
 # `lockstep/` is five of the demos `squared/` answers, built by rewriting a
 # residue rather than by interpreting the program over two states, and it is
@@ -56,7 +69,7 @@ here=${0:a:h}
 # question, the static tower is the one that ships, and an experiment does not
 # get to slow down or destabilise a default run while the question is open.
 #
-# `probe/` is the third, and the only one held back purely on cost. It is
+# `probe/` is the third, and the only tree here held back purely on cost. It is
 # `riscv/cache/branchy` with the probe count as a dial, twelve files, one per
 # setting per construction, and the point of the subtree is that the last
 # settings are expensive: each probe forks three ways, so the space is 3^k and
@@ -64,24 +77,18 @@ here=${0:a:h}
 # Nothing in it is a verdict the tree does not already carry at k=4, so a
 # default run has nothing to learn from it and a scaling study has everything.
 #
-# `pht/` is the fourth, and held back on volume rather than on per-file cost.
-# Six of Kocher's Spectre v1 variants, plus one of them again with the
-# attacker's probe on the end, against all seven models is 49 files here. That
-# is a quarter again on top of the main suite for one family, and every verdict
-# in it is a shape the tree already states somewhere else. A default run is for
-# noticing that a model stopped detecting what it detected; a corpus is for
-# reading across.
-#
-# `sbt testFull` still regenerates all four, so the C stays current whether or
-# not anybody checks it.
-full_only='(*/lockstep/*|*/dynamic/*|*/probe/*|*/pht/*)'
+# `sbt testFull` regenerates all five whichever flag anybody passes, so the C
+# stays current whether or not it is ever checked.
+full_only='(*/lockstep/*|*/dynamic/*|*/probe/*)'
 
 certify=0
+corpus=0
 full=0
 while [[ $1 == --* ]]; do
     case $1 in
         --certify) certify=1 ;;
-        --full)    full=1 ;;
+        --corpus)  corpus=1 ;;
+        --full)    full=1; corpus=1 ;;
         *) print -u2 -- "unknown flag $1"; exit 2 ;;
     esac
     shift
@@ -92,11 +99,18 @@ typeset -i held_back=0
 files=($@)
 if (( ! $#files )); then
     files=(${here}/**/*.check.c(N))
-    if (( ! full )); then
-        held_back=${#${(M)files:#${~full_only}}}
-        files=(${files:#${~full_only}})
-        (( held_back )) && print -- "skip     $held_back under lockstep/, dynamic/, probe/ and pht/ (pass --full to check them)"
+    typeset -i corpus_held=0 deep_held=0
+    if (( ! corpus )); then
+        corpus_held=${#${(M)files:#${~corpus_only}}}
+        files=(${files:#${~corpus_only}})
     fi
+    if (( ! full )); then
+        deep_held=${#${(M)files:#${~full_only}}}
+        files=(${files:#${~full_only}})
+    fi
+    (( corpus_held )) && print -- "skip     $corpus_held under pht/ and stl/ (pass --corpus to check them)"
+    (( deep_held )) && print -- "skip     $deep_held under lockstep/, dynamic/ and probe/ (pass --full to check them)"
+    held_back=$(( corpus_held + deep_held ))
 fi
 
 typeset -i failures=0
@@ -149,7 +163,7 @@ done
 rm -f $log
 
 note=""
-(( held_back )) && note=" ($held_back held back for --full)"
+(( held_back )) && note=" ($held_back held back)"
 
 if (( failures )); then
     print -- "$failures of $#files disagree$note"

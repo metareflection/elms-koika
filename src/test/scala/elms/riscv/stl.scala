@@ -1,0 +1,271 @@
+package elms.koika.test.riscv
+
+import elms.prelude.*
+import elms.prelude.given
+
+import elms.koika.test.{KoikaSuite, Taint, Verdict}
+import elms.koika.test.common.{
+  Cached,
+  Forwarding,
+  Init,
+  NonBlocking,
+  Predictive,
+  PredictiveNonBlocking,
+  Reach,
+  Static
+}
+
+// Five Spectre-STL litmus shapes, ported in `src/test/asm/riscv`, run against
+// every model the tree has.
+//
+// Kocher's variants cover Spectre-PHT and nothing equivalent existed for v4,
+// which is why Daniel, Bardin and Rezk wrote these for *Hunting the Haunter*
+// (NDSS 2021) alongside the Haunted RelSE checker. They follow Kocher's
+// philosophy for PHT by way of Pitchfork's adaptation of it
+// (github.com/cdisselkoen/pitchfork, `new-testcases/spectrev1.c`, from Cauligi
+// et al., *Constant-Time Foundations for the New Spectre Era*, PLDI 2020), and
+// what is ported here is `src/litmus-stl/programs/spectrev4.c` from
+// github.com/binsec/haunted_bench.
+//
+// Each `.s` file carries its case number, which is what keeps that
+// correspondence findable, and says what the port had to change. The originals
+// pin a value into `edx` to force the distinction between an index that lives
+// in a register and one that goes through the stack; RV32I has no such idiom,
+// so the ports are hand-written and spell the distinction out in
+// instructions.
+//
+// What they add comes in two parts. `stale_ptr`, `stale_mask` and `stale_index`
+// bypass a sanitizer, which nothing in the tree did before: every store-queue
+// gadget here bypasses a scrub, a zero written over the secret word, and
+// `bypass.s` reads that word anyway. These three never touch the secret. What
+// the store was about to fix is the pointer, the mask or the selector that
+// decides where the load goes, and the queue cannot tell that from a scrub.
+//
+// `inflight` and `retired` are the other two and are the scrub again, as a
+// pair. The only thing that differs between the two files is how many
+// `addi x0, x0, 0` sit between the store and the load. `Forwarding.storeWindow`
+// is 4, so the load is at distance 1 in one and distance 5 in the other, which
+// measures the window from inside a program rather than reading it off the
+// model.
+//
+// The `insecure` and `secure` labels the originals carry in comments are
+// measured against gcc-10.2.0 -O0 -m32 on a real machine, so they are not
+// predictions about a tower with a two-bit store-queue tag, a four-instruction
+// window and twelve cache frames. Nothing below was seeded from them. Every
+// `leak` is a pair of secrets [SquaredRunSuite] witnessed before CBMC was
+// asked, and every `clean` is CBMC's.
+//
+// Derived separately they agree anyway, and where they agree is the result.
+// The original calls cases 5, 6, 7 and 9bis insecure and case 9 secure, and so
+// does the `forwarding` column, five for five. The other six columns call all
+// five clean, which is the same table saying those labels describe a machine
+// with a store queue rather than a program.
+//
+// `retired` is the narrowest of the five agreements, because the two answers
+// come from different mechanisms. The original earns `secure` from a
+// 200-iteration loop retiring the store; this port earns it from four
+// `addi x0, x0, 0`, since a backward branch is not `speculable` and a loop here
+// would end the window at the jump rather than at `storeWindow`.
+//
+// Held back from a default `verify`, both towers, and `src/out/*/verify
+// --corpus` is what checks them. Sixty files per backend and 180 across the
+// three, and not one of them a verdict the tree cannot already state: the four
+// that leak do it in the column `bypass` already leaks in. KLEE gives the
+// sharper reason. Three of the five produce no verdict inside a 1200-second
+// budget in each tower, so a default run reaching them would spend most of six
+// budgets to learn nothing.
+//
+// `--corpus` and not `--full`, which holds back something else: `lockstep/` is
+// a second opinion, `dynamic/` is an open question and `probe/` is a scaling
+// study. These are a corpus, and a corpus is for reading across.
+//
+// [SquaredStlSuite] is the other tower's half and reads the table below rather
+// than keeping one of its own.
+object Stl {
+  // Four of the five answer alike in all seven columns, which is the corpus's
+  // claim rather than a redundancy in it: these shapes need a store queue, and
+  // every model to the left of one commits a store where it stands and so has
+  // nothing to read around. There is no branch in any of the five programs, so
+  // the two predictors have nothing to mispredict either.
+  private val queued: Expect = Expect(
+    naive = Verdict.Clean,
+    cache = Verdict.Clean,
+    static = Verdict.Clean,
+    predictive = Verdict.Clean,
+    forwarding = Verdict.Leak,
+    nonblocking = Verdict.Clean,
+    predictive_nb = Verdict.Clean
+  )
+
+  // [Expect] is `pht.scala`'s, one field per column of the README's table.
+  val all: List[(String, Expect)] = List(
+    "stale_ptr" -> queued,
+    "stale_mask" -> queued,
+    "stale_index" -> queued,
+    "inflight" -> queued,
+    // The half of the pair where the store has landed. Clean everywhere, and
+    // that includes the column that reports the other four, which is the whole
+    // reason it is here.
+    "retired" -> Expect.uniform(Verdict.Clean)
+  )
+
+  // Where Eva reports a leak the program does not have, measured by
+  // `src/out/eva/verify` rather than reasoned out.
+  //
+  // Two of the five and not all of them. `inflight.s` and `retired.s` scrub the
+  // secret word and then read that same word back, so the load's address is the
+  // secret's whatever the store did with the value, and from there the taint is
+  // on the channel. Whether the zero that came back could have moved a clock is
+  // the question Eva does not ask. The three `stale_*` shapes never load through
+  // the secret's address at all once the store has committed, which is what
+  // every model but `forwarding` does, so there is nothing to start a taint
+  // from.
+  //
+  // And nothing widens under `naive`, where an address has no cache behind it
+  // and so cannot reach the timer at all. Both towers run the same rule, which
+  // is why it lives here rather than in either suite.
+  private val scrubbed = Set("inflight", "retired")
+
+  def eva(name: String, says: Verdict, cached: Boolean): Taint =
+    if (says == Verdict.Leak) { Taint.Agrees }
+    else if (cached && scrubbed(name)) { Taint.Widens }
+    else { Taint.Agrees }
+
+  // Where `src/out/klee/verify` comes back with nothing. Six cells rather than
+  // three because [SquaredStlSuite] runs the same three shapes squared, and the
+  // two halves are here for different reasons.
+  //
+  // The squared half is cheap and the label is about the script.
+  // `squared/stl/forwarding/stale_ptr` writes `test000001.assert.err` 124
+  // seconds in, which is the verdict the first line of that file declares, and
+  // then prints `now ignoring this error at this location` and carries on until
+  // something stops it. `check_one` has nothing to stop it with, so it waits,
+  // `outcome()` never runs, and the answer sits unread on disk. Given
+  // `--exit-on-error` the three stop at their witness in 112, 125 and 209
+  // seconds.
+  //
+  // The single-tower half is the expensive one, which is backwards from the
+  // file sizes and from `bypass_alias`, where the single tower settles in 89
+  // seconds and the squared one does not. Given 360 seconds and
+  // `--exit-on-error`, `stale_mask` found `ASSERTION FAIL: s1_->timer ==
+  // s2_->timer` at 354 and the other two found nothing and stopped on the
+  // budget. So `--max-time` does halt KLEE. It did not on the runs where a
+  // witness landed early, and what separates those is not known. Whether these
+  // two settle inside the real 1200-second budget is a guess nobody has run.
+  //
+  // The earlier claim here that the path space stops being walkable was wrong
+  // squared and is the open question single-tower. What killed it squared: the
+  // `.err` lands at the same 124 seconds under plain baseline,
+  // `--max-solver-time=10` and `--exit-on-error` alike, so the flag does not
+  // find the leak sooner, it stops afterwards.
+  //
+  // All six labels stay. Three because `verify` does not pass the flag yet,
+  // three because nobody has watched them finish.
+  private val hangs = Set("stale_ptr", "stale_mask", "stale_index")
+
+  def klee(name: String): Reach =
+    if (hangs(name)) { Reach.LikelyTimeout } else { Reach.Settles }
+}
+
+// A class and not a trait for the reason [PhtDriver] is one: [prog] reads
+// [name], and a constructor parameter is set before the body where an abstract
+// member would not be.
+//
+// One `init` for all seven models rather than the four the per-model suites
+// spell out between them. These exist to be compared across the columns, and
+// which fields a model leaves untouched is not the comparison.
+abstract class StlDriver(val name: String) extends RiscVDriver[64] {
+  override val prog = demo(name)
+  override val init = Init.all(stateT)
+}
+
+@virtualize
+class StlNaiveTests extends KoikaSuite {
+  val under = "stl/naive/"
+
+  for ((name, expect) <- Stl.all) {
+    test(s"stl naive $name") {
+      val snippet = new StlDriver(name) {}
+      val says = expect.naive
+      check(name, snippet, says, eva = Stl.eva(name, says, cached = false))
+    }
+  }
+}
+
+@virtualize
+class StlCacheTests extends KoikaSuite {
+  val under = "stl/cache/"
+
+  for ((name, expect) <- Stl.all) {
+    test(s"stl cache $name") {
+      val snippet = new StlDriver(name) with Cached {}
+      val says = expect.cache
+      check(name, snippet, says, eva = Stl.eva(name, says, cached = true))
+    }
+  }
+}
+
+@virtualize
+class StlStaticTests extends KoikaSuite {
+  val under = "stl/static/"
+
+  for ((name, expect) <- Stl.all) {
+    test(s"stl static $name") {
+      val snippet = new StlDriver(name) with Static {}
+      val says = expect.static
+      check(name, snippet, says, eva = Stl.eva(name, says, cached = true))
+    }
+  }
+}
+
+@virtualize
+class StlPredictiveTests extends KoikaSuite {
+  val under = "stl/predictive/"
+
+  for ((name, expect) <- Stl.all) {
+    test(s"stl predictive $name") {
+      val snippet = new StlDriver(name) with Predictive {}
+      val says = expect.predictive
+      check(name, snippet, says, eva = Stl.eva(name, says, cached = true))
+    }
+  }
+}
+
+@virtualize
+class StlForwardingTests extends KoikaSuite {
+  val under = "stl/forwarding/"
+
+  for ((name, expect) <- Stl.all) {
+    test(s"stl forwarding $name") {
+      val snippet = new StlDriver(name) with Forwarding {}
+      val says = expect.forwarding
+      check(name, snippet, says, klee = Stl.klee(name), eva = Stl.eva(name, says, cached = true))
+    }
+  }
+}
+
+@virtualize
+class StlNonBlockingTests extends KoikaSuite {
+  val under = "stl/nonblocking/"
+
+  for ((name, expect) <- Stl.all) {
+    test(s"stl nonblocking $name") {
+      val snippet = new StlDriver(name) with NonBlocking {}
+      val says = expect.nonblocking
+      check(name, snippet, says, eva = Stl.eva(name, says, cached = true))
+    }
+  }
+}
+
+@virtualize
+class StlPredictiveNonBlockingTests extends KoikaSuite {
+  val under = "stl/predictive_nb/"
+
+  for ((name, expect) <- Stl.all) {
+    test(s"stl predictive_nb $name") {
+      val snippet = new StlDriver(name) with PredictiveNonBlocking {}
+      val says = expect.predictive_nb
+      check(name, snippet, says, eva = Stl.eva(name, says, cached = true))
+    }
+  }
+}

@@ -262,6 +262,35 @@ class SquaredRunSuite extends AnyFunSuite {
   predictiveNb("bypass_late", leaks = false)
   predictiveNb("dynstore", leaks = false)
 
+  // The five Haunted Spectre-STL shapes. Three of them bypass a sanitizer where
+  // the store-queue demos above bypass a scrub: the secret is never written
+  // over, and what the store was about to fix is the address the load ends up
+  // using. `inflight` is the scrub again with the load one instruction behind
+  // the store. All four answer the same in all seven columns, so a row apiece
+  // would say one thing four times, and the loop is the claim: nothing weaker
+  // than a store queue sees any of them.
+  for (name <- Seq("stale_ptr", "stale_mask", "stale_index", "inflight")) {
+    naive(name, leaks = false)
+    cached(name, leaks = false)
+    static(name, leaks = false)
+    predictive(name, leaks = false)
+    forwarding(name, leaks = true)
+    nonblocking(name, leaks = false)
+    predictiveNb(name, leaks = false)
+  }
+
+  // `inflight.s` with four instructions of filler between the store and the
+  // load, which is `Forwarding.storeWindow` exactly, so the store has committed
+  // by the time the load runs. The pair is what pins the window down, and this
+  // is the half where the column that reports the other four reports nothing.
+  naive("retired", leaks = false)
+  cached("retired", leaks = false)
+  static("retired", leaks = false)
+  predictive("retired", leaks = false)
+  forwarding("retired", leaks = false)
+  nonblocking("retired", leaks = false)
+  predictiveNb("retired", leaks = false)
+
   // The row the two towers disagree about, and the reason is the same in all
   // seven columns: a pair of secrets on either side of the midpoint takes the
   // branch two ways, and `sameWay` stops the walk there. Every witness this

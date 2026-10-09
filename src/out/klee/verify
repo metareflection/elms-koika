@@ -1,6 +1,6 @@
 #!/usr/bin/env zsh
 
-# usage: ./verify [--slow | --only-slow] [--full] [files...]
+# usage: ./verify [--slow | --only-slow] [--corpus] [--full] [files...]
 #
 # Checks every KLEE residue against the verdict its test declared. With no
 # arguments that is the main suite: every snapshot under this directory except
@@ -59,46 +59,53 @@
 
 here=${0:a:h}
 
-# What the main suite leaves out, and `src/out/cbmc/verify` leaves out the same
-# two trees for the same two reasons.
+# What the main suite leaves out, which is two groups, and the other two
+# `verify` scripts leave out the same ones under the same two flags.
+#
+# `pht/` and `stl/` are the ported litmus corpora and `--corpus` adds them
+# back. 109 files, most of them five to twenty-five instructions and answered
+# in seconds, so for `pht/` the reason is coverage per second rather than cost:
+# none of its 49 is a verdict the main suite cannot already state. `stl/` has a
+# reason of its own on top of that, and it is this script's. Six of its cells,
+# `forwarding/stale_ptr`, `stale_mask` and `stale_index` in each tower, spend a
+# full 1200-second budget and produce nothing, so a default run that reached
+# them would be two hours of skipping or two hours of waiting.
+corpus_only='(*/pht/*|*/stl/*)'
+
+# The other three are `--full`'s, and a KLEE budget is the last thing to spend
+# on any of them.
 #
 # `lockstep/` is five of the demos `squared/` answers, built by rewriting a
 # residue rather than by interpreting the program over two states. It is kept
-# for the day the two constructions disagree, and a KLEE budget is the last
-# thing to spend finding out that they still agree.
+# for the day the two constructions disagree, and a budget is the last thing to
+# spend finding out that they still agree.
 #
 # `dynamic/` is the same demos again with the control-flow assumption dropped,
 # so a conditional comes out two ways and each run's tail is walked on its own
 # rather than shared. That is an open question rather than a second opinion on
-# a settled one, and a KLEE budget is the last thing to spend on it for the
-# sharper reason as well: dropping the assumption is dropping the pruning, so a
-# split path is exactly where the search gets expensive.
+# a settled one, and for the sharper reason as well: dropping the assumption is
+# dropping the pruning, so a split path is exactly where the search gets
+# expensive.
 #
 # `probe/` is the third and the one this script has the strongest reason to
 # skip. It is `riscv/cache/branchy` at one through six probes under both
-# constructions, and KLEE's bill on that demo is the path space itself: 5s, 41s,
-# 222s and 929s self-composed at one through four, with five and six never seen
-# to finish. Twelve files, most of a budget apiece at the top of the dial, and
-# no verdict the tree does not already have. It is here to be measured rather
-# than to be run.
-#
-# `pht/` is the fourth. Six of Kocher's Spectre v1 variants and a seventh that
-# is one of them with the attacker's probe on the end, against all seven
-# models, 49 files, each a sixteen to twenty-five instruction demo that KLEE
-# answers quickly. So the reason is not cost but coverage per second: none of
-# the 49 is a verdict the main suite cannot already state, and all three
-# scripts holding the same trees back is what makes a disagreement between them
-# mean something.
-full_only='(*/lockstep/*|*/dynamic/*|*/probe/*|*/pht/*)'
+# constructions, and KLEE's bill on that demo is the path space itself: 5s,
+# 41s, 222s and 929s self-composed at one through four, with five and six never
+# seen to finish. Twelve files, most of a budget apiece at the top of the dial,
+# and no verdict the tree does not already have. It is here to be measured
+# rather than to be run.
+full_only='(*/lockstep/*|*/dynamic/*|*/probe/*)'
 
 slow=0
 only_slow=0
+corpus=0
 full=0
 while [[ $1 == --* ]]; do
     case $1 in
         --slow)      slow=1 ;;
         --only-slow) slow=1; only_slow=1 ;;
-        --full)      full=1 ;;
+        --corpus)    corpus=1 ;;
+        --full)      full=1; corpus=1 ;;
         *) print -u2 -- "unknown flag $1"; exit 2 ;;
     esac
     shift
@@ -166,11 +173,18 @@ typeset -i held_back=0
 files=($@)
 if (( ! $#files )); then
     files=(${here}/**/*.check.c(N))
-    if (( ! full )); then
-        held_back=${#${(M)files:#${~full_only}}}
-        files=(${files:#${~full_only}})
-        (( held_back )) && print -- "skip     $held_back under lockstep/, dynamic/, probe/ and pht/ (pass --full to check them)"
+    typeset -i corpus_held=0 deep_held=0
+    if (( ! corpus )); then
+        corpus_held=${#${(M)files:#${~corpus_only}}}
+        files=(${files:#${~corpus_only}})
     fi
+    if (( ! full )); then
+        deep_held=${#${(M)files:#${~full_only}}}
+        files=(${files:#${~full_only}})
+    fi
+    (( corpus_held )) && print -- "skip     $corpus_held under pht/ and stl/ (pass --corpus to check them)"
+    (( deep_held )) && print -- "skip     $deep_held under lockstep/, dynamic/ and probe/ (pass --full to check them)"
+    held_back=$(( corpus_held + deep_held ))
 fi
 
 if (( ! $#files )); then
@@ -236,7 +250,7 @@ done
 note=""
 parts=()
 (( skipped )) && parts+=("$skipped skipped")
-(( held_back )) && parts+=("$held_back held back for --full")
+(( held_back )) && parts+=("$held_back held back")
 (( $#parts )) && note=" (${(j:, :)parts})"
 
 if (( failures )); then

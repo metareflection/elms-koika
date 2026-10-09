@@ -102,21 +102,35 @@ has said what should happen to it. `check` writes the claim into the first line
 of the generated C, which makes it part of the snapshot `sbt testFull` pins,
 and [`verify`](src/out/cbmc/verify) reads it back out and runs the checker:
 
-`./src/out/cbmc/verify [--certify] [--full] [file.c ...]`
+`./src/out/cbmc/verify [--certify] [--corpus] [--full] [file.c ...]`
 
-With no arguments it takes the main suite, all 207 snapshots of it. Four trees
-are held back, for four different reasons. `lockstep/` is five demos
-`squared/` also answers, by the construction `squared/` replaced, and it is
-held back because it agrees and costs time. `dynamic/` is held back because it
-is not settled. It drops the control-flow assumption rather than making it,
-which is an open question about the construction and not a second opinion on a
-closed one. [`probe/`](#the-probe-count-dial) is held back on cost alone: it is
-one demo at six sizes under both towers, and the sizes at the top are the whole
-point. `pht/` is held back on volume: six of Kocher's Spectre v1 variants and a
-seventh that probes the cache after one of them, against all seven models, is
-49 more files for one family and no verdict the tree cannot already state.
-`sbt testFull` regenerates all four either way, so what `--full` buys
-is the check rather than the C. Naming files runs exactly those, main suite or not.
+Three tiers, nested. With no arguments it takes the main suite, all 207
+snapshots of it. `--corpus` adds the 109 under `pht/` and `stl/`, for 316.
+`--full` adds the 19 under `lockstep/`, `dynamic/` and `probe/` on top of that,
+for 335.
+
+The corpus tier is the ported litmus variants, held back on volume. `pht/` is
+six of Kocher's Spectre v1 variants and a seventh that probes the cache after
+one of them, against all seven models. `stl/` is five Haunted Spectre-STL
+shapes against seven models and five more in the squared tower, and the four
+that leak do it in the one column `bypass` already leaks in. Between them that
+is half the main suite again, and no verdict the tree cannot already state. A
+default run is for noticing that a model stopped detecting what it detected; a
+corpus is for reading across, and the flag is so that reading across does not
+mean running everything.
+
+The `--full` tier is three trees held back for reasons of their own, none of
+them volume. `lockstep/` is five demos `squared/` also answers, by the
+construction `squared/` replaced, and it is held back because it agrees and
+costs time. `dynamic/` is held back because it is not settled. It drops the
+control-flow assumption rather than making it, which is an open question about
+the construction and not a second opinion on a closed one.
+[`probe/`](#the-probe-count-dial) is held back on cost alone: it is one demo at
+six sizes under both towers, and the sizes at the top are the whole point.
+
+`sbt testFull` regenerates all five whichever flag anybody passes, so what the
+two flags buy is the check rather than the C. Naming files runs exactly those,
+main suite or not.
 It prints one line per file and exits non-zero if CBMC says anything other than
 what the file claims, so a model that stops detecting what it used to detect is
 a failing run rather than a stale comment. The claims themselves are greppable
@@ -308,8 +322,9 @@ NanoRisc has only the first three models, and RISC-V is what fills the rest.
 The blanks are suites nobody has written: `cmp` under cache, `cmp` and
 `branchy` under forwarding, and the FaCT and NanoRisc programs under the last
 two columns, which are RISC-V only so far. The seven `v` rows are the Kocher
-ports under `pht/`, which a default `verify` holds back; everything above them
-is the main suite.
+ports under `pht/` and the five below them are the Haunted Spectre-STL ports
+under `stl/`, both families behind `--corpus`; everything above
+them is the main suite.
 
 | demo | naive | cache | static | predictive | forwarding | nonblocking | predictive_nb |
 |---|---|---|---|---|---|---|---|
@@ -339,6 +354,11 @@ is the main suite.
 | `v20r` | clean | clean | leak | leak | leak | clean | leak |
 | `v21` | clean | clean | clean | clean | clean | clean | clean |
 | `v25` | clean | clean | clean | clean | clean | clean | clean |
+| `stale_ptr` | clean | clean | clean | clean | leak | clean | clean |
+| `stale_mask` | clean | clean | clean | clean | leak | clean | clean |
+| `stale_index` | clean | clean | clean | clean | leak | clean | clean |
+| `inflight` | clean | clean | clean | clean | leak | clean | clean |
+| `retired` | clean | clean | clean | clean | clean | clean | clean |
 
 `evict` is the row the geometry was for, and it is a stronger statement than
 `2ctr` next to it. `2ctr` needs a cache of some kind. `evict` needs a cache with
@@ -989,11 +1009,14 @@ it.
 `src/out/klee` is the same 207 residues checked by [KLEE](#KLEE) instead, and
 [`src/out/klee/verify`](src/out/klee/verify) is its script:
 
-`./src/out/klee/verify [--slow | --only-slow] [--full] [file.c ...]`
+`./src/out/klee/verify [--slow | --only-slow] [--corpus] [--full] [file.c ...]`
 
-`--full` means what it means next door: the five under `lockstep/` are held
-back from a default run, because a KLEE budget is the last thing to spend
-confirming that two constructions of one product still agree.
+The two tier flags mean what they mean next door. `--corpus` adds the ported
+litmus variants, and this script has a reason of its own for holding those
+back: six cells under `stl/forwarding` spend a full budget and produce nothing.
+`--full` adds `lockstep/`, `dynamic/` and `probe/`, where a KLEE budget is the
+last thing to spend confirming that two constructions of one product still
+agree.
 
 Both trees agree, 207 verdicts for 207, model sensitivity included. That
 agreement is the point of having two: a residue really is an ordinary C program,
@@ -1037,7 +1060,7 @@ accepted and a wrong one still is not.
 The label means two different things now, and which one a file gets is
 measured rather than assumed.
 
-Eleven of the fourteen are `branchy` with a cache in front of the walk, one per
+Eleven of the twenty are `branchy` with a cache in front of the walk, one per
 model that has one and one per squared twin, and every one of them finishes
 inside the budget. At 120 seconds `cache/branchy` ends with 0 completed paths
 against 23 partially completed, and at ten minutes it ends the same way, which
@@ -1047,17 +1070,32 @@ last take 958 and 970. So for those eleven `LikelyTimeout` means expensive
 rather than unreachable, and it is kept because a quarter of an hour apiece is
 not something a default run should spend.
 
-The other three do not finish, and they are the squared tower's:
-`squared/riscv/forwarding/bypass_alias`, the same under `bypass_late`, and
-`squared/riscv/predictive_nb/reload`. Each was given 1500 seconds of wall clock
-and produced no verdict, against 453 for the slowest squared residue that does.
-`--max-time` stops KLEE forking new states and does not interrupt a query
-already in flight, so the budget is a search bound and not a wall clock, and a
-file like this hangs a default run rather than failing it. All three are where
-the squared model carries the most: the two `bypass` rows are the store queue's
-deferred alias check over addresses nobody knows, doubled, and
-`predictive_nb/reload` is the join, where a squash rewrites every register's
-arrival time in both runs and the probe still asks the cache afterwards.
+The other nine do not finish, and every one of them has a store queue or a
+join under it. Eight are the queue's deferred alias check over addresses nobody
+knows: `squared/riscv/forwarding/bypass_alias`, the same under `bypass_late`,
+and the three Spectre-STL shapes `stale_ptr`, `stale_mask` and `stale_index` in
+both towers, under `squared/stl/forwarding` and under `stl/forwarding`. The
+ninth is `squared/riscv/predictive_nb/reload`, where a squash rewrites every
+register's arrival time in both runs and the probe still asks the cache
+afterwards. `--max-time` stops KLEE forking new states and does not interrupt a
+query already in flight, so the budget is a search bound and not a wall clock,
+and a file like this hangs a default run rather than failing it.
+
+Six of the nine were measured. `bypass_alias`, `bypass_late`, `reload` and
+`squared/stl/forwarding/stale_ptr` each got 1500 seconds of wall clock with
+no verdict, `stl/forwarding/stale_ptr` none in 900 and `stl/forwarding/stale_index`
+none in 660, against 453 for the slowest squared residue that does finish. The
+three `stale_mask` and `stale_index` cells left over are the same construction,
+a sanitizer bypassed and the stale value chased through two more loads, and
+carry the label on that rather than on runs of their own.
+
+It is the queue and not the size of the residue, which needs saying because the
+line counts suggest the opposite. `squared/stl/static/stale_index` is 2407
+lines with the queue taken out from under it and settles in one second, where
+`squared/stl/forwarding/stale_ptr` is 3055 and produces nothing in 1500. The two
+scrub shapes stay cheap on the same column, since neither has a forwarded load
+to disambiguate: `squared/stl/forwarding/inflight` finds its leak in 123 seconds
+against `stl/forwarding/inflight`'s 151, and `retired` is clean in 31 and 18.
 
 None of this is for want of a path space. `runCache` answers out of L1, out of
 L2 or out of memory, so four probes are (3^4 + 1) / 2 paths and CBMC is done in
@@ -1072,22 +1110,33 @@ had to grow from 120 to 1200 with the cache. Five residues started reporting
 case: `fact/static/guarded` finds its leak in 326s and
 `riscv/forwarding/bypass` in 485s, so the old budget was turning "not yet" into
 a failing test. A budget is a cap and not a cost, so the files that settled
-quickly still do, and the only ones that spend most of one are the fourteen
+quickly still do, and the only ones that spend most of one are the twenty
 above.
 
 Each of those costs a full budget or more, so a default run skips them and says
 which it skipped:
 
 ```
-skip     68 under lockstep/, dynamic/, probe/ and pht/ (pass --full to check them)
+skip     109 under pht/ and stl/ (pass --corpus to check them)
+skip     19 under lockstep/, dynamic/ and probe/ (pass --full to check them)
 skip     src/out/klee/riscv/cache/branchy.check.c (likely-timeout; pass --slow to run it)
-all 194 agree (13 skipped, 68 held back for --full)
+all 194 agree (13 skipped, 128 held back)
 ```
 
 Those counts are the tree's arithmetic and not a transcript. 207 snapshots in
 the main suite, thirteen of them labelled. Every one of the 194 has been
-checked on its own, and the three that hang were found by checking them on
-their own; what nobody has sat through is all 194 in a single run.
+checked on its own, and the three of them that hang were found by checking them
+on their own; what nobody has sat through is all 194 in a single run.
+
+The other six that hang are in the corpus tier, under `stl/forwarding` and
+`squared/stl/forwarding`, and they are the reason this script holds that tier
+back as well as the one next door does. Of the sixty files there, eight were
+run: `stale_ptr` produced no verdict in 1500 seconds squared and 900 in the
+single tower, `stale_index` none in 660, and the cheap half settled,
+`static/stale_index` clean in a second, `retired` clean in 31 and 18, and
+`inflight` leaking in 123 and 151. The remaining fifty-two carry `Settles`
+because CBMC and Eva settle them and nothing in their shape is what the label
+is for.
 
 `--slow` adds them back, and `--only-slow` runs nothing else, which is the one
 to reach for after touching the squared tower or the cache model.
@@ -1260,22 +1309,24 @@ on sixty-nine verdicts is weaker evidence than it looks.
 `src/out/eva` is the same 207 residues read by a taint analysis rather than by a
 model checker, and [`src/out/eva/verify`](src/out/eva/verify) is its script:
 
-`./src/out/eva/verify [--full] [file.c ...]`
+`./src/out/eva/verify [--corpus] [--full] [file.c ...]`
 
-The whole tree, held-back subtrees included, comes out in under three minutes:
+The whole tree, held-back subtrees included, comes out in about four minutes:
 
 ```
-all 275 agree
+all 335 agree
 ```
 
 `fact/naive/salsa20` is the slowest file in it at 11 seconds and a typical
 residue answers in about one.
 
-A default run leaves out the same four trees the other two scripts leave out,
-and `--full` adds them back. The reasons for leaving them out are theirs rather
-than Eva's, which is cheap on all four. What the holdback buys here is that a default run
-of all three scripts covers the same 207 files, so a three-way disagreement is
-about the backends rather than about which tree somebody remembered to check.
+A default run leaves out the same five trees the other two scripts leave out,
+in the same two tiers, and `--corpus` and `--full` add them back the same way.
+The reasons for leaving them out are theirs rather than Eva's, which is cheap
+on all five: 174 seconds for the main suite, 230 with the corpus and 241 for
+everything. What the tiers buy here is that a default run of all three scripts
+covers the same 207 files, so a three-way disagreement is about the backends
+rather than about which tree somebody remembered to check.
 
 The question is weaker on purpose. CBMC and KLEE both read the self-composed
 program and decide whether the two timers can actually differ. Eva asks only
@@ -1436,12 +1487,14 @@ That is not built.
 
 ### What it costs, which is one flag
 
-CBMC answers its 207 residues in 247 seconds. Eva answers all 275, the four
-held-back trees included, in 210.
+CBMC answers the main suite's 207 residues in 171 seconds, 316 with `--corpus`
+in 272, and all 335 in 339. Eva's three tiers are 174, 230 and 241. Level on
+the default run and a hundred seconds cheaper on everything, which is the
+opposite of where it started.
 
-It did not start there. The first working version of this backend took 1543
-seconds over 207 files, six times CBMC's cost for a weaker question, and the
-whole difference is `-eva-no-results`. Eva keeps a state per statement by
+Where it started was 1543 seconds over those same 207 files, six times what
+CBMC cost at the time, for a weaker question. The whole difference is
+`-eva-no-results`. Eva keeps a state per statement by
 default, which is where the time went and which nothing here reads. The saving
 scales with the size of the residue, so the files that dominated the bill are
 the ones that moved:
@@ -1522,21 +1575,30 @@ What that costs in answers is not symmetric. The first two give the same verdict
 about the clock on all sixty-nine, and the places they differ are the places the
 squared tower is answering its second question rather than disagreeing about the
 first. Eva differs from self-composition on thirteen of the sixty-nine, and on
-fifty-nine of the full 263, always a clean program widened to `leak` and never
-the other way.
+seventy-nine of the full 323, always a clean program widened to `leak` and
+never the other way.
 
 ### What it agrees on
 
-204 of the 263 residues come out matching `Verdict`, and all 59 that do not are
+244 of the 323 residues come out matching `Verdict`, and all 79 that do not are
 a `clean` widened to a `leak`. None goes the other way, which is the direction
 that would matter. Nothing in the tree answers `unknown` and nothing errors.
 
-Eleven demos account for the 59. `bypass` and `bypass_late` are nine each, one
+Thirteen demos account for the 79. `bypass` and `bypass_late` are nine each, one
 per model with a cache in front of the load that also commits its store the
 instant it runs. The load takes a secret address and then costs the same either
 way, so the dependence is real and the difference is not. Under `forwarding`,
 which queues the store, both are genuine leaks and Eva agrees with the other
 two.
+
+`retired` is eleven and `inflight` nine, the two Spectre-STL shapes that scrub
+the secret word and then read that same word back. The load's address is the
+secret's whether or not the store landed, so from there the taint is on the
+channel, and whether the zero that came back could have moved a clock is the
+question Eva does not ask. `inflight` is two short of `retired` because under
+`forwarding` it is a genuine leak and Eva agrees about those. The three
+`stale_*` shapes widen nowhere, since none of them loads through the secret's
+address once the store has committed.
 
 `balanced` is six and is the clearest of them, since both arms of the branch
 cost exactly the same. `evict` is five, four where the memory system does not
@@ -1551,7 +1613,7 @@ six, `v20` three and `v20r` two. That is every clean cell they have except the
 a cache an address cannot move a clock and Eva has nothing to over-approximate.
 `v10` and `v21` put the secret in a branch condition instead, which taint
 follows whether or not a model has a cache, so their `naive` cells widen too.
-The last of the 59 is `fact/cache/guarded`.
+The last of the 79 is `fact/cache/guarded`.
 
 Each says so where it calls `check`:
 
