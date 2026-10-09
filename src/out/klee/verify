@@ -82,12 +82,13 @@ here=${0:a:h}
 # no verdict the tree does not already have. It is here to be measured rather
 # than to be run.
 #
-# `pht/` is the fourth. Six of Kocher's Spectre v1 variants against all seven
-# models, 42 files, each of them a sixteen to twenty-three instruction demo
-# that KLEE answers quickly. So the reason is not cost but coverage per
-# second: none of the 42 is a verdict the main suite cannot already state, and
-# all three scripts holding the same trees back is what makes a disagreement
-# between them mean something.
+# `pht/` is the fourth. Six of Kocher's Spectre v1 variants and a seventh that
+# is one of them with the attacker's probe on the end, against all seven
+# models, 49 files, each a sixteen to twenty-five instruction demo that KLEE
+# answers quickly. So the reason is not cost but coverage per second: none of
+# the 49 is a verdict the main suite cannot already state, and all three
+# scripts holding the same trees back is what makes a disagreement between them
+# mean something.
 full_only='(*/lockstep/*|*/dynamic/*|*/probe/*|*/pht/*)'
 
 slow=0

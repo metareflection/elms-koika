@@ -104,15 +104,18 @@ and [`verify`](src/out/cbmc/verify) reads it back out and runs the checker:
 
 `./src/out/cbmc/verify [--certify] [--full] [file.c ...]`
 
-With no arguments it takes the main suite, all 207 snapshots of it. Three trees
-are held back, for three different reasons. `lockstep/` is five demos
+With no arguments it takes the main suite, all 207 snapshots of it. Four trees
+are held back, for four different reasons. `lockstep/` is five demos
 `squared/` also answers, by the construction `squared/` replaced, and it is
 held back because it agrees and costs time. `dynamic/` is held back because it
 is not settled. It drops the control-flow assumption rather than making it,
 which is an open question about the construction and not a second opinion on a
 closed one. [`probe/`](#the-probe-count-dial) is held back on cost alone: it is
 one demo at six sizes under both towers, and the sizes at the top are the whole
-point. `sbt testFull` regenerates all three either way, so what `--full` buys
+point. `pht/` is held back on volume: six of Kocher's Spectre v1 variants and a
+seventh that probes the cache after one of them, against all seven models, is
+49 more files for one family and no verdict the tree cannot already state.
+`sbt testFull` regenerates all four either way, so what `--full` buys
 is the check rather than the C. Naming files runs exactly those, main suite or not.
 It prints one line per file and exits non-zero if CBMC says anything other than
 what the file claims, so a model that stops detecting what it used to detect is
@@ -304,7 +307,9 @@ and RISC-V and answer the same on each, so the table does not split them;
 NanoRisc has only the first three models, and RISC-V is what fills the rest.
 The blanks are suites nobody has written: `cmp` under cache, `cmp` and
 `branchy` under forwarding, and the FaCT and NanoRisc programs under the last
-two columns, which are RISC-V only so far.
+two columns, which are RISC-V only so far. The seven `v` rows are the Kocher
+ports under `pht/`, which a default `verify` holds back; everything above them
+is the main suite.
 
 | demo | naive | cache | static | predictive | forwarding | nonblocking | predictive_nb |
 |---|---|---|---|---|---|---|---|
@@ -327,6 +332,13 @@ two columns, which are RISC-V only so far.
 | `dynstore` | clean | clean | clean | clean | clean | clean | clean |
 | `bypass_alias` | clean | clean | clean | clean | leak | clean | clean |
 | `balanced` | clean | clean | leak | leak | leak | clean | leak |
+| `v08` | clean | leak | leak | leak | leak | leak | leak |
+| `v10` | clean | clean | clean | clean | clean | clean | clean |
+| `v17` | leak | leak | leak | leak | leak | leak | leak |
+| `v20` | clean | clean | leak | leak | leak | clean | clean |
+| `v20r` | clean | clean | leak | leak | leak | clean | leak |
+| `v21` | clean | clean | clean | clean | clean | clean | clean |
+| `v25` | clean | clean | clean | clean | clean | clean | clean |
 
 `evict` is the row the geometry was for, and it is a stronger statement than
 `2ctr` next to it. `2ctr` needs a cache of some kind. `evict` needs a cache with
@@ -357,11 +369,13 @@ to record nothing, so every branch gets the cold-start guess of not-taken and
 goes on getting it. That is what a machine with no history bits does, and it is
 why the column is worth keeping next to `predictive`: a leak in it did not need
 a predictor to be trained, which is a claim about the threat model rather than
-about the predictor. No demo tells the two apart by verdict. Eight of them do
-stage differently, `shortcircuit`, `constant_time`, `reload`, `dynstore`, `cmp`,
-`folded`, `guarded` and `salsa20`, because a branch that resolves taken leaves
-`predictive` holding a history `static` never records, and the two then number
-the instructions after it into different slots.
+about the predictor. No demo tells the two apart by verdict. Fourteen of them do
+stage differently, because a branch that resolves taken leaves `predictive`
+holding a history `static` never records, and the two then number the
+instructions after it into different slots. Eight are in the main suite,
+`shortcircuit`, `constant_time`, `reload`, `dynstore`, `cmp`, `folded`,
+`guarded` and `salsa20`. The rest are the `v` rows, every one of them but
+`v08`, which has no conditional branch for a history to be about.
 
 `balanced` is a row about the predictor and nothing else. A secret word decides
 a branch whose two arms are the same length, so a machine that does not
@@ -432,6 +446,36 @@ So the traits are a lattice rather than a line: naive, then cache, then
 `static`, `predictive` and `forwarding` in a chain on top of it, with
 `nonblocking` a second branch off cache and `predictive_nb` the join. Only the
 first five columns are also ordered by what they report.
+
+The seven `v` rows are Spectre v1 variants, ported in
+[`src/test/asm/riscv/pht`](src/test/asm/riscv/pht). Paul Kocher wrote fifteen
+of them to show which gadgets each compiler's mitigation missed, and the
+[Spectector](https://arxiv.org/abs/1812.08639) authors grew the set to 27 and
+used it as their evaluation corpus; six are ported here, and what makes them
+worth having is that a compiler emitted them. `v20` is `spectre`'s row cell for cell
+and `v20r` is `reload`'s, which is the control the family was ported to get:
+the gadget somebody wrote by hand for this tower and the one clang emitted from
+Kocher's C answer the same under all seven models. `v20r` is the only file
+there that is not one of the 27, because a victim function never probes
+anything and the probe is what an observer made of a clock needs. Porting them
+is also what found the window rule the tower used to carry. A window ended on a
+write to one of the branch condition's own registers, a bounds check compares
+the index, and the body's first move is to scale it, so every one of these lost
+its whole window to a register name; branch resolution now reads the operands
+the branch was staged with.
+
+`v10`, `v21` and `v25` are clean in every column and each is clean for its own
+reason. A window here is a straight line of `speculable` instructions, so
+control flow between the guard and the gadget ends it first: `v10`'s leak is an
+inner branch and a window cannot open inside a window, `v21`'s secret-dependent
+address belongs to the loop's second iteration and reaching it means the
+backward branch, and `v25` joins the switch's two arms with a `j`. Spectector
+calls all three leaks, since its observation is a load's address rather than a
+clock and its window is an instruction budget under always-mispredict. The
+other two rows need no predictor at all. `v17`'s bounds check reads the array
+it is guarding, so `naive` already has it, and `v08`'s is a branchless ternary
+whose `x + 1` walks one word past the end, which wants a cache rather than
+speculation.
 
 `branchy` is RISC-V only, and it is a walk over four addresses nobody knows and
 everybody agrees on. That is the one shape in this tree whose cost is the
@@ -1028,9 +1072,9 @@ Each of those costs a full budget or more, so a default run skips them and says
 which it skipped:
 
 ```
-skip     19 under lockstep/, dynamic/ and probe/ (pass --full to check them)
+skip     68 under lockstep/, dynamic/, probe/ and pht/ (pass --full to check them)
 skip     src/out/klee/riscv/cache/branchy.check.c (likely-timeout; pass --slow to run it)
-all 194 agree (13 skipped, 19 held back for --full)
+all 194 agree (13 skipped, 68 held back for --full)
 ```
 
 Those counts are the tree's arithmetic and not a transcript. 207 snapshots in
@@ -1220,9 +1264,9 @@ all 226 agree
 `fact/naive/salsa20` is the slowest file in it at 11 seconds and a typical
 residue answers in about one.
 
-A default run leaves out the same three trees the other two scripts leave out,
+A default run leaves out the same four trees the other two scripts leave out,
 and `--full` adds them back. The reasons for leaving them out are theirs rather
-than Eva's, which is cheap on all three. What the holdback buys here is that a default run
+than Eva's, which is cheap on all four. What the holdback buys here is that a default run
 of all three scripts covers the same 207 files, so a three-way disagreement is
 about the backends rather than about which tree somebody remembered to check.
 

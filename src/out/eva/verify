@@ -96,7 +96,7 @@ here=${0:a:h}
 # the three disagree about covering is worse than a tree none of them covers.
 #
 # `pht/` is the fourth and is held back for the coverage reason above rather
-# than for any of its own. Eva is as cheap on 42 Spectre variants as on
+# than for any of its own. Eva is as cheap on 49 Spectre variants as on
 # anything else here; what it must not do is answer a tree the other two
 # scripts are not looking at.
 full_only='(*/lockstep/*|*/dynamic/*|*/probe/*|*/pht/*)'

@@ -65,11 +65,12 @@ here=${0:a:h}
 # default run has nothing to learn from it and a scaling study has everything.
 #
 # `pht/` is the fourth, and held back on volume rather than on per-file cost.
-# Six of Kocher's Spectre v1 variants against all seven models is 42 files
-# here, which is a fifth again on top of the main suite for one family, and
-# every verdict in it is a shape the tree already states somewhere else. A
-# default run is for noticing that a model stopped detecting what it detected;
-# a corpus is for reading across.
+# Six of Kocher's Spectre v1 variants, plus one of them again with the
+# attacker's probe on the end, against all seven models is 49 files here. That
+# is a quarter again on top of the main suite for one family, and every verdict
+# in it is a shape the tree already states somewhere else. A default run is for
+# noticing that a model stopped detecting what it detected; a corpus is for
+# reading across.
 #
 # `sbt testFull` still regenerates all four, so the C stays current whether or
 # not anybody checks it.

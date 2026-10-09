@@ -106,6 +106,25 @@ object Variant {
         predictive_nb = Verdict.Clean
       )
     ),
+    // `v20` with the attacker's probe after it, which is the one demo here
+    // that is not one of the 27. `riscv/reload` is `riscv/spectre` the same
+    // way, and for the same reason: a victim function never probes anything,
+    // so a tower whose observation is the victim's own clock cannot see a line
+    // nothing asks about. The two columns it moves against `v20` are the
+    // answer to whether the line was there.
+    Variant(
+      "v20r",
+      index,
+      Expect(
+        naive = Verdict.Clean,
+        cache = Verdict.Clean,
+        static = Verdict.Leak,
+        predictive = Verdict.Leak,
+        forwarding = Verdict.Leak,
+        nonblocking = Verdict.Clean,
+        predictive_nb = Verdict.Leak
+      )
+    ),
     // The secret-dependent address is the second iteration's, and reaching it
     // means going round the loop's backward branch. The first iteration reads
     // the secret and ands it into an accumulator, which is a value and not an
@@ -147,7 +166,7 @@ abstract class PhtDriver(val variant: Variant)
 // `if` in the class it annotates and then cannot find a `unit` to build one
 // out of.
 private val branchers = Set("v10", "v21")
-private val addressers = Set("v20", "v25")
+private val addressers = Set("v20", "v20r", "v25")
 
 private def eva(v: Variant, says: Verdict, cached: Boolean): Taint =
   if (says == Verdict.Leak) { Taint.Agrees }
@@ -155,14 +174,16 @@ private def eva(v: Variant, says: Verdict, cached: Boolean): Taint =
   else { Taint.Agrees }
 
 // Six of Kocher's Spectre v1 variants, ported in `src/test/asm/riscv/pht`, run
-// against every model the tree has.
+// against every model the tree has, and a seventh that is `v20` with the
+// attacker's probe on the end.
 //
 // Three more of them are already here under other names and are not re-ported.
 // `spectre.s` is variant 1 written by hand, `fact/guarded` is variant 1 reached
 // through a program FaCT's type system accepts, and `fact/folded` is the
-// secret-dependent branch variant 8 arrives at through a ternary.
+// secret-dependent branch variant 8 arrives at through a ternary. `reload.s`
+// is `spectre.s` probed, which is what `v20r` is to `v20`.
 //
-// Held back from a default `verify` on cost: 126 files for one family, none of
+// Held back from a default `verify` on cost: 147 files for one family, none of
 // which is a verdict the tree cannot already state. `src/out/*/verify --full`
 // is what checks them.
 
