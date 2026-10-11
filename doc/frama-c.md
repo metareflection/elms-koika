@@ -6,11 +6,15 @@ model checker, and [`src/out/eva/verify`](../src/out/eva/verify) is its script:
 `./src/out/eva/verify [--corpus] [--full] [file.c ...]`
 
 The whole tree, held-back subtrees included, comes out in about four minutes.
-That run was made before the `fscalar_product` port and said
+That run was made before the `fscalar_product` port and the seven case-study
+leaves after it, and said
 
 ```
 all 335 agree
 ```
+
+The tree holds 375 residues now. A default run over 247 of them, the other 128
+held back, takes four and a half minutes.
 
 `fact/naive/salsa20` is the slowest file in it at 11 seconds and a typical
 residue answers in about one.
@@ -183,9 +187,12 @@ That is not built.
 ## What it costs, which is one flag
 
 One sitting, one machine, and the tree as it stood before the
-`fscalar_product` port, which added five files per backend. The counts below
-are that tree's and the seconds were taken together, so they compare to each
-other and not to a run made today.
+`fscalar_product` port and the seven case-study leaves after it, which added
+five and thirty-five files per backend between them. The counts below are that
+tree's and the seconds were taken together, so they compare to each other and
+not to a run made today. The thirty-five leaf residues were timed on their own
+and Eva answers the set in 76 seconds, which is the only number here that was
+taken later.
 
 CBMC answers the main suite's 207 residues in 171 seconds, 316 with `--corpus`
 in 272, and all 335 in 339. Eva's three tiers are 174, 230 and 241. Level on

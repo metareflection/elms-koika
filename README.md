@@ -134,10 +134,17 @@ the main suite.
 | `constant_time` | clean | clean | clean | clean | clean | clean | clean |
 | `cmp` | leak | | leak | leak | | | |
 | `salsa20` | clean | clean | clean | clean | clean | | |
+| `hsalsa20` | clean | clean | clean | clean | clean | | |
+| `salsa_keysetup` | clean | clean | clean | clean | clean | | |
+| `poly1305_init` | clean | clean | clean | clean | clean | | |
+| `crypto_verify_16` | clean | clean | clean | clean | clean | | |
 | `guarded` | clean | clean | leak | leak | leak | | |
 | `choose` | clean | clean | clean | clean | clean | | |
 | `folded` | leak | leak | leak | leak | leak | | |
 | `fscalar_product` | leak | leak | leak | leak | leak | | |
+| `fsum` | clean | clean | clean | clean | clean | | |
+| `fdifference_backwards` | clean | clean | clean | clean | clean | | |
+| `swap_conditional` | clean | clean | clean | clean | clean | | |
 | `branchy` | clean | clean | clean | clean | | clean | clean |
 | `bypass` | clean | clean | clean | clean | leak | clean | clean |
 | `bypass_ct` | clean | clean | clean | clean | clean | clean | clean |

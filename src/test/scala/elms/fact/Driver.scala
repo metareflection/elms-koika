@@ -119,6 +119,74 @@ object Program {
       stack = 96,
       expect = Expect.uniform(Verdict.Clean)
     ),
+    // Four leaves out of fact-eval's `crypto_secretbox`, which is the module
+    // `salsa20` above was lifted out of by hand. These came out whole, one
+    // `define` apiece, and `src/test/fact/extract` is what did it; the header
+    // of each `.ll` names the module and the commit.
+    //
+    // Sizes and taint are read off each function's FaCT signature, quoted
+    // above the entry. The signature is the only thing that says which argument
+    // the author meant to be a secret, and guessing from the body is how a port
+    // ends up proving something nobody claimed.
+    //
+    // `(secret mut uint8[32] out, secret uint8[16] input, secret uint8[32] k)`.
+    // This is `salsa20` above with different numbers, and the only branch llc
+    // emits is the ten-round loop counting against a trip count it set to 9.
+    Program(
+      "hsalsa20",
+      List(
+        Param.Arr(8, Fill.Out),
+        Param.Arr(4, Fill.Secret(20)),
+        Param.Arr(8, Fill.Secret(20))
+      ),
+      stack = 48,
+      expect = Expect.uniform(Verdict.Clean)
+    ),
+    // `(secret mut uint32[16] ctx, secret uint8[32] k)`. Sixteen of the 20
+    // frame words are a `public uint32[16]` permutation table, which `mem2reg`
+    // leaves alone because it promotes scalars and not arrays. llc then folds
+    // every read of it into a literal and the stores that fill it are dead, so
+    // the frame is written once and never loaded.
+    Program(
+      "salsa_keysetup",
+      List(Param.Arr(16, Fill.Out), Param.Arr(8, Fill.Secret(20))),
+      stack = 80,
+      expect = Expect.uniform(Verdict.Clean)
+    ),
+    // `(mut poly1305_state_internal_t state, secret uint8[32] key)`. The struct
+    // is two `uint64[3]`, a `uint64[2]`, a `uint64`, a `uint8[16]` and one more
+    // byte, which the 32-bit layout rounds to 96. `init` only writes it, down
+    // to the `sb` at byte 88, so the whole 24 words draw as [Fill.Out].
+    Program(
+      "poly1305_init",
+      List(Param.Arr(24, Fill.Out), Param.Arr(8, Fill.Secret(20))),
+      stack = 0,
+      expect = Expect.uniform(Verdict.Clean)
+    ),
+    // `secret bool _crypto_verify_16(secret uint8[16] x, secret uint8[16] y)`,
+    // and the body of it is
+    //
+    //   for (uint32 i from 0 to 16) { if (x[i] != y[i]) { return false; } }
+    //
+    // which is `src/test/asm/riscv/cmp.c` with the names changed. That one
+    // leaks on `naive`, with neither a cache nor a predictor in the model,
+    // because clang stops the loop at the first mismatch and the trip count is
+    // the secret. FaCT runs all sixteen iterations whatever the bytes are and
+    // puts `xor`, `snez` and two `and`s where the early return was, so the only
+    // branch in the object counts against a 15 that llc put in a register. One
+    // algorithm, two compilers, opposite verdicts.
+    //
+    // This is the port that needed `factc -no-inline-asm`. FaCT's default
+    // selection is an x86 `cmovnz` written as inline assembly and every `.ll`
+    // fact-eval ships was built with it, which `llc` for riscv32 will not
+    // take; `./factc --eval crypto_secretbox` is what rebuilt the module this
+    // came out of.
+    Program(
+      "crypto_verify_16",
+      List(Param.Arr(4, Fill.Secret(20)), Param.Arr(4, Fill.Secret(20))),
+      stack = 0,
+      expect = Expect.uniform(Verdict.Clean)
+    ),
     // The gadget FaCT accepts, whose story is in `src/test/fact/guarded.fact`.
     // Words 0 to 15 are `table` and 16 to 23 are the key, and `idx` is drawn up
     // to 23 so that an out-of-bounds `table[idx]` reaches the key and stops
@@ -178,6 +246,63 @@ object Program {
       // A run that does finish still has to say `leak`, which is what the
       // label buys: expensive rather than unreachable.
       klee = Reach.LikelyTimeout
+    ),
+    // `fscalar_product`'s two neighbours in `donna/curve25519-c64.fact`, and
+    // the pair that says what in it leaks. These add and subtract the same
+    // five `uint64` limbs and never leave 64 bits, where a carry is an `sltu`
+    // and nothing branches. The accumulator above is `uint128`, llc lowers a
+    // comparison at that width as a branch, and that is where its four `beq`s
+    // came from.
+    //
+    // `(secret mut uint64[5] output, secret uint64[5] input)`, and `output` is
+    // read as well as written: the body is `output[i] += input[i]`. So it is a
+    // secret rather than a [Fill.Out], and the ten `lw`s off a0 in `fsum.s`
+    // are what says so.
+    Program(
+      "fsum",
+      List(Param.Arr(10, Fill.Secret(20)), Param.Arr(10, Fill.Secret(20))),
+      stack = 0,
+      expect = Expect.uniform(Verdict.Clean)
+    ),
+    // `(secret mut uint64[5] out, secret uint64[5] input)`, whose body is
+    // `out[i] = input[i] + two54m8 - out[i]`. Same in-out first argument.
+    Program(
+      "fdifference_backwards",
+      List(Param.Arr(10, Fill.Secret(20)), Param.Arr(10, Fill.Secret(20))),
+      stack = 0,
+      expect = Expect.uniform(Verdict.Clean),
+      // The second port to carry this, and the one that shows the label is
+      // about the backend and nothing else. CBMC answers all five cells in
+      // 1.4 seconds or less apiece and Eva agrees, and KLEE closes only
+      // `naive`, in 224 seconds of its 1200. The other four die on KLEE's
+      // default 2GB cap after 26 seconds with 152 states killed, and at a 16GB
+      // cap they spend a whole 720-second run without closing a path, so what
+      // stops them is the search and not the memory.
+      //
+      // Nothing about the program says which of these it would be. `fsum` is
+      // the same five limbs through the same models and settles everywhere in
+      // seconds, and `hsalsa20` has four times the residue and settles too.
+      // `FactNaiveTests` is where the one cell that answers gets its label
+      // back.
+      klee = Reach.LikelyTimeout
+    ),
+    // `(secret mut uint64[5] a, secret mut uint64[5] b, secret uint64 swapi)`,
+    // the swap `cmult` drives the Montgomery ladder with, and the other port
+    // `-no-inline-asm` unlocked. `swapi` is `byte >> 7` at both call sites, so
+    // it draws against 1 the way `choose`'s condition does.
+    //
+    // FaCT's `if (swapi == 1)` is gone before llc sees it. The mask is one
+    // `snez` and one `addi -1`, the body is four `xor`s and two `and`s a limb,
+    // and the only branch left counts the five iterations.
+    Program(
+      "swap_conditional",
+      List(
+        Param.Arr(10, Fill.Secret(20)),
+        Param.Arr(10, Fill.Secret(20)),
+        Param.Wide(secret = true, bound = 1)
+      ),
+      stack = 0,
+      expect = Expect.uniform(Verdict.Clean)
     )
   )
 }

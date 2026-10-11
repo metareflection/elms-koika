@@ -12,11 +12,12 @@
 # A file whose line says `likely-timeout` is one the tree expects KLEE not to
 # finish, and those are skipped unless you pass --slow, or --only-slow to run
 # nothing else. Skipped files are printed, so a default run still says what it
-# did not look at. Twelve files in the main suite are in that state. Ten finish
-# and spend most of a budget doing it, and the other two produce no verdict at
-# all, which is the whole reason for the flag. Nine more carry it outside the
-# main suite: one under `lockstep/`, six under `probe/` where the whole subtree
-# is held back anyway, and two under `stl/forwarding` in the corpus tier.
+# did not look at. Twenty-one files in the main suite are in that state. Of the
+# twelve that carried it when the split was last measured, ten finish and spend
+# most of a budget doing it and two produce no verdict at all, which is the
+# whole reason for the flag. Nine more carry it outside the main suite: one
+# under `lockstep/`, six under `probe/` where the whole subtree is held back
+# anyway, and two under `stl/forwarding` in the corpus tier.
 #
 # The claim lives in the file, on the `// verify:` line that `KoikaSuite.check`
 # writes at the top of it, same as `src/out/cbmc/verify` reads. What differs is

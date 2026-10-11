@@ -4,24 +4,31 @@
 programs that branch on a secret or index memory with one, whose Z3-backed
 checker rejects programs it cannot prove stay in bounds, and whose compiler
 emits a branchless selection in place of the branch you would have written.
-[`src/test/fact`](../src/test/fact) holds four programs it accepts, lowered into
-five objects. Three of the programs come from FaCT's own repositories: the
-Salsa20 core and `fscalar_product` from
-[fact-eval](https://github.com/PLSysSec/fact-eval), the case studies published
-alongside the paper, and `example.fact`, which is what the compiler ships to
-show what it does. The fourth is written here. Two of the five objects verify
-clean under every model and three do not, and which is which is not a property
-of FaCT's type system.
+[`src/test/fact`](../src/test/fact) holds eleven programs it accepts, lowered
+into twelve objects. Nine of them come from FaCT's own repositories:
+`example.fact`, which is what the compiler ships to show what it does, and
+eight out of [fact-eval](https://github.com/PLSysSec/fact-eval), the case
+studies published alongside the paper. The other two are written here. Nine of
+the twelve objects verify clean under every model and three do not, and which
+is which is not a property of FaCT's type system.
 
 We do not build the FaCT frontend to run it. What is checked in is the LLVM that
 `factc` emitted, and
 
 `./src/test/fact/build`
 
-lowers it to RV32IM with stock `opt`, `llc` and `clang`.
-`./src/test/fact/factc` regenerates the `.ll` from the `.fact` source beside it
-and is the only thing here that wants the FaCT compiler; it builds it under
-`podman` from the image its authors published, and no test run needs it.
+lowers it to RV32IM with stock `opt`, `llc` and `clang`. Two scripts put the
+`.ll` there and no test run needs either. `./src/test/fact/factc` compiles the
+`.fact` sources beside it, under `podman` from the image FaCT's authors
+published; `./src/test/fact/extract` pulls one `define` out of a fact-eval
+module into a file of its own, and clones fact-eval the first time it is asked
+for one.
+
+`factc --eval <module>` is where the two meet. The `.ll` fact-eval ships was
+built without `-no-inline-asm`, so every selection in it is an x86 `cmovnz`
+that `llc` for riscv32 will not take; `--eval` rebuilds the module in place
+with the flag on, and `extract` then reads the result and says in the file's
+header which of the two it got.
 
 ## Salsa20
 
@@ -69,6 +76,103 @@ longer does: the tower decodes `mul`, `mulh`, `mulhsu` and `mulhu`, and
 with no feature that unblocks them. `s3_cbc.fact` opens by declaring `extern
 void SHA1_Transform`, and a symbol outside the object is a target no `auipc`
 inside it computed.
+
+## The case-study leaves
+
+Seven leaf functions out of the two case studies, one `define` apiece, which is
+what `extract` exists for. Not one of them calls anything, so not one of them
+needs the inlining the paragraph above puts out of reach, and `build` globs
+`*.ll` so nothing else had to change either.
+
+| function | module | what it is | CBMC, naive through forwarding |
+|---|---|---|---|
+| `hsalsa20` | crypto_secretbox | the HSalsa20 core | 4.9s, 6.5s, 6.6s, 7.6s, 7.7s |
+| `salsa_keysetup` | crypto_secretbox | key expansion | 0.2s, 1.9s, 1.9s, 1.9s, 2.0s |
+| `poly1305_init` | crypto_secretbox | the MAC's `r` clamping | 0.2s, 1.2s, 1.2s, 1.2s, 1.3s |
+| `crypto_verify_16` | crypto_secretbox | the 16-byte compare | 0.6s, 1.1s, 1.2s, 1.3s, 1.3s |
+| `fsum` | curve25519-donna | field addition | 0.2s, 1.1s, 1.1s, 1.1s, 1.2s |
+| `fdifference_backwards` | curve25519-donna | field subtraction | 0.3s, 1.2s, 1.2s, 1.2s, 1.4s |
+| `swap_conditional` | curve25519-donna | the ladder's swap | 0.5s, 1.5s, 1.5s, 1.8s, 1.9s |
+
+All 35 cells are clean, CBMC certifies every one of them at unwind 65, and Eva
+agrees on the set in 76 seconds. That is the expected result and it is the
+reason to run them: these are primitives whose authors built a type system to
+keep them from leaking, and the question the tower asks is whether the
+guarantee survives a microarchitecture that type system never modelled.
+`guarded` below is that answer coming back no. These seven are it coming back
+yes, which means something only because both were asked the same way.
+
+Sizes and taint are read off each function's FaCT signature rather than off its
+body, and each `Program` entry quotes the signature it used. The signature is
+the only thing that says which argument the author meant to be secret, and two
+of these would have been got wrong by reading the code: `fsum` and
+`fdifference_backwards` take a `mut` first argument that they read before they
+write, so it draws as a secret rather than as scratch.
+
+### `crypto_verify_16` and `cmp`
+
+`stdlib.fact` writes the 16-byte compare like this:
+
+```
+for (uint32 i from 0 to 16) {
+  if (x[i] != y[i]) {
+    return false;
+  }
+}
+return true;
+```
+
+and [`cmp.c`](../src/test/asm/riscv/cmp.c), which has been in the tree far
+longer, writes it like this:
+
+```
+for (i = 0; i < n; i++) {
+  if (guess[i] != secret[i]) return 0;
+}
+return 1;
+```
+
+`cmp` leaks on `naive`, with neither a cache nor a predictor in the model,
+because clang stops the loop at the first mismatch and the trip count is the
+secret. FaCT's nineteen instructions run all sixteen iterations whatever the
+bytes hold:
+
+```
+lbu  a6, 0(a6)
+lbu  a7, 0(a7)
+xor  a6, a6, a7
+snez a6, a6
+and  a6, a6, a4
+and  a7, a6, a2
+xor  a4, a4, a6
+xor  a2, a2, a7
+```
+
+The `snez` and the two `and`s are where the early return went. The only branch
+in the object counts against a 15 that llc put in a register. One algorithm,
+two compilers, opposite verdicts, and the difference is the thing FaCT was
+built to do.
+
+This port and `swap_conditional` are the two that needed `factc --eval`. Both
+select with FaCT's `cmovnz`, so both are unbuildable from the `.ll` fact-eval
+ships and both come out of a module rebuilt with `-no-inline-asm`. That is the
+same flag `choose` and `folded` turn on below, so the arithmetic selection they
+are a story about is the selection in these two as well.
+
+### KLEE answers one cell of five
+
+`fdifference_backwards` is the second port marked `LikelyTimeout` and the only
+leaf that carries it. On `naive` KLEE closes it clean in 224 seconds of its
+1200. On the other four it dies at the default 2GB cap after 26 seconds with
+152 states killed, and at a 16GB cap it spends a whole 720-second run without
+closing a path, so what stops it is the search and not the memory.
+
+Nothing about the program says which of those it would be. `fsum` is the same
+five limbs through the same five models and settles everywhere in seconds.
+`hsalsa20` has four times the residue and a loop in it and settles too. CBMC
+answers all five cells in 1.4 seconds or less apiece. So `FactNaiveTests`
+carries a `settles` map that puts `Reach.Settles` back on the one cell that
+answers, which is `FactCacheTests`'s `widens` pointing the other way.
 
 ## `guarded`
 
@@ -177,11 +281,11 @@ it leaks under every model:
 | leak, 8.5s | leak, 14.4s | leak, 14.5s | leak, 14.6s | leak, 15.6s |
 
 Eva agrees on all five, in 25 seconds for the set. KLEE does not answer, and
-this is the only FaCT port marked `LikelyTimeout`. On `naive`, the cheapest
-cell, it spends the whole 1200-second budget and halts on its own timer with
-111 live states, no completed path and no error file: 46434 instructions and
-21257 queries in twenty minutes. `folded` is the same leak in five
-instructions on one secret bit; here the branch is four deep in a
+this is the first of the two ports marked `LikelyTimeout`. On `naive`, the
+cheapest cell, it spends the whole 1200-second budget and halts on its own
+timer with 111 live states, no completed path and no error file: 46434
+instructions and 21257 queries in twenty minutes. `folded` is the same leak in
+five instructions on one secret bit; here the branch is four deep in a
 215-instruction residue and what it tests is a carry out of a 64x64 product
 over full symbolic words.
 

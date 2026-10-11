@@ -71,6 +71,18 @@ own. The four left each have a store queue or a join under them:
 `squared/riscv/forwarding/bypass_alias`, `squared/riscv/predictive_nb/reload`,
 and `stale_ptr` and `stale_index` under `stl/forwarding`.
 
+Two ports have landed since those numbers were taken and neither is in them.
+`fscalar_product` carries the label on all five of its models and
+`fdifference_backwards` on four of its five, so the tree holds thirty of these
+files rather than twenty-one and the main suite twenty-one rather than twelve.
+The four new ones are the first that stop on memory rather than on time: KLEE
+kills 152 states at its default 2GB cap after 26 seconds, and at a 16GB cap it
+spends a whole 720-second run without closing a path, so what stops it is the
+search. `fact/naive/fdifference_backwards` closes clean in 224 seconds of its
+1200, which is why `FactNaiveTests` carries a `settles` map putting
+`Reach.Settles` back on that one cell. Everything else in this section was
+measured before either port and is not re-run here.
+
 Every one of the nine residues in the tree declaring `leak` has been run with
 `--exit-on-error`, and five stop at a witness: `bypass_late` at 108 seconds, the
 three squared Spectre-STL shapes at 112, 125 and 209, and
