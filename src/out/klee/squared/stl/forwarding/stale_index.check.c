@@ -1,4 +1,4 @@
-// verify: leak likely-timeout (KLEE probably does not finish this path space) [budget 1200s]
+// verify: leak (KLEE should report a failing assertion) [budget 1200s]
 #define NUM_REGS 32
 #define MEM_SIZE 64
 #define SECRET_SIZE 10

@@ -124,20 +124,26 @@ class SquaredSuite extends KoikaSuite {
     override val init = Init.speculative(stateT)
   }
 
-  // The three residues KLEE does not get through, measured rather than
-  // guessed: 1500 seconds apiece with no verdict, against 453 for the slowest
-  // one that does finish. `--max-time` stops KLEE forking new states and does
-  // not interrupt a query already in flight, so the 1200-second budget is not
-  // a wall clock, and a file like this hangs a default run rather than failing
-  // it.
+  // The two residues KLEE does not get through, measured rather than guessed:
+  // given `--exit-on-error` and 360 seconds apiece neither found a witness,
+  // and both ran past their own `--max-time` and had to be killed at 400,
+  // against 453 for the slowest squared residue that does finish.
   //
-  // All three are where the squared model carries the most. The two `bypass`
-  // rows are the store queue's deferred alias check over addresses nobody
-  // knows, doubled. `predictive_nb/reload` is the join, where a squash
-  // rewrites every register's arrival time in both runs and the probe still
-  // asks the cache afterwards.
+  // Both are where the squared model carries the most. `forwarding/bypass_alias`
+  // is the store queue's deferred alias check over addresses nobody knows,
+  // doubled. `predictive_nb/reload` is the join, where a squash rewrites every
+  // register's arrival time in both runs and the probe still asks the cache
+  // afterwards.
+  //
+  // `forwarding/bypass_late` was the third of these until `src/out/klee/verify`
+  // started passing `--exit-on-error`. It had a witness the whole time and
+  // spent the rest of its budget searching past it, and it stops at 108
+  // seconds now. The 1500 seconds this comment used to claim for all three was
+  // the script waiting rather than the search running, and the two left are the
+  // control for that reading: same flag, same budget, and they still find
+  // nothing.
   private val slow: Map[String, Reach] =
-    Seq("forwarding/bypass_alias", "forwarding/bypass_late", "predictive_nb/reload")
+    Seq("forwarding/bypass_alias", "predictive_nb/reload")
       .map(_ -> Reach.LikelyTimeout)
       .toMap
 

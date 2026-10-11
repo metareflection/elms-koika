@@ -29,12 +29,17 @@ import elms.koika.test.riscv.{SquaredRiscVDriver, Stl}
 // already have.
 //
 // A file of its own rather than rows in [SquaredSuite], so that both halves of
-// the family sit behind `--full` together. Twenty-five files here against
+// the family sit behind `--corpus` together. Twenty-five files here against
 // thirty-five next door, and a default run of all three `verify` scripts covers
-// neither. The reason is volume for CBMC and Eva, which answer them in under a
-// minute between them, and cost for KLEE, where `forwarding/stale_ptr`,
-// `stale_mask` and `stale_index` each spend a full 1200-second budget and
-// produce nothing.
+// neither. The reason is volume: CBMC and Eva answer the sixty in under a
+// minute between them, and not one of them is a verdict the tree cannot already
+// state.
+//
+// KLEE is the one that costs, and it costs less here than it does next door,
+// which is the opposite of what the residue sizes say. `forwarding/stale_ptr`,
+// `stale_mask` and `stale_index` stop at their witness in 125, 112 and 209
+// seconds squared, where single-tower `stale_ptr` and `stale_index` find
+// nothing inside 360. [Stl.klee] takes the tower for that reason.
 //
 // Labels carry the model, so a residue lands beside its twin's path with
 // `squared/` on the front, the way [SquaredSuite]'s do.
@@ -84,7 +89,7 @@ class SquaredStlSuite extends KoikaSuite {
         s"forwarding/$name",
         snippet,
         says,
-        klee = Stl.klee(name),
+        klee = Stl.klee(name, squared = true),
         eva = Stl.eva(name, says, cached = true)
       )
     }

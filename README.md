@@ -1043,8 +1043,9 @@ No error file is only clean if the run also finished, which is
 `halting execution` on stderr. Drop the last two and an exploration that ran out
 of time reports exactly like a proof.
 
-Twenty files in the tree are marked for that case, fourteen in the main suite
-and six more under `probe/`, and they say so where they call `check`:
+Twenty-one files in the tree are marked for that case, twelve in the main
+suite, seven under `lockstep/` and `probe/` and two in the corpus tier, and they
+say so where they call `check`:
 
 ```scala
 check("cache/branchy", snippet, Verdict.Clean, klee = Reach.LikelyTimeout)
@@ -1060,7 +1061,7 @@ accepted and a wrong one still is not.
 The label means two different things now, and which one a file gets is
 measured rather than assumed.
 
-Eleven of the twenty are `branchy` with a cache in front of the walk, one per
+Eleven of the twenty-one are `branchy` with a cache in front of the walk, one per
 model that has one and one per squared twin, and every one of them finishes
 inside the budget. At 120 seconds `cache/branchy` ends with 0 completed paths
 against 23 partially completed, and at ten minutes it ends the same way, which
@@ -1070,32 +1071,34 @@ last take 958 and 970. So for those eleven `LikelyTimeout` means expensive
 rather than unreachable, and it is kept because a quarter of an hour apiece is
 not something a default run should spend.
 
-The other nine do not finish, and every one of them has a store queue or a
-join under it. Eight are the queue's deferred alias check over addresses nobody
-knows: `squared/riscv/forwarding/bypass_alias`, the same under `bypass_late`,
-and the three Spectre-STL shapes `stale_ptr`, `stale_mask` and `stale_index` in
-both towers, under `squared/stl/forwarding` and under `stl/forwarding`. The
-ninth is `squared/riscv/predictive_nb/reload`, where a squash rewrites every
-register's arrival time in both runs and the probe still asks the cache
-afterwards. `--max-time` stops KLEE forking new states and does not interrupt a
-query already in flight, so the budget is a search bound and not a wall clock,
-and a file like this hangs a default run rather than failing it.
+Six of the other ten are `probe/`'s count dial, which has a section of its
+own. The four left each have a store queue or a join under them:
+`squared/riscv/forwarding/bypass_alias`, `squared/riscv/predictive_nb/reload`,
+and `stale_ptr` and `stale_index` under `stl/forwarding`.
 
-Six of the nine were measured. `bypass_alias`, `bypass_late`, `reload` and
-`squared/stl/forwarding/stale_ptr` each got 1500 seconds of wall clock with
-no verdict, `stl/forwarding/stale_ptr` none in 900 and `stl/forwarding/stale_index`
-none in 660, against 453 for the slowest squared residue that does finish. The
-three `stale_mask` and `stale_index` cells left over are the same construction,
-a sanitizer bypassed and the stale value chased through two more loads, and
-carry the label on that rather than on runs of their own.
+Every one of the nine residues in the tree declaring `leak` has been run with
+`--exit-on-error`, and five stop at a witness: `bypass_late` at 108 seconds, the
+three squared Spectre-STL shapes at 112, 125 and 209, and
+`stl/forwarding/stale_mask` at 354. The other four find nothing. `stale_ptr`
+and `stale_index` in the single tower stopped on their own `--max-time` at 360,
+where `bypass_alias` and `reload` ran past theirs and had to be killed at 400,
+which is the same budget on the same box minutes apart and nobody can say what
+separates them. That is why `check_one` wraps the call in `timeout -k` as well.
+
+All five that stop have moved to `Settles` and are checked normally. The last
+of them was `bypass_late`, whose label lived in `SquaredSuite.scala` and came
+off separately; the 1500 seconds that file used to claim for all three of its
+rows was the script waiting rather than the search running.
 
 It is the queue and not the size of the residue, which needs saying because the
-line counts suggest the opposite. `squared/stl/static/stale_index` is 2407
-lines with the queue taken out from under it and settles in one second, where
-`squared/stl/forwarding/stale_ptr` is 3055 and produces nothing in 1500. The two
-scrub shapes stay cheap on the same column, since neither has a forwarded load
-to disambiguate: `squared/stl/forwarding/inflight` finds its leak in 123 seconds
-against `stl/forwarding/inflight`'s 151, and `retired` is clean in 31 and 18.
+line counts say the opposite twice over. `squared/stl/static/stale_index` is
+2407 lines with the queue taken out from under it and settles in one second,
+where `squared/stl/forwarding/stale_ptr` is 3055 and needs 125. Sharper than
+that: `stl/forwarding/stale_ptr` is 1545 lines, half its squared twin, and it is
+the one that finds nothing at all. The two scrub shapes stay cheap on the same
+column, since neither has a forwarded load to disambiguate:
+`squared/stl/forwarding/inflight` finds its leak in 123 seconds against
+`stl/forwarding/inflight`'s 151, and `retired` is clean in 31 and 18.
 
 None of this is for want of a path space. `runCache` answers out of L1, out of
 L2 or out of memory, so four probes are (3^4 + 1) / 2 paths and CBMC is done in
@@ -1110,7 +1113,7 @@ had to grow from 120 to 1200 with the cache. Five residues started reporting
 case: `fact/static/guarded` finds its leak in 326s and
 `riscv/forwarding/bypass` in 485s, so the old budget was turning "not yet" into
 a failing test. A budget is a cap and not a cost, so the files that settled
-quickly still do, and the only ones that spend most of one are the twenty
+quickly still do, and the only ones that spend most of one are the twenty-one
 above.
 
 Each of those costs a full budget or more, so a default run skips them and says
@@ -1120,23 +1123,25 @@ which it skipped:
 skip     109 under pht/ and stl/ (pass --corpus to check them)
 skip     19 under lockstep/, dynamic/ and probe/ (pass --full to check them)
 skip     src/out/klee/riscv/cache/branchy.check.c (likely-timeout; pass --slow to run it)
-all 194 agree (13 skipped, 128 held back)
+all 195 agree (12 skipped, 128 held back)
 ```
 
 Those counts are the tree's arithmetic and not a transcript. 207 snapshots in
-the main suite, thirteen of them labelled. Every one of the 194 has been
-checked on its own, and the three of them that hang were found by checking them
-on their own; what nobody has sat through is all 194 in a single run.
+the main suite, twelve of them labelled. Every one of the 195 has been checked
+on its own, `bypass_late` at 108 seconds among them, and so were the two
+labelled files that are not `branchy`: `bypass_alias` and `reload` both found
+nothing. What nobody has sat through is all 195 in a single run.
 
-The other six that hang are in the corpus tier, under `stl/forwarding` and
-`squared/stl/forwarding`, and they are the reason this script holds that tier
-back as well as the one next door does. Of the sixty files there, eight were
-run: `stale_ptr` produced no verdict in 1500 seconds squared and 900 in the
-single tower, `stale_index` none in 660, and the cheap half settled,
-`static/stale_index` clean in a second, `retired` clean in 31 and 18, and
-`inflight` leaking in 123 and 151. The remaining fifty-two carry `Settles`
-because CBMC and Eva settle them and nothing in their shape is what the label
-is for.
+Two more are in the corpus tier, `stale_ptr` and `stale_index` under
+`stl/forwarding`, and they are why this script holds that tier back as well as
+the one next door. Eleven of the sixty files there have been run: the three
+squared Spectre-STL shapes stop at 112, 125 and 209, `stl/forwarding/stale_mask`
+at 354, `static/stale_index` is clean in a second, `retired` is clean in 31 and
+18, `inflight` leaks in 123 and 151, and the two labelled ones find nothing in
+360. Both carry the label on that 360 rather than on the 1200 they declare, so
+whether they would settle inside their own budget is open. The other forty-nine
+carry `Settles` because CBMC and Eva settle them and nothing in their shape is
+what the label is for.
 
 `--slow` adds them back, and `--only-slow` runs nothing else, which is the one
 to reach for after touching the squared tower or the cache model.

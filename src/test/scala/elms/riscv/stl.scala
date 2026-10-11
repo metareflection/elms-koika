@@ -71,9 +71,10 @@ import elms.koika.test.common.{
 // --corpus` is what checks them. Sixty files per backend and 180 across the
 // three, and not one of them a verdict the tree cannot already state: the four
 // that leak do it in the column `bypass` already leaks in. KLEE gives the
-// sharper reason. Three of the five produce no verdict inside a 1200-second
-// budget in each tower, so a default run reaching them would spend most of six
-// budgets to learn nothing.
+// sharper reason. `stale_ptr` and `stale_index` produce no verdict at all in
+// this tower, and the four cells that do settle cost between 112 and 354
+// seconds apiece, so a default run reaching them would spend most of six
+// budgets on answers CBMC has in thirty seconds.
 //
 // `--corpus` and not `--full`, which holds back something else: `lockstep/` is
 // a second opinion, `dynamic/` is an open question and `probe/` is a scaling
@@ -131,40 +132,35 @@ object Stl {
     else if (cached && scrubbed(name)) { Taint.Widens }
     else { Taint.Agrees }
 
-  // Where `src/out/klee/verify` comes back with nothing. Six cells rather than
-  // three because [SquaredStlSuite] runs the same three shapes squared, and the
-  // two halves are here for different reasons.
+  // Where `src/out/klee/verify` comes back with nothing, which is two cells
+  // rather than six and only in the single tower.
   //
-  // The squared half is cheap and the label is about the script.
-  // `squared/stl/forwarding/stale_ptr` writes `test000001.assert.err` 124
-  // seconds in, which is the verdict the first line of that file declares, and
-  // then prints `now ignoring this error at this location` and carries on until
-  // something stops it. `check_one` has nothing to stop it with, so it waits,
-  // `outcome()` never runs, and the answer sits unread on disk. Given
-  // `--exit-on-error` the three stop at their witness in 112, 125 and 209
-  // seconds.
+  // `verify` passes `--exit-on-error` as of this landing, and that is what
+  // moved. KLEE finds the witness in these and then prints `now ignoring this
+  // error at this location` and carries on through a space that may never
+  // close, so before the flag the verdict was written to `klee-out` and nobody
+  // read it. All nine residues in the tree declaring `leak` have since been run
+  // with it, and five stop at their witness: the three squared shapes here at
+  // 112, 125 and 209 seconds, `stl/forwarding/stale_mask` at 354, and
+  // `squared/riscv/forwarding/bypass_late` at 108 next door.
   //
-  // The single-tower half is the expensive one, which is backwards from the
-  // file sizes and from `bypass_alias`, where the single tower settles in 89
-  // seconds and the squared one does not. Given 360 seconds and
-  // `--exit-on-error`, `stale_mask` found `ASSERTION FAIL: s1_->timer ==
-  // s2_->timer` at 354 and the other two found nothing and stopped on the
-  // budget. So `--max-time` does halt KLEE. It did not on the runs where a
-  // witness landed early, and what separates those is not known. Whether these
-  // two settle inside the real 1200-second budget is a guess nobody has run.
+  // The two left are `stale_ptr` and `stale_index` single-tower, which found
+  // nothing at all inside 360 seconds while their squared twins are the cheap
+  // ones. That is backwards from the file sizes and backwards from
+  // `bypass_alias`, where the single tower settles in 89 seconds and the
+  // squared one does not finish even with the flag. Two shapes, opposite
+  // directions, and nothing anybody has named predicts the sign.
   //
-  // The earlier claim here that the path space stops being walkable was wrong
-  // squared and is the open question single-tower. What killed it squared: the
-  // `.err` lands at the same 124 seconds under plain baseline,
-  // `--max-solver-time=10` and `--exit-on-error` alike, so the flag does not
-  // find the leak sooner, it stops afterwards.
-  //
-  // All six labels stay. Three because `verify` does not pass the flag yet,
-  // three because nobody has watched them finish.
-  private val hangs = Set("stale_ptr", "stale_mask", "stale_index")
+  // Both carry the label on a 360-second run rather than on the 1200 they
+  // declare, so whether they settle inside their own budget is open. That run
+  // is for whoever has the machine the full sweep goes on.
+  private val hangs = Set("stale_ptr", "stale_index")
 
-  def klee(name: String): Reach =
-    if (hangs(name)) { Reach.LikelyTimeout } else { Reach.Settles }
+  // The tower is a parameter here where it is not in [eva], because
+  // `--exit-on-error` split the two halves apart and nothing about the shape
+  // says which way a given cell goes.
+  def klee(name: String, squared: Boolean): Reach =
+    if (!squared && hangs(name)) { Reach.LikelyTimeout } else { Reach.Settles }
 }
 
 // A class and not a trait for the reason [PhtDriver] is one: [prog] reads
@@ -239,7 +235,7 @@ class StlForwardingTests extends KoikaSuite {
     test(s"stl forwarding $name") {
       val snippet = new StlDriver(name) with Forwarding {}
       val says = expect.forwarding
-      check(name, snippet, says, klee = Stl.klee(name), eva = Stl.eva(name, says, cached = true))
+      check(name, snippet, says, klee = Stl.klee(name, squared = false), eva = Stl.eva(name, says, cached = true))
     }
   }
 }

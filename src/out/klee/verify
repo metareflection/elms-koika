@@ -12,11 +12,11 @@
 # A file whose line says `likely-timeout` is one the tree expects KLEE not to
 # finish, and those are skipped unless you pass --slow, or --only-slow to run
 # nothing else. Skipped files are printed, so a default run still says what it
-# did not look at. Fourteen files in the main suite are in that state. Eleven
-# finish and spend most of a budget doing it, and the other three produce no
-# verdict at all, which is the whole reason for the flag. Six more carry the
-# label under `probe/`, where the whole subtree is held back anyway, so the two
-# skips never both apply to one file.
+# did not look at. Twelve files in the main suite are in that state. Ten finish
+# and spend most of a budget doing it, and the other two produce no verdict at
+# all, which is the whole reason for the flag. Nine more carry it outside the
+# main suite: one under `lockstep/`, six under `probe/` where the whole subtree
+# is held back anyway, and two under `stl/forwarding` in the corpus tier.
 #
 # The claim lives in the file, on the `// verify:` line that `KoikaSuite.check`
 # writes at the top of it, same as `src/out/cbmc/verify` reads. What differs is
@@ -66,10 +66,10 @@ here=${0:a:h}
 # back. 109 files, most of them five to twenty-five instructions and answered
 # in seconds, so for `pht/` the reason is coverage per second rather than cost:
 # none of its 49 is a verdict the main suite cannot already state. `stl/` has a
-# reason of its own on top of that, and it is this script's. Six of its cells,
-# `forwarding/stale_ptr`, `stale_mask` and `stale_index` in each tower, spend a
-# full 1200-second budget and produce nothing, so a default run that reached
-# them would be two hours of skipping or two hours of waiting.
+# reason of its own on top of that, and it is this script's. Two of its cells,
+# `stl/forwarding/stale_ptr` and `stale_index`, produce no verdict at all, and
+# four more cost between 112 and 354 seconds apiece even now that
+# `--exit-on-error` stops them at their witness.
 corpus_only='(*/pht/*|*/stl/*)'
 
 # The other three are `--full`'s, and a KLEE budget is the last thing to spend
@@ -124,25 +124,53 @@ native=${KOIKA_KLEE_NATIVE:-0}
 # Compile [1]/subject.c and check it with a [2] second budget, leaving
 # `klee-out` beside it. Both arms write the same tree, so everything downstream
 # reads one shape.
+#
+# Two things wrap the `klee` call and neither of them is `--max-time`'s job.
+#
+# `--exit-on-error` stops at the first assertion. Without it KLEE prints `now
+# ignoring this error at this location` and carries on through a space that may
+# never close, so on a file that does leak the verdict gets written to
+# `klee-out` and nobody ever reads it. It cannot change an answer, because
+# `outcome` globs `*.err` before it looks at anything else. It only arrives at
+# the same answer sooner, measured across the nine files declaring `leak`: five
+# of them now stop at their witness between 108 and 354 seconds.
+#
+# `timeout -k` is the wall clock, because `--max-time` is not one. In a single
+# sweep it stopped two files at exactly their budget and let two others run
+# past it until something else killed them, same box, minutes apart, and what
+# separates those is not known. Plain `timeout` is not enough either, since
+# KLEE catches SIGTERM to flush statistics and one blocked inside STP never
+# gets to. The inner guard is the one that matters under podman: killing
+# `podman run` from outside leaves the container alive and burning CPU, which
+# is how a 900-second budget became 10582 seconds. So the two wrappers are not
+# one wrapper written twice, and collapsing them to the outer one puts that
+# back. It would read as a hang rather than as the tidy-up it was.
 check_one() {
     local dir=$1 budget=$2
+    local wall=$(( budget + 60 ))
     if (( native )); then
         clang -emit-llvm -c -g -O0 -Xclang -disable-O0-optnone -DKLEE \
               $dir/subject.c -o $dir/subject.bc >$dir/cc.log 2>&1 || return 1
-        klee --max-time=${budget}s --output-dir=$dir/klee-out \
-             $dir/subject.bc >$dir/klee.log 2>&1
+        timeout -k 10 $wall \
+            klee --max-time=${budget}s --exit-on-error --output-dir=$dir/klee-out \
+                 $dir/subject.bc >$dir/klee.log 2>&1
     else
+        timeout -k 10 $(( wall + 30 )) \
         podman run --rm --user root -v $dir:/work:rw,Z -w /work $image bash -c "
             export PATH=/home/klee/klee_build/bin:/tmp/llvm-130-install_O_D_A/bin:\$PATH
             clang -I /home/klee/klee_src/include -emit-llvm -c -g -O0 \
                   -Xclang -disable-O0-optnone -DKLEE \
                   subject.c -o subject.bc >cc.log 2>&1 || exit 1
-            klee --max-time=${budget}s --output-dir=/work/klee-out \
-                 subject.bc >klee.log 2>&1
+            timeout -k 10 $wall \
+                klee --max-time=${budget}s --exit-on-error --output-dir=/work/klee-out \
+                     subject.bc >klee.log 2>&1
         " >/dev/null 2>&1
     fi
     # Not the exit status of either tool. clang's is the only one that means
-    # anything, and a failed compile is the `return 1` above.
+    # anything, and a failed compile is the `return 1` above. A run the wall
+    # clock killed leaves `info` with no completed-paths line, which `outcome`
+    # reads as `unknown`, and `unknown` is what a `likely-timeout` file passes
+    # on.
     [[ -f $dir/klee-out/info ]]
 }
 
