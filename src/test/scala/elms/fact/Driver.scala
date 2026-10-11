@@ -4,6 +4,7 @@ import elms.prelude.*
 import elms.prelude.given
 
 import elms.koika.test.Verdict
+import elms.koika.test.common.Reach
 import elms.koika.test.riscv.{RiscV, RiscVDriver, elf}
 
 // What the driver puts in an array before entry.
@@ -19,12 +20,20 @@ import elms.koika.test.riscv.{RiscV, RiscVDriver, elf}
 // and `__SMACK_value(arr)` is the pointer rather than what it points at. So an
 // array's base address is always public and identical in the two runs, and this
 // is only about the contents.
+//
+// [bound] is the top of the range each word draws from, and it is load
+// bearing rather than a knob. `fscalar_product` reads clean at 20 and leaks at
+// `Int.MaxValue`, because the branch its verdict turns on is a carry out of a
+// product, and products of small numbers do not carry. A bound chosen for
+// checker cost is a bound that can answer the wrong question, so every port
+// writes its own down.
 enum Fill derives CanEqual {
-  // A draw in each state. Whether the timer can tell them apart is the question.
-  case Secret
+  // A draw in each state, from `[0, bound]`. Whether the timer can tell them
+  // apart is the question.
+  case Secret(bound: Int)
   // One draw, written into both. The attacker chose it, and both runs face the
   // same attacker.
-  case Public
+  case Public(bound: Int)
   // Nothing. `init` has already zeroed `mem` and the function only writes here,
   // so a draw would be nondets CBMC carries around for no reason.
   case Out
@@ -35,6 +44,9 @@ enum Fill derives CanEqual {
 enum Param derives CanEqual {
   // A scalar in an argument register, drawn from `[0, bound]`.
   case Word(secret: Boolean, bound: Int)
+  // A `uint64`, which ilp32 passes in two registers, low half first. Each half
+  // is its own draw from `[0, bound]`.
+  case Wide(secret: Boolean, bound: Int)
   // A run of `mem`, whose base address is what the register holds.
   case Arr(words: Int, fill: Fill)
 }
@@ -67,8 +79,17 @@ object Expect {
 // A ported function and what its arguments mean. [name] is both the object file
 // under `src/test/fact` and the label on the snapshot. [stack] is how many bytes
 // of frame it spills, which the layout has to leave room for.
-case class Program(name: String, params: List[Param], stack: Int, expect: Expect)
-    derives CanEqual
+//
+// [klee] is a claim about the backend rather than about the program, which is
+// why it sits beside [expect] rather than inside it: CBMC and Eva answer every
+// port, and KLEE has a budget.
+case class Program(
+    name: String,
+    params: List[Param],
+    stack: Int,
+    expect: Expect,
+    klee: Reach = Reach.Settles
+) derives CanEqual
 
 object Program {
   // FaCT's `choose(secret bool cond, public uint32 a, public uint32 b)`, shared
@@ -92,8 +113,8 @@ object Program {
       "salsa20",
       List(
         Param.Arr(16, Fill.Out),
-        Param.Arr(4, Fill.Secret),
-        Param.Arr(8, Fill.Secret)
+        Param.Arr(4, Fill.Secret(20)),
+        Param.Arr(8, Fill.Secret(20))
       ),
       stack = 96,
       expect = Expect.uniform(Verdict.Clean)
@@ -107,8 +128,8 @@ object Program {
       "guarded",
       List(
         Param.Word(secret = false, bound = 23),
-        Param.Arr(16, Fill.Public),
-        Param.Arr(8, Fill.Secret),
+        Param.Arr(16, Fill.Public(20)),
+        Param.Arr(8, Fill.Secret(20)),
         Param.Arr(8, Fill.Out)
       ),
       stack = 0,
@@ -120,7 +141,44 @@ object Program {
     // that pass puts back is on a secret, so nothing has to speculate for the
     // timer to notice.
     Program("choose", choose, stack = 0, expect = Expect.uniform(Verdict.Clean)),
-    Program("folded", choose, stack = 0, expect = Expect.uniform(Verdict.Leak))
+    Program("folded", choose, stack = 0, expect = Expect.uniform(Verdict.Leak)),
+    // `folded` again with the optimizer replaced by the backend, and the story
+    // is in `src/test/fact/fscalar_product.fact`. Five `uint64` limbs times a
+    // `uint64` scalar is 22 `mul` and 21 `mulhu` on ilp32, which is why this
+    // is the port RV32M exists for, and it is also four `beq`s: llc lowers a
+    // 64-bit carry comparison as a branch, its arms differ by one `sltu`, and
+    // the value it tests is a secret. Nobody wrote that branch. It leaks on
+    // every column, including `naive`, which has neither a cache nor a
+    // predictor in it.
+    //
+    // `Int.MaxValue` and not the 20 above it, because the bound is what makes
+    // the verdict mean anything here. At 20 no product carries, all four
+    // branches go the same way in both runs, and CBMC proves clean in four
+    // seconds about a program whose only interesting path it was told to skip.
+    Program(
+      "fscalar_product",
+      List(
+        Param.Arr(10, Fill.Out),
+        Param.Arr(10, Fill.Secret(Int.MaxValue)),
+        Param.Wide(secret = true, bound = Int.MaxValue)
+      ),
+      stack = 16,
+      expect = Expect.uniform(Verdict.Leak),
+      // The only port that carries this, and the label was measured on
+      // `naive`, the cheapest of the five cells. KLEE spent the whole 1200
+      // seconds, halted on its own timer with 111 live states and no completed
+      // path, and wrote no `.assert.err`: 46434 instructions and 21257 queries
+      // in twenty minutes, which is a rate, not an answer.
+      //
+      // Why this one and not `folded`, which is the same leak. `folded` is
+      // five instructions and the secret is one bit. Here the branch is four
+      // deep in a 215-instruction residue, what it tests is a carry out of a
+      // 64x64 product, and every operand is a full symbolic word.
+      //
+      // A run that does finish still has to say `leak`, which is what the
+      // label buys: expensive rather than unreachable.
+      klee = Reach.LikelyTimeout
+    )
   )
 }
 
@@ -144,21 +202,34 @@ abstract class FactDriver(val program: Program) extends RiscVDriver[64] {
   // where its contents start.
   private case class Slot(param: Param, reg: Int, at: Int)
 
+  // How many argument registers a parameter takes, and how many words of `mem`
+  // its contents want.
+  private def width(p: Param): (Int, Int) = p match {
+    case Param.Arr(n, _)  => (1, n)
+    case Param.Word(_, _) => (1, 0)
+    case Param.Wide(_, _) => (2, 0)
+  }
+
   // a0 is regs[10], and arrays stack up from the bottom of `mem` in parameter
   // order. Nothing in the object constrains either choice.
   private lazy val slots: List[Slot] =
-    program.params.zipWithIndex
-      .foldLeft((List.empty[Slot], 0)) { case ((acc, free), (p, i)) =>
-        val next = p match {
-          case Param.Arr(n, _)  => free + n
-          case Param.Word(_, _) => free
-        }
-        (acc :+ Slot(p, 10 + i, free), next)
+    program.params
+      .foldLeft((List.empty[Slot], 10, 0)) { case ((acc, reg, free), p) =>
+        val (regs, words) = width(p)
+        (acc :+ Slot(p, reg, free), reg + regs, free + words)
       }
       ._1
 
-  private lazy val argWords: Int =
-    program.params.map { case Param.Arr(n, _) => n; case Param.Word(_, _) => 0 }.sum
+  // ilp32 wants a `uint64` in an *aligned* even-odd pair, so a [Param.Wide]
+  // landing on an odd register is one the ABI would have pushed along by one.
+  // Nothing ported so far does that, and guessing at the rule for a case
+  // nothing exercises is how it comes out wrong.
+  require(
+    slots.collect { case Slot(Param.Wide(_, _), r, _) => r }.forall(_ % 2 == 0),
+    s"${program.name} puts a uint64 on an odd register; ilp32 would skip one"
+  )
+
+  private lazy val argWords: Int = program.params.map(p => width(p)._2).sum
 
   // Arguments from word 0 up and the frame from the top down, which the 30
   // words the demos run on cannot hold between them. The length is pinned in
@@ -174,11 +245,11 @@ abstract class FactDriver(val program: Program) extends RiscVDriver[64] {
   private def public(s: Slot): String = s match {
     case Slot(Param.Arr(n, fill), r, at) => {
       val contents = fill match {
-        case Fill.Public =>
+        case Fill.Public(hi) =>
           s"""
              |  // its contents, public: the same draw in both states
              |  for (int i=0; i<$n; i++) {
-             |    int v = bounded(0, 20);
+             |    int v = bounded(0, $hi);
              |    s1.mem[$at + i] = v;
              |    s2.mem[$at + i] = v;
              |  }""".stripMargin
@@ -196,23 +267,42 @@ abstract class FactDriver(val program: Program) extends RiscVDriver[64] {
          |  int a$r = bounded(0, $hi);
          |  s1.regs[$r] = a$r;
          |  s2.regs[$r] = a$r;""".stripMargin
+    case Slot(Param.Wide(false, hi), r, _) =>
+      s"""
+         |  // a$r and a${r + 1}, public: a uint64's halves, one draw each,
+         |  // written into both states
+         |  int a$r = bounded(0, $hi);
+         |  int a${r + 1} = bounded(0, $hi);
+         |  s1.regs[$r] = a$r;
+         |  s2.regs[$r] = a$r;
+         |  s1.regs[${r + 1}] = a${r + 1};
+         |  s2.regs[${r + 1}] = a${r + 1};""".stripMargin
     case Slot(Param.Word(true, _), _, _) => ""
+    case Slot(Param.Wide(true, _), _, _) => ""
   }
 
   // Two draws. The whole question is whether the timer can tell them apart.
   private def secret(s: Slot): String = s match {
-    case Slot(Param.Arr(n, Fill.Secret), r, at) =>
+    case Slot(Param.Arr(n, Fill.Secret(hi)), r, at) =>
       s"""
          |  // a$r's contents, secret: a different draw in each state
          |  for (int i=0; i<$n; i++) {
-         |    s1.mem[$at + i] = secret(0, 20);
-         |    s2.mem[$at + i] = secret(0, 20);
+         |    s1.mem[$at + i] = secret(0, $hi);
+         |    s2.mem[$at + i] = secret(0, $hi);
          |  }""".stripMargin
     case Slot(Param.Word(true, hi), r, _) =>
       s"""
          |  // a$r, secret: a different draw in each state
          |  s1.regs[$r] = secret(0, $hi);
          |  s2.regs[$r] = secret(0, $hi);""".stripMargin
+    case Slot(Param.Wide(true, hi), r, _) =>
+      s"""
+         |  // a$r and a${r + 1}, secret: a uint64's halves, drawn separately
+         |  // in each state
+         |  s1.regs[$r] = secret(0, $hi);
+         |  s2.regs[$r] = secret(0, $hi);
+         |  s1.regs[${r + 1}] = secret(0, $hi);
+         |  s2.regs[${r + 1}] = secret(0, $hi);""".stripMargin
     case _ => ""
   }
 

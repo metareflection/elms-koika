@@ -6,8 +6,8 @@ import elms.prelude.given
 import elms.koika.test.{KoikaSuite, Taint}
 import elms.koika.test.common.{Cached, Forwarding, Init, Predictive, Static}
 
-// The FaCT ports against every model. Four programs, two that hold up and two
-// that say where FaCT's guarantee stops.
+// The FaCT ports against every model. Five programs, two that hold up and
+// three that say where FaCT's guarantee stops.
 //
 // `salsa20` is the positive control, and what it controls for is size.
 // Everything else in the tree that verifies clean does so in under twenty
@@ -23,11 +23,18 @@ import elms.koika.test.common.{Cached, Forwarding, Init, Predictive, Static}
 // `folded` is the same LLVM with `instcombine` after it, which puts the branch
 // back, and it leaks under every model. Nothing speculates in that one.
 //
-// `forwarding` is a fifth column and says nothing new about any of these four,
-// which is worth having anyway. Neither `choose.o` nor `folded.o` contains a
-// store, so their snapshots there are their `predictive` twins to the byte;
-// `guarded.o` has one and `salsa20.o` has thirty-eight, and neither turns a
-// verdict. The demos that exercise the queue are `riscv/bypass`.
+// `fscalar_product` is that pair's third member and needs no extra pass to be
+// it. The source has no conditional and neither does the `.ll`, and llc still
+// emits four `beq`s, because a 64-bit carry comparison on a 32-bit target
+// lowers as a branch. It leaks under every model for the same reason `folded`
+// does.
+//
+// `forwarding` is a fifth column and says nothing new about any of these
+// five, which is worth having anyway. Neither `choose.o` nor `folded.o`
+// contains a store, so their snapshots there are their `predictive` twins to
+// the byte; `guarded.o` has one, `fscalar_product.o` has sixteen and `salsa20.o`
+// has thirty-eight, and none of them turns a verdict. The demos that exercise
+// the queue are `riscv/bypass`.
 //
 // `src/test/fact/*.fact` has the rest of all of it.
 
@@ -40,7 +47,7 @@ class FactNaiveTests extends KoikaSuite {
       val snippet = new FactDriver(p) {
         override val init = Init.Spilling.naive(stateT)
       }
-      check(p.name, snippet, p.expect.naive)
+      check(p.name, snippet, p.expect.naive, klee = p.klee)
     }
   }
 }
@@ -64,7 +71,7 @@ class FactCacheTests extends KoikaSuite {
         override val init = Init.Spilling.cache(stateT)
       }
       val eva = widens.getOrElse(p.name, Taint.Agrees)
-      check(p.name, snippet, p.expect.cache, eva = eva)
+      check(p.name, snippet, p.expect.cache, klee = p.klee, eva = eva)
     }
   }
 }
@@ -78,7 +85,7 @@ class FactStaticTests extends KoikaSuite {
       val snippet = new FactDriver(p) with Static {
         override val init = Init.Spilling.speculative(stateT)
       }
-      check(p.name, snippet, p.expect.static)
+      check(p.name, snippet, p.expect.static, klee = p.klee)
     }
   }
 }
@@ -92,7 +99,7 @@ class FactPredictiveTests extends KoikaSuite {
       val snippet = new FactDriver(p) with Predictive {
         override val init = Init.Spilling.speculative(stateT)
       }
-      check(p.name, snippet, p.expect.predictive)
+      check(p.name, snippet, p.expect.predictive, klee = p.klee)
     }
   }
 }
@@ -106,7 +113,7 @@ class FactForwardingTests extends KoikaSuite {
       val snippet = new FactDriver(p) with Forwarding {
         override val init = Init.Spilling.forwarding(stateT)
       }
-      check(p.name, snippet, p.expect.forwarding)
+      check(p.name, snippet, p.expect.forwarding, klee = p.klee)
     }
   }
 }

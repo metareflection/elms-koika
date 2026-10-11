@@ -1,0 +1,57 @@
+// One limb-wise multiply from curve25519-donna, out of
+// `donna/curve25519-c64.fact` in PLSysSec/fact-eval, which is the case study
+// accompanying the FaCT paper. Everything below the header is that file's
+// lines 56-77 unchanged except for the `export`, which `fmonty` would
+// otherwise supply by calling it.
+//
+// This is the port RV32M exists for. The limbs are `uint64` and the
+// accumulator is `uint128`, so each of the five lines is a 64x64 widening
+// multiply, and on a 32-bit machine that is four `mul` and four `mulhu`
+// apiece. Without the extension llc lowers every one of them to a `__mulsi3`
+// or `__muldi3` libcall, and a call to a symbol no `auipc` in the object
+// computed is the dynamic jump [Decode] refuses. The whole function is 22
+// `mul` and 21 `mulhu`.
+//
+// It is also `folded` again with the backend standing in for the optimizer,
+// and that is the finding. There is no conditional anywhere above: every index
+// is a literal and the scalar is multiplied whatever it holds. The `.ll` FaCT
+// emits has no branch in it either. llc puts four back, because a 64-bit
+// `sltu` lowers as
+//
+//   beq  t2, t4, .LBB0_2
+//   sltu t3, t2, t4
+//   .LBB0_2:
+//
+// and the arms of that differ by one instruction. What it tests is a carry out
+// of a secret product, so the timer separates the two runs on `naive`, with
+// neither a cache nor a predictor in the model. `choose`/`folded` is the same
+// shape with `instcombine` as the culprit; this one needs no extra pass, only
+// a 32-bit target.
+//
+// The bound the draws use is what decides whether any of that is visible.
+// Products of numbers below 21 do not carry, every branch goes the same way in
+// both runs, and the residue verifies clean. [Program] is where the bound is
+// written down and why.
+
+/* Multiply a number by a scalar: output = input * scalar */
+export void
+fscalar_product(secret mut uint64[5] output, secret uint64[5] input, secret uint64 scalar) {
+  secret mut uint128 a = 0;
+
+  a = uint128(input[0]) * scalar;
+  output[0] = uint64(a) & 0x7ffffffffffff;
+
+  a = uint128(input[1]) * scalar + uint64(a >> 51);
+  output[1] = uint64(a) & 0x7ffffffffffff;
+
+  a = uint128(input[2]) * scalar + uint64(a >> 51);
+  output[2] = uint64(a) & 0x7ffffffffffff;
+
+  a = uint128(input[3]) * scalar + uint64(a >> 51);
+  output[3] = uint64(a) & 0x7ffffffffffff;
+
+  a = uint128(input[4]) * scalar + uint64(a >> 51);
+  output[4] = uint64(a) & 0x7ffffffffffff;
+
+  output[0] += uint64((a >> 51) * 19);
+}
