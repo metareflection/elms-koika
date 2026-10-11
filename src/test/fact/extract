@@ -1,0 +1,68 @@
+#!/usr/bin/env zsh
+
+# usage: ./extract <module.ll> <function> [name]
+#
+# e.g. ./extract crypto_secretbox/ll/crypto_secretbox.asm.ll _salsa_keysetup
+#
+# One `define` out of a fact-eval module and into a `<name>.ll` of its own, so
+# that `./build` can lower it the way it lowers every other `.ll` here. The
+# result is checked in; the clone this reads is not, and the provenance header
+# the script writes is the only record of which module and which commit a file
+# came from.
+#
+# Only leaf functions survive the trip. A `define` that calls another one comes
+# out with the callee missing, and `llc` emits a jump to a symbol the ELF
+# reader cannot resolve. There is no check for that here because the lowering
+# is where it shows up, loudly.
+
+set -e
+here=${0:a:h}
+eval=$here/.fact-eval
+
+(( $# >= 2 )) || { echo "usage: ${0:t} <module.ll> <function> [name]" >&2; exit 1 }
+module=$1 fn=$2 name=${3:-${2##_}}
+
+if [[ ! -d $eval ]]; then
+    echo "Cloning fact-eval"
+    git clone --depth 1 https://github.com/PLSysSec/fact-eval.git $eval
+fi
+
+src=$eval/$module
+[[ -f $src ]] || { echo "no such module: $module" >&2; exit 1 }
+
+# Everything before the first `define` is the module header: the datalayout and
+# triple `./build` rewrites, plus whatever struct types and intrinsic
+# declarations the module needs. `attributes` sits at the far end of the file
+# and the declarations reference it by number, so it comes along too.
+#
+# `internal` is what makes a fact-eval function invisible outside its module.
+# Stripping it is the whole edit; the body is verbatim.
+body=$(awk -v fn="@$fn(" '
+    index($0, "define") == 1 && index($0, fn) { p = 1 }
+    p { print }
+    p && $0 == "}" { exit }
+' $src)
+
+[[ -n $body ]] || { echo "no define for @$fn in $module" >&2; exit 1 }
+
+# Where the module came from, which is two different answers. A clean clone is
+# reproducible from the commit below; a module `./factc --eval` rebuilt is not,
+# and the difference is a flag that changes what the function does.
+if [[ -n $(git -C $eval status --porcelain -- $module) ]]; then
+    origin="rebuilt in place by \`./factc --eval\`, so with -no-inline-asm"
+else
+    origin="as upstream checked it in, so with x86 inline asm wherever FaCT selects"
+fi
+
+{
+    echo "; @$fn, by src/test/fact/extract. The body is verbatim apart from"
+    echo "; the \`internal\` that kept it inside its module."
+    echo ";"
+    echo "; $module of PLSysSec/fact-eval@$(git -C $eval rev-parse --short HEAD),"
+    echo "; $origin."
+    awk '/^define/ { exit } { print }' $src
+    echo ${body/#define internal /define }
+    grep '^attributes' $src || true
+} > $here/$name.ll
+
+echo "wrote $name.ll"

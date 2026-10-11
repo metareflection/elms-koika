@@ -45,3 +45,4 @@ src/test/asm/riscv/pht/*.o
 src/test/fact/*.o
 src/test/fact/*.s
 src/test/fact/.factc-src/
+src/test/fact/.fact-eval/

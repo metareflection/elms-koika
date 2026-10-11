@@ -1,10 +1,20 @@
 #!/usr/bin/env zsh
 
-# usage: ./factc                 regenerate every *.ll from its *.fact
-#        ./factc foo.fact ...    just these
+# usage: ./factc                     regenerate every *.ll from its *.fact
+#        ./factc foo.fact ...        just these
+#        ./factc --eval <module>     rebuild a fact-eval module's `.ll` in place
 #
 # Nothing in the test run needs this. The `.ll` files it writes are checked in,
 # and `./build` lowers those; this is only for when a `.fact` source changes.
+#
+# `--eval` is the other direction. The `.ll` checked into fact-eval was built
+# without `-no-inline-asm`, so every selection in it is an x86 `cmovnz` written
+# as inline assembly and `llc` for riscv32 will not take it. This rebuilds the
+# module with the flag on, over the top of the clone's own copy, and then
+# `./extract` pulls a function out of the result. Which is also why `extract`
+# checks whether the file it read is still the one git has: a `.ll` rebuilt here
+# and a `.ll` cloned from upstream are different provenance and only one of them
+# is reproducible from a commit hash.
 #
 # FaCT wants OCaml 4.06 and LLVM 6.0, so it builds inside the image its authors
 # published in 2018. That image is a 3GB pull and the compiler takes a couple of
@@ -24,8 +34,37 @@ if [[ ! -d $here/.factc-src ]]; then
     git clone --depth 1 https://github.com/PLSysSec/FaCT.git $here/.factc-src
 fi
 
-srcs=(${@:-$here/*.fact})
-cp $srcs $work/
+# Which sources make up a fact-eval module and what its `.ll` is called, out of
+# that module's own Makefile. Nothing in the clone records the pairing: the
+# Makefile runs `factc` on a list and then `mv`s whatever lands into `ll/`.
+#
+# What is not carried over is `crypto_secretbox`'s `-addl "-mretpoline ..."`,
+# which reaches the clang that turns the module into an object. `-llvm-out`
+# stops before that clang runs, so the flags cannot reach the `.ll` this writes.
+typeset -A eval_srcs=(
+    crypto_secretbox "stdlib.fact crypto_poly1305.fact u0.fact salsa20-avx2.fact crypto_secretbox.fact"
+    donna            "curve25519-c64.fact"
+)
+typeset -A eval_name=(
+    crypto_secretbox crypto_secretbox.asm
+    donna            curve25519-c64
+)
+# Where the `.ll` lands, relative to this directory. Empty is beside this
+# script, which is where a `.fact` checked in here belongs; `--eval` writes over
+# the clone's own copy instead, since that is the file `./extract` reads.
+module= rel=
+if [[ $1 == --eval ]]; then
+    module=$2
+    eval=$here/.fact-eval
+    [[ -n ${eval_srcs[$module]} ]] || { echo "no such fact-eval module: $module" >&2; exit 1 }
+    [[ -d $eval ]] || { echo "no $eval; run ./extract once to clone it" >&2; exit 1 }
+    srcs=(${~=eval_srcs[$module]})
+    rel=.fact-eval/$module/ll/
+    cp ${srcs/#/$eval/$module/} $work/
+else
+    srcs=(${@:-$here/*.fact})
+    cp $srcs $work/
+fi
 
 # Runs as root inside the container so that rootless podman maps the output
 # files back to the invoking user. The opam switch lives under /home/docker,
@@ -38,20 +77,26 @@ cp $srcs $work/
 # target-independent arithmetic. `./build` has the rest of that story.
 podman run --rm --entrypoint /bin/bash \
     -v "$here/.factc-src:/home/docker/FaCT:z" -v "$work:/work:z" \
-    -e HOME=/home/docker $image -lc '
+    -e HOME=/home/docker -e MODULE=$module -e SRCS="${srcs[*]}" \
+    -e NAME=${eval_name[$module]} $image -lc '
         eval $(opam config env)
         export LD_LIBRARY_PATH=/home/docker/.opam/4.06.0/lib/z3
         export PATH=/usr/lib/llvm-6.0/bin:$PATH
         cd /home/docker/FaCT
         [[ -x factc ]] || { oasis setup >/dev/null 2>&1; make >/dev/null; }
         cd /work
-        for f in *.fact; do
-            echo "factc $f"
-            /home/docker/FaCT/factc -llvm-out -no-inline-asm $f
-        done
+        if [[ -n "$MODULE" ]]; then
+            echo "factc $MODULE"
+            /home/docker/FaCT/factc -llvm-out -no-inline-asm $SRCS -o $NAME.o
+        else
+            for f in *.fact; do
+                echo "factc $f"
+                /home/docker/FaCT/factc -llvm-out -no-inline-asm $f
+            done
+        fi
     ' 2>&1 | grep -vE "ttyname|Running as root|overriding the module target|warning generated"
 
 for f in $work/*.ll; do
-    cp $f $here/${f:t}
-    echo "wrote ${f:t}"
+    cp $f $here/$rel${f:t}
+    echo "wrote $rel${f:t}"
 done
