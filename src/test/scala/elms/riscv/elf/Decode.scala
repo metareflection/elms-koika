@@ -1,7 +1,7 @@
 package elms.koika.test.riscv.elf
 
 import elms.koika.test.riscv.RiscV
-import RiscV.{AluOp, Cmp, Imm, Instr, Reg, Width}
+import RiscV.{AluOp, Cmp, Imm, Instr, MulOp, Reg, Width}
 
 // One word, decoded. [Ret] stands apart from [Instr] because `jalr x0, 0(x1)`
 // only becomes a jump once the length of the program is known, and that is the
@@ -15,9 +15,10 @@ enum Decoded derives CanEqual {
   case Jalr(rd: Reg, rs1: Reg, imm: Int)
 }
 
-// RV32I encodings, back to [RiscV.Instr]. No files, no ELF and no state, so the
-// two scrambled immediate formats are testable on hand-written hex, which
-// matters because the object files this feeds are generated and gitignored.
+// RV32I and RV32M's multiplies, back to [RiscV.Instr]. No files, no ELF and no
+// state, so the two scrambled immediate formats are testable on hand-written
+// hex, which matters because the object files this feeds are generated and
+// gitignored.
 object Decode {
   // `jalr x0, 0(x1)`, the only dynamic jump with a static meaning.
   val ret: Int = 0x00008067
@@ -78,6 +79,9 @@ object Decode {
 
   private val stores: Map[Int, Width] = Map(0 -> Width.B, 1 -> Width.H, 2 -> Width.W)
 
+  private val muls: Map[Int, MulOp] =
+    Map(0 -> MulOp.Mul, 1 -> MulOp.Mulh, 2 -> MulOp.Mulhsu, 3 -> MulOp.Mulhu)
+
   private def form(w: Int): Either[String, Instr] = {
     val rd = Reg(bits(w, 11, 7))
     val rs1 = Reg(bits(w, 19, 15))
@@ -101,7 +105,14 @@ object Decode {
       case 0x13 if funct3 == 1 || funct3 == 5 =>
         pick(alu, (funct3, funct7), "shift").map(Instr.OpImm(_, rd, rs1, Imm(shamt)))
       case 0x13 => pick(alu, (funct3, 0x00), "op-imm").map(Instr.OpImm(_, rd, rs1, Imm(iImm(w))))
-      case 0x33 if funct7 == 0x01 => Left("RV32M is out of scope; rebuild with -march=rv32i")
+      // The other half of RV32M is `div`, `divu`, `rem` and `remu`, at `funct3`
+      // 4 to 7. [muls] has no row for them, so the message is theirs rather
+      // than [pick]'s, which would call them RV32I.
+      case 0x33 if funct7 == 0x01 =>
+        muls
+          .get(funct3)
+          .map(Instr.Mul(_, rd, rs1, rs2))
+          .toRight("`div` and `rem` are out of scope; rebuild without them")
       case 0x33 => pick(alu, (funct3, funct7), "op").map(Instr.Op(_, rd, rs1, rs2))
       // Reached only for a malformed `jalr`; the well-formed ones are taken in
       // [insn], which is where [Decoded] is in scope.

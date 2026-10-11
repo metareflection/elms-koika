@@ -1,7 +1,8 @@
 package elms.koika.test.riscv
 
-// RV32I, minus `FENCE`, `ECALL`, `EBREAK` and the CSR instructions, which have
-// no meaning in this model.
+// RV32I plus RV32M's four multiplies, minus `FENCE`, `ECALL`, `EBREAK` and the
+// CSR instructions, which have no meaning in this model. `div` and `rem` are
+// the rest of RV32M and are not here.
 //
 // `JALR` appears only in the two shapes a compiler emits it in. An
 // `auipc`/`jalr` pair with no relocation left on it has a target the reader can
@@ -18,6 +19,11 @@ object RiscV {
   enum AluOp derives CanEqual {
     case Add, Sub, Sll, Slt, Sltu, Xor, Srl, Sra, Or, And
   }
+  // Separate from [AluOp] because there is no `muli` and nothing here shares a
+  // shape with an op-imm. `div` and `rem` stay out: nothing measured needs
+  // them, and a divider's data-dependent latency is a different question from a
+  // multiplier's.
+  enum MulOp derives CanEqual { case Mul, Mulh, Mulhsu, Mulhu }
   enum Cmp derives CanEqual { case Eq, Ne, Lt, Ge, Ltu, Geu }
   enum Width derives CanEqual { case B, H, W, Bu, Hu }
 
@@ -26,6 +32,7 @@ object RiscV {
   // happens at staging time.
   enum Instr derives CanEqual {
     case Op(op: AluOp, rd: Reg, rs1: Reg, rs2: Reg)
+    case Mul(op: MulOp, rd: Reg, rs1: Reg, rs2: Reg)
     case OpImm(op: AluOp, rd: Reg, rs1: Reg, imm: Imm)
     case Lui(rd: Reg, imm: Imm)
     case Auipc(rd: Reg, imm: Imm)

@@ -16,7 +16,7 @@ import RiscV.*
 // `@virtualize` is per-class, and forgetting it here does not fail to compile:
 // the guard conversion throws at staging time instead.
 @virtualize
-trait Exec extends Direct {
+trait Exec extends Direct with Multiplier {
   type Instr = RiscV.Instr
   type Reg = RiscV.Reg
   type Cond = (Cmp, RiscV.Reg, RiscV.Reg)
@@ -44,6 +44,7 @@ trait Exec extends Direct {
   override def speculable(i: Instr): Option[Reg] = i match {
     case Instr.Load(_, rd, _, _) => Some(rd)
     case Instr.Op(_, rd, _, _)   => Some(rd)
+    case Instr.Mul(_, rd, _, _)  => Some(rd)
     case Instr.OpImm(_, rd, _, _) => Some(rd)
     case Instr.Lui(rd, _)        => Some(rd)
     case Instr.Auipc(rd, _)      => Some(rd)
@@ -150,6 +151,10 @@ trait Exec extends Direct {
       prog(pc) match {
         case Instr.Op(op, rd, rs1, rs2) => {
           write(s, rd, alu(op, readReg(s, rs1), readReg(s, rs2)))
+          call(pc + 1, s)
+        }
+        case Instr.Mul(op, rd, rs1, rs2) => {
+          write(s, rd, mulOp(op, readReg(s, rs1), readReg(s, rs2)))
           call(pc + 1, s)
         }
         case Instr.OpImm(op, rd, rs1, imm) => {

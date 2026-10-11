@@ -3,10 +3,10 @@ package elms.koika.test.squared
 import elms.prelude.given
 import elms.core.macros.virtualize
 
-import elms.koika.test.riscv.RiscV
+import elms.koika.test.riscv.{Multiplier, RiscV}
 import RiscV.*
 
-// RV32I over a pair of runs.
+// RV32I and RV32M's multiplies, over a pair of runs.
 //
 // Every rule reads the same: the effects go through [each], because they are
 // each run's own, and where control goes next is shared. The branch is the
@@ -15,7 +15,7 @@ import RiscV.*
 // The single-run halves below are a transcription of
 // [elms.koika.test.riscv.Exec], which is where the ISA arguments live.
 @virtualize
-trait Exec extends Squared {
+trait Exec extends Squared with Multiplier {
   // A conditional direct branch: what it tests, and where it goes. Static,
   // because the operands are register names and the target is an offset.
   type Cond = (Cmp, Reg, Reg)
@@ -47,6 +47,7 @@ trait Exec extends Squared {
   def speculable(i: Instr): Option[Reg] = i match {
     case Instr.Load(_, rd, _, _)  => Some(rd)
     case Instr.Op(_, rd, _, _)    => Some(rd)
+    case Instr.Mul(_, rd, _, _)   => Some(rd)
     case Instr.OpImm(_, rd, _, _) => Some(rd)
     case Instr.Lui(rd, _)         => Some(rd)
     case Instr.Auipc(rd, _)       => Some(rd)
@@ -156,6 +157,10 @@ trait Exec extends Squared {
       prog(pc) match {
         case Instr.Op(op, rd, rs1, rs2) => {
           each(s)(h => write(h, rd, alu(op, readReg(h, rs1), readReg(h, rs2))))
+          call(pc + 1, s)
+        }
+        case Instr.Mul(op, rd, rs1, rs2) => {
+          each(s)(h => write(h, rd, mulOp(op, readReg(h, rs1), readReg(h, rs2))))
           call(pc + 1, s)
         }
         case Instr.OpImm(op, rd, rs1, imm) => {

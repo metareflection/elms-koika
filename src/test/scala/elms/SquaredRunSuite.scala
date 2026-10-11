@@ -20,6 +20,7 @@ import elms.koika.test.squared.{
   StaticRun
 }
 import elms.koika.test.riscv.{RiscV, elf}
+import RiscV.MulOp
 
 // The squared interpreter, run rather than staged.
 //
@@ -329,6 +330,75 @@ class SquaredRunSuite extends AnyFunSuite {
   // to be interesting, and it is why it is the one row that cannot say
   // anything about a cache.
   private val neverLoads = Set("spectre")
+
+  // RV32M's high half, run rather than argued about.
+  //
+  // `mulh`, `mulhsu` and `mulhu` want the top 32 bits of a 64-bit product and
+  // there is no `Rep[Long]`, so [riscv.Multiplier] builds them out of four
+  // 16-bit partial products and a carry. Nothing about that is readable off
+  // the source; what settles it is running it against `Long`, which is a
+  // different implementation rather than the same expression twice. Both
+  // towers mix in the one trait, so this covers the staged tower too.
+  private def product(op: MulOp, a: Int, b: Int): Int = {
+    val run = FlatRun(Vector(RiscV.Instr.Mul(op, RiscV.Reg(12), RiscV.Reg(10), RiscV.Reg(11))))
+    val chips = Vector.fill(2) {
+      val c = run.blank
+      c.regs(10) = a
+      c.regs(11) = b
+      c
+    }
+    run(chips(0), chips(1)) match {
+      case Outcome.InStep(_) => chips(0).regs(12)
+      case other             => fail(s"$op($a, $b): $other")
+    }
+  }
+
+  // The values the 16-bit split has a boundary at, each sign of the two
+  // corrections, and the two words whose signed and unsigned readings are
+  // furthest apart.
+  private val edges: Vector[Int] =
+    Vector(0, 1, -1, 2, -2, 0xffff, 0x10000, 0xffffffff, 0x7fffffff, Int.MinValue, 0x12345678)
+
+  private val pairs: Vector[(Int, Int)] = {
+    val r = Random(0x6d75)
+    val square = for { a <- edges; b <- edges } yield (a, b)
+    square ++ Vector.fill(500)((r.nextInt(), r.nextInt())) ++
+      edges.flatMap(e => Vector((e, r.nextInt()), (r.nextInt(), e)))
+  }
+
+  private def expected(op: MulOp, a: Int, b: Int): Int = {
+    val s1 = a.toLong
+    val s2 = b.toLong
+    val u1 = a.toLong & 0xffffffffL
+    val u2 = b.toLong & 0xffffffffL
+    op match {
+      case MulOp.Mul    => a * b
+      case MulOp.Mulh   => (s1 * s2 >> 32).toInt
+      case MulOp.Mulhsu => (s1 * u2 >> 32).toInt
+      case MulOp.Mulhu  => (u1 * u2 >>> 32).toInt
+    }
+  }
+
+  for (op <- MulOp.values) {
+    test(s"squared run $op agrees with a 64-bit product") {
+      val wrong = pairs.filter((a, b) => product(op, a, b) != expected(op, a, b))
+      assert(wrong.take(5) == Vector())
+    }
+  }
+
+  // Three of the four differ only in which operand gets a sign correction, so
+  // a sample that never separates them would pass with any one of the three
+  // wired to all four rows. These are the pairs that tell them apart, and the
+  // counts are what say the sample reaches them.
+  test("the sample separates the three high halves from each other") {
+    def apart(x: MulOp, y: MulOp): Int =
+      pairs.count((a, b) => expected(x, a, b) != expected(y, a, b))
+    assert(apart(MulOp.Mulh, MulOp.Mulhu) > 100)
+    assert(apart(MulOp.Mulh, MulOp.Mulhsu) > 100)
+    assert(apart(MulOp.Mulhsu, MulOp.Mulhu) > 100)
+    // And a high half that answered 0 everywhere would still have to fail.
+    assert(pairs.count((a, b) => expected(MulOp.Mulhu, a, b) != 0) > 100)
+  }
 
   // A model that charged nothing for what the one before it added would pass
   // every clean row above for the wrong reason, and the clean rows are what

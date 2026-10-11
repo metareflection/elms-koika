@@ -68,6 +68,11 @@ trait Common extends Isa with Returns {
     () => { retstack = was }
   }
 
+  // One cycle per instruction, RV32M's multiplies included. That is a
+  // modelling choice and not a neutral default: small cores ship
+  // variable-latency multipliers and the latency is itself a published
+  // channel, so a model where `mul` costs what its operands say is a column of
+  // its own, the way [Cached] is. Nothing in the tree asks for one yet.
   def tick(s: Rep[State]): Rep[Unit] = s.timer = s.timer + 1
 
   // Cycles the clock pays for, now.

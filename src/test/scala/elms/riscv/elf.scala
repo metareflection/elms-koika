@@ -47,6 +47,18 @@ class RiscVDecodeTests extends AnyFunSuite {
     )
   }
 
+  // RV32M's half of opcode 0x33, which `funct7 = 0x01` is the whole of. The
+  // four here are every one of them the tower executes; `funct3` 4 to 7 are
+  // `div` and `rem`, and the test below is where they are refused.
+  test("the four multiplies, one per funct3") {
+    decodes(
+      0x023100b3 -> Instr.Mul(MulOp.Mul, Reg(1), Reg(2), Reg(3)),
+      0x02629233 -> Instr.Mul(MulOp.Mulh, Reg(4), Reg(5), Reg(6)),
+      0x029423b3 -> Instr.Mul(MulOp.Mulhsu, Reg(7), Reg(8), Reg(9)),
+      0x02c5b533 -> Instr.Mul(MulOp.Mulhu, Reg(10), Reg(11), Reg(12))
+    )
+  }
+
   // `srai` sets bit 30, so reading a shift-immediate the I-type way would give
   // 1031 rather than 7. `funct7` is the discriminator there and part of the
   // immediate everywhere else.
@@ -131,7 +143,8 @@ class RiscVDecodeTests extends AnyFunSuite {
   }
 
   test("what the tower does not decode says what to do about it") {
-    assert(why(0x023100b3).contains("-march=rv32i"))
+    // `div x1, x2, x3`, which is `mul` next door with `funct3` 4 instead of 0.
+    assert(why(0x023140b3).contains("`div` and `rem`"))
     assert(why(0x0ff0000f).contains("`fence`"))
     assert(why(0x00000073).contains("out of scope"))
     // A `lw` with no width, and a compressed instruction, neither of which has
@@ -185,6 +198,7 @@ class RiscVElfTests extends AnyFunSuite {
 
   private def regs(i: Instr): Set[Reg] = i match {
     case Instr.Op(_, rd, rs1, rs2)    => Set(rd, rs1, rs2)
+    case Instr.Mul(_, rd, rs1, rs2)   => Set(rd, rs1, rs2)
     case Instr.OpImm(_, rd, rs1, _)   => Set(rd, rs1)
     case Instr.Lui(rd, _)             => Set(rd)
     case Instr.Auipc(rd, _)           => Set(rd)
@@ -337,9 +351,9 @@ class RiscVElfTests extends AnyFunSuite {
 
   test("what the tower cannot execute is rejected where it sits") {
     val text = sectionAt(".text")
-    // `mul a0, a1, a2` and `jalr a0, 0(a1)`, over the `mv a1, a0` at .text+0.
-    assert(patched(text -> 0x33, text + 1 -> 0x85, text + 2 -> 0xc5, text + 3 -> 0x02)
-      .mkString.contains("-march=rv32i"))
+    // `div a0, a1, a2` and `jalr a0, 0(a1)`, over the `mv a1, a0` at .text+0.
+    assert(patched(text -> 0x33, text + 1 -> 0xc5, text + 2 -> 0xc5, text + 3 -> 0x02)
+      .mkString.contains("`div` and `rem`"))
     val jalr = patched(text -> 0x67, text + 1 -> 0x85, text + 2 -> 0x05, text + 3 -> 0x00)
     assert(jalr.mkString.contains("cmp.o .text+0x0"))
     // The reader is where this is refused rather than the decoder, so the
