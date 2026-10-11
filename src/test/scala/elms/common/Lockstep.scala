@@ -30,7 +30,8 @@ import elms.core.tree.{E, Function, Let, Note, Program, Term, V, View}
 // holding, and it grows with the path space. Against the two-entry cache this
 // predates, `branchy` at eighteen probes was 30.1s against 149.9s. Against the
 // one in the tree now it is 1.47s against 1.31s at the four probes `branchy`
-// ships, which is the wrong way round; the README has the rest of that story.
+// ships, which is the wrong way round; `doc/squared-tower.md` has the rest of
+// that story.
 //
 // It also has a precondition that is easy to lose: the two runs' addresses have
 // to be provably equal. `Cached` writes a dirty line back at an index nobody
