@@ -15,7 +15,7 @@ SIZE=16
 # toolchain at all. The gcc names are written from the documented flags and have
 # never run: this box has x86_64 gcc only.
 as=()
-if echo 'addi x1, x0, 1' | clang --target=riscv32 -march=rv32i -mabi=ilp32 \
+if echo 'addi x1, x0, 1' | clang --target=riscv32 -march=rv32im -mabi=ilp32 \
         -c -x assembler -o /dev/null - 2>/dev/null; then
     as=(clang --target=riscv32)
 else
@@ -30,8 +30,13 @@ if (( ! $#as )); then
     exit 1
 fi
 
+# `rv32im` and not `rv32i`, so a demo may write `mul`. The extension only
+# widens what the assembler accepts: every `.text` in the tree came out
+# byte-identical when it was turned on, and what moved was `.riscv.attributes`,
+# which nothing reads. `div` and `rem` the tower still refuses, and it refuses
+# them at the reader rather than here.
 assemble() {
-    $as -march=rv32i -mabi=ilp32 -mno-relax \
+    $as -march=rv32im -mabi=ilp32 -mno-relax \
         -Wa,--defsym,SECRET=$SECRET -Wa,--defsym,SIZE=$SIZE "${@:3}" \
         -c $1 -o $2 || exit 1
 }
@@ -48,7 +53,7 @@ merge=()
 [[ ${as[1]} == clang ]] && merge=(-mllvm -enable-global-merge=false)
 
 compile() {
-    $as -march=rv32i -mabi=ilp32 -mno-relax -O1 $merge -c $1 -o $2 || exit 1
+    $as -march=rv32im -mabi=ilp32 -mno-relax -O1 $merge -c $1 -o $2 || exit 1
 }
 
 for src in $here/*.s; do

@@ -2,7 +2,7 @@
 
 # usage: ./build
 #
-# Every `.ll` here to an RV32I object the ELF reader can load. The `.ll` files
+# Every `.ll` here to an RV32IM object the ELF reader can load. The `.ll` files
 # are FaCT's own output and are checked in, so nothing here needs the FaCT
 # compiler; `./factc` beside this script is what regenerates them, and it wants
 # podman and about 3GB of 2018 Ubuntu.
@@ -13,13 +13,13 @@ for tool in opt llc; do
     (( $+commands[$tool] )) || { echo "no $tool on PATH; install LLVM" >&2; exit 1 }
 done
 
-if ! echo 'addi x1, x0, 1' | clang --target=riscv32 -march=rv32i -mabi=ilp32 \
+if ! echo 'addi x1, x0, 1' | clang --target=riscv32 -march=rv32im -mabi=ilp32 \
         -c -x assembler -o /dev/null - 2>/dev/null; then
     echo "clang cannot target riscv32; the FaCT suite has no gcc fallback" >&2
     exit 1
 fi
 
-cc=(clang --target=riscv32 -march=rv32i -mabi=ilp32 -mno-relax)
+cc=(clang --target=riscv32 -march=rv32im -mabi=ilp32 -mno-relax)
 
 # FaCT hardcodes an x86-64 module header, and a 64-bit pointer size would make
 # every `getelementptr` in an array function lower wrong. Rewriting the two
@@ -53,12 +53,18 @@ retarget() {
 # second way is built that way on purpose.
 passes=mem2reg
 
+# `+m` is what keeps a multiply an instruction. Without it llc lowers one to a
+# `__mulsi3` libcall, and a call to a symbol no `auipc` in the object computed
+# is a dynamic jump the reader refuses. None of the four modules below
+# multiplies, so turning it on left every one of their `.text` sections
+# unchanged.
 lower() {
     local out=$1 module=$2 with=$3
     echo "Lowering $module.ll -> $out.o"
     retarget $here/$module.ll \
         | opt -passes=$with -S \
-        | llc -mtriple=riscv32 -O2 --relocation-model=static -o $here/$out.s || exit 1
+        | llc -mtriple=riscv32 -mattr=+m -O2 --relocation-model=static \
+            -o $here/$out.s || exit 1
     $cc -c $here/$out.s -o $here/$out.o || exit 1
 }
 
