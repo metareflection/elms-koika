@@ -83,11 +83,39 @@ trait Predictive extends Cached {
   // Whether a slot is keyed on the whole history or only on the part of it
   // anything downstream can still read.
   //
+  // On. [predict] is only ever asked about a branch the slot can reach, so two
+  // histories agreeing on those stage the same code and the rest of the map is
+  // a key component nothing reads. What it bought where it was first measured:
+  // seven balanced branches in a row numbered one pc into 985 functions with
+  // the whole map and 46 with this, which is what the model emits carrying no
+  // history at all.
+  //
+  // It buys nothing inside a loop, where no entry is dead, and
+  // `HistoryFanoutSuite` is where both halves of that are kept.
+  def liveHistoryOnly: Boolean = true
 
   // The branches [pc] can still reach, with a window's recovery path counted
   // too since that is somewhere control may yet go.
+  // Everything this slot can still consult: what [pc] reaches, and what the
+  // recovery path reaches, since a window that guessed wrong goes there.
+  // [None] from either one means the ISA declined to say and the key keeps the
+  // whole map.
+  protected def liveAt(pc: Int, w: Option[Window]): Option[Set[Int]] =
+    for {
+      here <- liveBranchesAt(pc)
+      back <- w.fold(Option(Set.empty[Int]))(x => liveBranchesAt(x.pending.recovery))
+    } yield here ++ back
 
-  override def slot(pc: Int): Int = intern(Key(pc, window, learned, retstack))
+  override def slot(pc: Int): Int =
+    intern(Key(pc, window, keyedHistory(pc), retstack))
+
+  // The history as the key records it: all of it, or only the part anything
+  // downstream can still read.
+  protected def keyedHistory(pc: Int): Map[Int, Boolean] =
+    if (!liveHistoryOnly) { learned }
+    else {
+      liveAt(pc, window).fold(learned)(live => learned.filter { case (b, _) => live(b) })
+    }
 
   override def live(at: Int): Boolean = interned(at) match {
     // Running off the end of [prog] with a branch still in flight is a real

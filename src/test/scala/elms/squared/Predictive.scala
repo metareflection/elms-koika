@@ -89,7 +89,27 @@ trait Predictive extends Cached with Exec {
   private def goto(w: Option[Window], l: Map[Int, Boolean], pc: Int, s: Pair): Pair =
     under(w, l) { call(pc, s) }
 
-  override def slot(pc: Int): Int = intern(Key(pc, active, retstack, window, learned))
+  // Whether a slot is keyed on the whole history or only on the part of it
+  // anything downstream can still read. [common.Predictive] carries the same
+  // seam, and the two towers have no ancestor between them to share it.
+  def liveHistoryOnly: Boolean = true
+
+  override def slot(pc: Int): Int =
+    intern(Key(pc, active, retstack, window, keyedHistory(pc)))
+
+  // Everything this slot can still consult: what [pc] reaches, and what a
+  // window's recovery path reaches. [None] from either means the ISA declined
+  // to say and the key keeps the whole map.
+  protected def keyedHistory(pc: Int): Map[Int, Boolean] =
+    if (!liveHistoryOnly) { learned }
+    else {
+      val live =
+        for {
+          here <- liveBranchesAt(pc)
+          back <- window.fold(Option(Set.empty[Int]))(w => liveBranchesAt(w.pending.recovery))
+        } yield here ++ back
+      live.fold(learned)(l => learned.filter { case (b, _) => l(b) })
+    }
 
   override def live(at: Int): Boolean = interned(at) match {
     // Running off the end of [prog] with a branch still in flight is a real

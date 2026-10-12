@@ -1,5 +1,7 @@
 package elms.koika.test.riscv
 
+import scala.collection.mutable
+
 import elms.prelude.*
 import elms.prelude.given
 
@@ -34,6 +36,14 @@ trait Exec extends Direct with Multiplier {
   // the live part of the predictor's history. Anything a return can land on is
   // counted, because where control goes once this function returns is not
   // something one pc can see.
+  // Memoized, because `slot` asks this once per arrival and the walk behind it
+  // is over the whole program. [Predictive] is the only caller and it asks a
+  // great many times.
+  private val live = mutable.Map[Int, Set[Int]]()
+
+  override def liveBranchesAt(pc: Int): Option[Set[Int]] =
+    Some(live.getOrElseUpdate(pc, Flow.trains(prog, pc) ++ consulted))
+
   // A byte offset lands on an instruction index, and a misaligned one is a bug
   // in the demo rather than something the generated C should have to check.
   private def target(pc: Int, offset: Imm): Int = {

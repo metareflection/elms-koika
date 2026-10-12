@@ -197,6 +197,12 @@ trait Squared extends Machine with Returns {
   // window without anyone noticing.
   def inlined: Boolean = false
 
+  // The branches [pc] can still reach, for a model that keys a slot on the
+  // live part of a predictor's history. [None] means the ISA cannot say, and
+  // the history is then left alone; an empty set would instead claim nothing
+  // downstream reads anything, which merges machines that predict differently.
+  def liveBranchesAt(pc: Int): Option[Set[Int]] = None
+
   // Staging-time state a slot carries that the worklist will not, and how to
   // put it back. [Predictive] interns the rest of its own into the slot
   // number.

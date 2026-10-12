@@ -60,7 +60,6 @@ struct StateT * slot_5(struct StateT * v267);
 struct StateT * slot_17(struct StateT * v1014);
 struct StateT * slot_2(struct StateT * v218);
 struct StateT * slot_7(struct StateT * v297);
-struct StateT * slot_21(struct StateT * v1378);
 struct StateT * slot_3(struct StateT * v226);
 struct StateT * snippet(struct StateT * v0);
 struct StateT * slot_10(struct StateT * v527);
@@ -70,6 +69,7 @@ struct StateT * slot_19(struct StateT * v1063);
 struct StateT * slot_4(struct StateT * v247);
 struct StateT * slot_13(struct StateT * v575);
 struct StateT * slot_15(struct StateT * v794);
+struct StateT * slot_18(struct StateT * v1058);
 struct StateT * slot_9(struct StateT * v513);
 struct StateT * slot_11(struct StateT * v547);
 struct StateT * slot_0(struct StateT * v2);
@@ -304,7 +304,7 @@ struct StateT * slot_17(struct StateT * v1014) {
     int v1029 = v1028[12];
     int * v1030 = v1014->regs;
     v1030[12] = v1029;
-    struct StateT * v1032 = slot_21(v1014);
+    struct StateT * v1032 = slot_18(v1014);
     v1036 = v1032;
   } else {
     struct StateT * v1034 = slot_19(v1014);
@@ -478,13 +478,6 @@ struct StateT * slot_7(struct StateT * v297) {
   v404[10] = v403;
   struct StateT * v406 = slot_8(v297);
   return v406;
-}
-
-struct StateT * slot_21(struct StateT * v1378) {
-  int v1379 = v1378->timer;
-  int v1382 = v1379 + 1;
-  v1378->timer = v1382;
-  return v1378;
 }
 
 struct StateT * slot_3(struct StateT * v226) {
@@ -930,7 +923,7 @@ struct StateT * slot_19(struct StateT * v1063) {
   v1228[v1372] = v1068;
   int * v1230 = v1063->cache_dirty;
   v1230[v1227] = 1;
-  struct StateT * v1232 = slot_21(v1063);
+  struct StateT * v1232 = slot_18(v1063);
   return v1232;
 }
 
@@ -1118,6 +1111,13 @@ struct StateT * slot_15(struct StateT * v794) {
   v901[11] = v900;
   struct StateT * v903 = slot_16(v794);
   return v903;
+}
+
+struct StateT * slot_18(struct StateT * v1058) {
+  int v1059 = v1058->timer;
+  int v1062 = v1059 + 1;
+  v1058->timer = v1062;
+  return v1058;
 }
 
 struct StateT * slot_9(struct StateT * v513) {

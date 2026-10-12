@@ -17,6 +17,17 @@ trait Common extends Isa with Returns {
   // The number is the function's identity, not a hint: it is what [slotName]
   // spells and what every call site to that slot writes down. Two slots that
   // number the same are one function whether or not they mean the same thing.
+  // The branches [pc] can still reach, for a model that keys a slot on the
+  // live part of a predictor's history. This is how [Predictive] gets a
+  // RISC-V answer without knowing about RISC-V.
+  //
+  // [None] and not an empty set, because the two would mean opposite things
+  // here and the wrong one is quiet. An ISA that cannot answer wants the
+  // history left alone; an empty set says nothing downstream reads anything,
+  // which collapses every history into one slot and merges machines that
+  // predict differently.
+  def liveBranchesAt(pc: Int): Option[Set[Int]] = None
+
   def slot(pc: Int): Int = keyed(pc)
   def resume(at: Int, s: Rep[State]): Rep[State] = step(pcOf(at), s)
   def live(at: Int): Boolean = pcOf(at) < prog.length

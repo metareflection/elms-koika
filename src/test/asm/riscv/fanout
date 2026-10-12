@@ -1,0 +1,101 @@
+#!/usr/bin/env zsh
+
+# usage: ./fanout [outdir]
+#
+# A sweep and not a demo. Nothing here claims a verdict; what these objects
+# measure is how many functions one pc is numbered into as the number of
+# branches before it grows, which is `HistoryFanoutSuite`'s question and the
+# one that decides whether `Predictive` reaches a real crypto routine.
+#
+# Three families, because the answer differs between them and the difference is
+# the whole point.
+#
+#   straight    k balanced branches in a row. Every history entry is dead the
+#               moment it is written, since nothing re-executes.
+#   loop-same   the same k branches inside a loop, so every one of them can run
+#               again and every entry stays live. All k test `x16 < 10` with
+#               neither register touched between them, so two of the 2^k
+#               histories can actually occur.
+#   loop-indep  the same loop with the k branches testing k different bits of
+#               the secret, so all 2^k really are reachable.
+#
+# `loop-same` against `loop-indep` is what says whether the tower is counting
+# machine states or syntax: the two differ by a factor of eight in how many
+# histories a machine could be in and by nothing much in what it costs.
+#
+# Objects only, written outside the tree by default, because `build` globs
+# `*.s` and these are not demos it should be assembling.
+
+here=${0:a:h}
+out=${1:-${TMPDIR:-/tmp}/koika-fanout}
+
+SECRET=80
+SIZE=16
+
+if echo 'addi x1, x0, 1' | clang --target=riscv32 -march=rv32im -mabi=ilp32 \
+        -c -x assembler -o /dev/null - 2>/dev/null; then
+    as=(clang --target=riscv32)
+else
+    print -u2 -- "fanout needs a clang that can assemble RISC-V"
+    exit 1
+fi
+
+# One balanced branch. Both arms are `addi` then `j`, so neither outcome costs
+# more than the other and what the sweep measures is the predictor rather than
+# the arms.
+arm() {
+    local i=$1
+    print "	addi	x18, x0, 1"
+    print "	j	L${i}_done"
+    print "L${i}_low:"
+    print "	addi	x18, x0, 2"
+    print "	j	L${i}_done"
+    print "L${i}_done:"
+}
+
+emit() {
+    local mode=$1 k=$2
+    print '	.text'
+    print '	.globl fanout'
+    print 'fanout:'
+    print "	addi	x12, x0, SECRET"
+    print '	lw	x16, 0(x12)		# a secret word, drawn in [0, 20]'
+    print '	addi	x17, x0, 10'
+    [[ $mode != straight ]] && print '	addi	x20, x0, 3' && print 'loop:'
+    for i in {1..$k}; do
+        if [[ $mode == loop-indep ]]; then
+            print "	andi	x21, x16, $((1 << (i - 1)))"
+            print "	beq	x21, x0, L${i}_low"
+        else
+            print "	blt	x16, x17, L${i}_low"
+        fi
+        arm $i
+    done
+    if [[ $mode != straight ]]; then
+        print '	addi	x20, x20, -1'
+        print '	bne	x20, x0, loop'
+    fi
+    print '	addi	x19, x0, 0'
+}
+
+# Four is where `loop-indep` stops being honest: the secret is drawn in [0, 20]
+# and four bits of it are all reachable, where five would leave eleven of the
+# thirty-two patterns unreachable and the family would stop meaning what it
+# says. `straight` has no such bound and goes further, because that is the
+# family where the growth has to be seen to bend.
+for mode in straight loop-same loop-indep; do
+    last=7
+    # `loop-indep` is the only family the secret's range binds: it tests one bit
+    # of it per branch, and a draw in [0, 20] leaves eleven of the thirty-two
+    # five-bit patterns unreachable. The other two test the same condition every
+    # time and go as far as anybody wants to look.
+    [[ $mode == loop-indep ]] && last=4
+    mkdir -p $out/$mode
+    for k in {1..$last}; do
+        emit $mode $k > $out/$mode/fanout$k.s
+        $as -march=rv32im -mabi=ilp32 -mno-relax \
+            -Wa,--defsym,SECRET=$SECRET -Wa,--defsym,SIZE=$SIZE \
+            -c $out/$mode/fanout$k.s -o $out/$mode/fanout$k.o || exit 1
+    done
+    print "fanout: $mode, k up to $last, in $out/$mode"
+done

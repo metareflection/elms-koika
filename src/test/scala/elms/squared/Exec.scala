@@ -1,5 +1,7 @@
 package elms.koika.test.squared
 
+import scala.collection.mutable
+
 import elms.prelude.given
 import elms.core.macros.virtualize
 
@@ -22,6 +24,14 @@ trait Exec extends Squared with Multiplier {
 
   override def shareable(target: Int): Boolean =
     !carriesHistory || Flow.historySafe(prog, target, consulted)
+
+  // Memoized, because `slot` asks this once per arrival and the walk behind it
+  // is over the whole program. [Predictive] is the only caller and it asks a
+  // great many times.
+  private val live = mutable.Map[Int, Set[Int]]()
+
+  override def liveBranchesAt(pc: Int): Option[Set[Int]] =
+    Some(live.getOrElseUpdate(pc, Flow.trains(prog, pc) ++ consulted))
 
   // A conditional direct branch: what it tests, and where it goes. Static,
   // because the operands are register names and the target is an offset.
