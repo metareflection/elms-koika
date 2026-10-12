@@ -155,8 +155,15 @@ trait Common extends Isa with Returns {
   // Nothing, for every model that has already spent every cycle it charged.
   def finish(s: Rep[State]): Rep[State] = s
 
+  // Which instruction the walk starts at.
+  //
+  // Zero for an object holding one function, which is every demo in the tree.
+  // An object holding nine wants to be asked about one of them at a time, and
+  // [elf.Image.entries] is what turns a symbol into this number.
+  def entryPc: Int = 0
+
   def snippet(s: Rep[State]): Rep[State] = {
-    val entry = call(0, s)
+    val entry = call(entryPc, s)
     drain()
     finish(entry)
   }

@@ -50,9 +50,15 @@ trait RiscVShell[M <: Int: ValueOf, S: StructManifest] extends KoikaDriver[32, M
 // and declaring the function anyway would move every snapshot in the tree for
 // a line nothing calls.
 //
+// Reachability from [from] and not a scan of the whole vector, because `prog`
+// is a whole `.text` and [Common.entryPc] may name a leaf inside an object
+// whose other functions call each other. Declaring it then is worse than
+// noise: the residue of a leaf with no branch in it has no `bool` anywhere, so
+// nothing included <stdbool.h> and the declaration does not parse.
+//
 // Both towers emit the same call, so both declare it from here.
-def retAssert(prog: Vector[RiscV.Instr]): String =
-  if (prog.exists { case RiscV.Instr.Call(_, _) => true; case _ => false }) {
+def retAssert(prog: Vector[RiscV.Instr], from: Int): String =
+  if (Flow.callsFrom(prog, from)) {
     """void ret_assert(bool c) { koika_assert(c, "return address"); }
       |
       |""".stripMargin
@@ -67,7 +73,7 @@ trait RiscVGhrDriver[M <: Int: ValueOf, P <: Int: ValueOf]
     extends RiscVShell[M, StateG[32, M, 24, 12, P]]
     with Exec
     with GlobalHistory {
-  override def helpers: String = retAssert(prog)
+  override def helpers: String = retAssert(prog, entryPc)
   // The struct the hand-written C around the residue declares. [StateG] and
   // not [StateT], because the generator names it after the case class and
   // `init` dereferences one.
@@ -106,7 +112,7 @@ trait RiscVGhrDriver[M <: Int: ValueOf, P <: Int: ValueOf]
 }
 
 trait RiscVDriver[M <: Int: ValueOf] extends RiscVShell[M, StateT[32, M, 24, 12]] with Exec {
-  override def helpers: String = retAssert(prog)
+  override def helpers: String = retAssert(prog, entryPc)
 }
 
 // The same demos, run in step. Everything above is unchanged; what differs is
@@ -120,5 +126,5 @@ trait SquaredRiscVDriver[M <: Int: ValueOf]
     extends SquaredKoikaDriver[32, M, 24, 12]
     with RiscVShell[M, StateT2[32, M, 24, 12]]
     with Flat {
-  override def helpers: String = retAssert(prog)
+  override def helpers: String = retAssert(prog, entryPc)
 }

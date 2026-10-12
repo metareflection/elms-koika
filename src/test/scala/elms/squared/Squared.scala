@@ -271,5 +271,9 @@ trait Squared extends Machine with Returns {
   // Where a pair of runs enters the program. This is also what
   // `SnippetDriver.snippet` wants when the interpreter stages, which is why it
   // takes and returns the same type the emitted `snippet` does.
-  def snippet(s: Pair): Pair = finish(call(0, s))
+  // Which instruction the walk starts at. [Common.entryPc] is the same seam,
+  // and the two towers have no ancestor between them to share it.
+  def entryPc: Int = 0
+
+  def snippet(s: Pair): Pair = finish(call(entryPc, s))
 }

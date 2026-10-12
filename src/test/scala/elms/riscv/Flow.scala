@@ -34,6 +34,31 @@ object Flow {
       case _                          => (List(pc + 1), None)
     }
 
+  // Whether a call can run at all once the walk starts at [from].
+  //
+  // [retAssert] is declared on the strength of this. An object holding nine
+  // functions has calls in it that the leaf being entered cannot reach, and
+  // declaring the helper anyway puts a `bool` in a residue that has no other
+  // boolean in it and so never included <stdbool.h>. `fe_tobytes` is 666
+  // instructions with no branch and no call, and it would not parse.
+  def callsFrom(prog: Vector[Instr], from: Int): Boolean = {
+    val seen = mutable.Set[Int]()
+    val todo = mutable.Stack(from)
+    while (todo.nonEmpty) {
+      val pc = todo.pop()
+      if (pc >= 0 && pc < prog.length && seen.add(pc)) {
+        prog(pc) match {
+          case Instr.Call(_, _) => return true
+          case _                => ()
+        }
+        val (succ, called) = next(prog, pc)
+        succ.foreach(todo.push)
+        called.foreach(todo.push)
+      }
+    }
+    false
+  }
+
   // Branch pcs that can run between arriving at [from] and the function
   // holding it returning. Descends into calls, because a callee's branches are
   // written by the call as surely as by the caller, and stops at a `ret`.
