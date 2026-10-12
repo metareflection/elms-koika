@@ -6,7 +6,7 @@ import elms.prelude.given
 import elms.codegen.{CCodegen, Config}
 import elms.core.StructManifest
 
-import elms.koika.test.common.{KoikaDriver, StateT}
+import elms.koika.test.common.{GlobalHistory, KoikaDriver, StateG, StateT}
 import elms.koika.test.squared.{Flat, SquaredKoikaDriver, StateT2}
 
 // What RISC-V needs from the driver that NanoRisc does not. [M] stays open
@@ -57,6 +57,53 @@ def retAssert(prog: Vector[RiscV.Instr]): String =
       |
       |""".stripMargin
   } else { "" }
+
+// The same shell, over a state that carries a pattern history table.
+//
+// [P] is the table's length and is a type parameter for the reason the other
+// four are: a `FixedArray`'s length decides whether the C backend gives the
+// member inline storage, and only the inline form is something CBMC can read.
+trait RiscVGhrDriver[M <: Int: ValueOf, P <: Int: ValueOf]
+    extends RiscVShell[M, StateG[32, M, 24, 12, P]]
+    with Exec
+    with GlobalHistory {
+  override def helpers: String = retAssert(prog)
+  // The struct the hand-written C around the residue declares. [StateG] and
+  // not [StateT], because the generator names it after the case class and
+  // `init` dereferences one.
+  override val stateT: String = "StateG"
+
+  override def phtEntries: Int = valueOf[P]
+
+  // Three numbers that have to agree and nothing else would notice them
+  // disagreeing: the register's width, how many branches the program has, and
+  // how long the table in the struct is. The first two decide how many entries
+  // get asked for and the third is laid out by [P], so a mismatch is an index
+  // past the end of a member rather than a failure.
+  //
+  // Lazy and forced from [defines] rather than run in the constructor, because
+  // [historyBits] is overridable and a subclass's override is not initialized
+  // while this class's body is still running. Same reason [KoikaDriver.checked]
+  // is.
+  private lazy val checkedHistory: Unit = {
+    require(historyBits >= 1 && historyBits <= 16, s"historyBits is $historyBits, not in [1, 16]")
+    val branches = prog.count { case RiscV.Instr.Branch(_, _, _, _) => true; case _ => false }
+    val wanted = branches * (1 << historyBits)
+    require(
+      wanted <= phtEntries,
+      s"$branches branch(es) at $historyBits history bits want $wanted pht entries" +
+        s" and the state has $phtEntries"
+    )
+  }
+
+  override def defines: Seq[(String, Int)] = {
+    checkedHistory
+    super.defines ++ Seq("PHT_ENTRIES" -> phtEntries, "HISTORY_BITS" -> historyBits)
+  }
+  // `init` loops over the table too, and a bound that falls short of it leaves
+  // two states disagreeing on whatever was in the entries it never wrote.
+  override def unwind: Int = math.max(super.unwind, phtEntries + 1)
+}
 
 trait RiscVDriver[M <: Int: ValueOf] extends RiscVShell[M, StateT[32, M, 24, 12]] with Exec {
   override def helpers: String = retAssert(prog)

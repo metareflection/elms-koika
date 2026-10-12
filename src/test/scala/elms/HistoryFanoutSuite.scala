@@ -5,7 +5,7 @@ import java.nio.file.{Files, Path}
 import org.scalatest.funsuite.AnyFunSuite
 
 import elms.koika.test.common.{Init, Predictive, Prover, Static}
-import elms.koika.test.riscv.{RiscVDriver, elf}
+import elms.koika.test.riscv.{RiscVDriver, RiscVGhrDriver, elf}
 
 // How many functions one pc is numbered into, against how many branches ran
 // before it.
@@ -60,6 +60,15 @@ class HistoryFanoutSuite extends AnyFunSuite {
     d.render(Prover.CBMC)
   }
 
+  // The same object under [GlobalHistory], whose history is bounded by its
+  // register rather than by how many branches the program has.
+  private def ghr(o: Path, bits: Int): String =
+    new RiscVGhrDriver[64, 512] {
+      override val prog = elf.Elf.load(o.toString).prog
+      override val init = Init.globalHistory(stateT)
+      override def historyBits: Int = bits
+    }.render(Prover.CBMC)
+
   // [k], and the slot count under each of the three keyings.
   private def sweep(family: String): Vector[(Int, Int, Int, Int)] = {
     val dir = root.get.resolve(family)
@@ -69,8 +78,9 @@ class HistoryFanoutSuite extends AnyFunSuite {
         val s = keys(render(o, history = false))
         val p = keys(render(o, history = true))
         val l = keys(render(o, history = true, liveOnly = true))
-        info(f"$family%-11s k=$k%d  static $s%4d  full $p%4d (${p.toDouble / s}%4.1fx)" +
-          f"  live $l%4d (${l.toDouble / s}%4.1fx)")
+        val g = keys(ghr(o, 4))
+        info(f"$family%-11s k=$k%d  static $s%4d  full $p%5d (${p.toDouble / s}%5.1fx)" +
+          f"  live $l%5d (${l.toDouble / s}%5.1fx)  ghr4 $g%4d (${g.toDouble / s}%4.1fx)")
         (k, s, p, l)
       }
     }

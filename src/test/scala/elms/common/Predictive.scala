@@ -15,14 +15,26 @@ import elms.prelude.given
 // inlined window inlines forever.
 //
 // The predictor's history is staging-time rather than a field of [State], and
-// that is the whole performance story. A [Rep] guess would force both
-// continuations of every branch to be staged, and the residue's branching call
-// sites are what a bounded checker's cost is exponential in. Specializing on
-// the history instead stages one continuation per branch and pays for it in
-// distinct functions, which is the cheaper axis. The cost is that nothing in
-// the generated C is the predictor any more; it is which function you are in.
+// where it sits is the dial rather than a detail. A [Rep] guess would force
+// both continuations of every branch to be staged, and the residue's branching
+// call sites are what a bounded checker's cost is exponential in. Specializing
+// on the history instead stages one continuation per branch and pays for it in
+// distinct functions, which is the cheaper axis on anything in this tree.
+//
+// What that buys is a change of representation and not a loss of one. The
+// unstaged interpreter has a predictor like it has a cache, and specializing
+// over it turns its state into control flow: the functions one pc is numbered
+// into are the predictor, written as code rather than as a table. A program
+// whose seven live branches put 6144 slots in the residue is carrying every
+// bit of predictor state a [Rep] table would have held.
+//
+// Which is to say the slot key is the specialization boundary. What goes in it
+// is partially evaluated and what stays in [State] is residual, and the two
+// together are what the end-to-end system accounts for. [GlobalHistory] moves
+// the predictor across that line; [Cached] was always on the other side of it,
+// because a cache index is data-dependent and cannot be anywhere else.
 @virtualize
-trait Predictive extends Cached {
+trait Speculative extends Cached {
   // The history is this model's whole specialization, so it is also the thing
   // a shared callee would drop on the way out. [Flow] decides which calls that
   // actually costs anything at.
@@ -49,7 +61,34 @@ trait Predictive extends Cached {
   // be part of the key for the same reason [window] is: two arrivals at one pc
   // under different return stacks are two different continuations, and sharing
   // a slot between them silently returns to the wrong place.
-  case class Key(pc: Int, window: Option[Window], learned: Map[Int, Boolean], stack: List[Int])
+  case class Key(pc: Int, window: Option[Window], learned: History, stack: List[Int])
+
+  // What this model carries between branches, and what the slot key is built
+  // from. A bit per branch for [Predictive], a bounded shift register for
+  // [GlobalHistory]; the whole question of how many functions one pc becomes
+  // is how many of these are reachable.
+  type History
+
+  protected def emptyHistory: History
+
+  // [h], with everything nothing downstream reads dropped.
+  protected def restrict(h: History, live: Set[Int]): History
+
+  // Which continuation to stage for a branch, and whether the choice is made
+  // while this stages or by the residue.
+  protected def guessing(pc: Int, s: Rep[State])(
+      taken: => Rep[State]
+  )(nottaken: => Rep[State]): Rep[State]
+
+  // What the predictor knows once [at] has resolved [taken].
+  def learn(at: Int, taken: Boolean): History
+
+  // The same outcome, written to whatever the residue reads its guess from.
+  // Nothing for a model that specializes the guess away, since there is no
+  // table in [State] for it to land in.
+  protected def record(at: Int, taken: Boolean, s: Rep[State]): Rep[Unit] = unit(())
+
+
 
   private val interned = mutable.ArrayBuffer[Key]()
   private val numbered = mutable.Map[Key, Int]()
@@ -60,12 +99,15 @@ trait Predictive extends Cached {
   // [Isa.step] recurses through `call(pc + 1, s)` with a bare pc, so the rest
   // of the lookahead has to be ambient rather than threaded.
   private var window: Option[Window] = None
-  private var learned: Map[Int, Boolean] = Map()
+  // Protected rather than private: the history's shape is a subtrait's, so
+  // what [learn] does to it is theirs to say and they have to be able to read
+  // what it is now.
+  protected var learned: History = emptyHistory
 
   // Staging one arm of a virtualized `if` runs [call]s that leave the ambient
   // state wherever they finished, so each arm is staged under the lookahead it
   // belongs to rather than under whatever the arm before it left behind.
-  private def under[A](w: Option[Window], l: Map[Int, Boolean])(body: => A): A = {
+  private def under[A](w: Option[Window], l: History)(body: => A): A = {
     val (outerWindow, outerLearned) = (window, learned)
     window = w
     learned = l
@@ -75,7 +117,7 @@ trait Predictive extends Cached {
 
   private def goto(
       w: Option[Window],
-      l: Map[Int, Boolean],
+      l: History,
       pc: Int,
       s: Rep[State]
   ): Rep[State] = under(w, l) { call(pc, s) }
@@ -111,11 +153,13 @@ trait Predictive extends Cached {
 
   // The history as the key records it: all of it, or only the part anything
   // downstream can still read.
-  protected def keyedHistory(pc: Int): Map[Int, Boolean] =
+  protected def keyedHistory(pc: Int): History =
     if (!liveHistoryOnly) { learned }
     else {
-      liveAt(pc, window).fold(learned)(live => learned.filter { case (b, _) => live(b) })
+      liveAt(pc, window).fold(learned)(live => restrict(learned, live))
     }
+
+
 
   override def live(at: Int): Boolean = interned(at) match {
     // Running off the end of [prog] with a branch still in flight is a real
@@ -147,11 +191,9 @@ trait Predictive extends Cached {
           // branch, and a correctly guessed one then comes out a cycle cheaper
           // than not speculating at all.
           tick(s)
-          // Static, so only the guessed continuation is staged. The other one
-          // is reached by whichever key holds the opposite history.
-          if (predict(pc)) {
+          guessing(pc, s) {
             goto(opening(pc, cnd, recovery = pc + 1, guess = true), learned, tgt, s)
-          } else {
+          } {
             goto(opening(pc, cnd, recovery = tgt, guess = false), learned, pc + 1, s)
           }
         }
@@ -170,6 +212,8 @@ trait Predictive extends Cached {
         case None => resolve(pc, p, saved, s)
       }
   }
+
+
 
   val mispredictPenalty: Int = 15
 
@@ -198,6 +242,9 @@ trait Predictive extends Cached {
     // The branch is what the predictor learns from, and it learns the truth
     // rather than the guess.
     val next = learn(p.at, taken)
+    // And a model whose predictor lives in [State] rather than in the key has
+    // to write it down. Nothing, for one whose history is the key.
+    record(p.at, taken, s)
     // [pc] has not run yet, whether or not the guess held.
     if (taken == p.guess) { goto(None, next, pc, s) }
     else {
@@ -243,6 +290,54 @@ trait Predictive extends Cached {
     squash(s, saved)
   }
 
+
+
+
+}
+
+
+// The predictor this tower was written for: one bit per branch pc, its last
+// outcome, and no aliasing between branches.
+//
+// A real BHT indexes low pc bits and does alias, which only ever adds
+// channels; keeping them apart is what makes a leak in a snapshot
+// attributable to the program.
+//
+// The history is specialized rather than reified, so the predictor in the
+// generated C is which function you are in. That is free in the residue and
+// exponential in the key, and [GlobalHistory] is the same model with the
+// staging boundary moved past it.
+@virtualize
+trait Predictive extends Speculative {
+  // What this model carries between branches.
+  //
+  // A map of one bit per branch pc for the predictor written here, and a
+  // [GlobalHistory] replaces it with a bounded shift register. It is a type
+  // member because it is what the slot key is built from: the whole question
+  // of how many functions one pc becomes is how many of these are reachable.
+  type History = Map[Int, Boolean]
+
+  protected def emptyHistory: History = Map.empty
+
+  // [h], with everything nothing downstream reads dropped. A map loses the
+  // dead entries; a shift register has nothing to drop, since its bits are not
+  // attributable to a branch any more.
+  protected def restrict(h: History, live: Set[Int]): History =
+    h.filter { case (b, _) => live(b) }
+
+  // Which continuation to stage for a branch whose guess is [taken].
+  //
+  // Static here, so only the guessed one is staged and the other is reached by
+  // whichever key holds the opposite history. That is what makes the predictor
+  // free in the residue and expensive in the key, and it is the trade
+  // [GlobalHistory] takes the other way: a guess read out of a table in
+  // [State] is a [Rep], both arms are staged, and they come back together at
+  // the resolution point under one bounded history.
+  protected def guessing(pc: Int, s: Rep[State])(
+      taken: => Rep[State]
+  )(nottaken: => Rep[State]): Rep[State] =
+    if (predict(pc)) { taken } else { nottaken }
+
   // One bit of history per branch, its last outcome, and no aliasing between
   // branches. A real BHT indexes low pc bits and does alias, which only ever
   // adds channels; keeping them apart is what makes a leak in a snapshot
@@ -254,7 +349,7 @@ trait Predictive extends Cached {
   // rather than a line inside [settle], because the history is also [Key]'s
   // third component: what a model records here is what decides how many slots
   // one pc is numbered into.
-  def learn(at: Int, taken: Boolean): Map[Int, Boolean] = learned.updated(at, taken)
+  def learn(at: Int, taken: Boolean): History = learned.updated(at, taken)
 }
 
 // The guess a machine with no history bits makes, which is not-taken at every
@@ -272,7 +367,7 @@ trait Predictive extends Cached {
 // code.
 @virtualize
 trait Static extends Predictive {
-  override def learn(at: Int, taken: Boolean): Map[Int, Boolean] = Map.empty
+  override def learn(at: Int, taken: Boolean): History = Map.empty
 
   // Nothing is ever recorded, so there is no history for a `ret` to carry and
   // every call is shareable whatever [Flow] would say about it.

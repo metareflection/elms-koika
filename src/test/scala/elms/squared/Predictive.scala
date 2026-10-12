@@ -12,7 +12,7 @@ import elms.koika.test.riscv.RiscV.Reg
 // the argument for it lives: the history is staging-time rather than a field
 // of the state, so a pc becomes several emitted functions rather than the
 // residue growing a branch per guess. Nothing in the generated C is the
-// predictor; it is which function you are in.
+// predictor as a table; it is which function you are in.
 //
 // Two things here are the squared semantics rather than the model.
 //

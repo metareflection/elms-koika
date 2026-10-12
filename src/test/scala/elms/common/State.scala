@@ -26,6 +26,40 @@ case class StateT[R <: Int, M <: Int, C <: Int, T <: Int](
     timer: Int
 )
 
+// [StateT] with a pattern history table beside it, for [GlobalHistory].
+//
+// A field and not a reuse of one already here, because every other array in
+// the struct belongs to a model that a predictor can be mixed in alongside.
+// Its own type rather than a field on [StateT] for the opposite reason: a
+// table nothing else reads would otherwise widen the struct every model emits,
+// and move every snapshot in the tree to do it.
+//
+// [P] entries, one per index the gshare hash can produce. Indexed by a
+// constant, since both the pc and the history that make the index are known
+// while this stages, so the residue never computes a subscript here.
+case class StateG[R <: Int, M <: Int, C <: Int, T <: Int, P <: Int](
+    regs: FixedArray[R, Int],
+    mem: FixedArray[M, Int],
+    saved_regs: FixedArray[R, Int],
+    reg_ready: FixedArray[R, Int],
+    cache_tags: FixedArray[T, Int],
+    cache_dirty: FixedArray[T, Int],
+    cache_age: FixedArray[T, Int],
+    cache_vals: FixedArray[C, Int],
+    pht: FixedArray[P, Int],
+    timer: Int
+)
+
+object StateG {
+  given manifest[
+      R <: Int: ValueOf,
+      M <: Int: ValueOf,
+      C <: Int: ValueOf,
+      T <: Int: ValueOf,
+      P <: Int: ValueOf
+  ]: StructManifest[StateG[R, M, C, T, P]] = StructManifest.derived
+}
+
 object StateT {
   // Spelled out rather than `derives`, because the derivation summons a
   // `Typable` per field and `Typable[FixedArray[R, Int]]` wants a `ValueOf[R]`
@@ -70,4 +104,12 @@ trait StateTOps extends DslOps {
     // assignment operator for an array, so the backend refuses the whole-member
     // write. Indexing into one is unaffected.
     def timer_=(v: Rep[Int]): Rep[Unit] = st.set("timer", v)
+}
+
+// The one field [StateTOps] does not declare, for the one model that has it.
+// Separate so that a driver without a [StateG] cannot reach a member its
+// struct does not carry.
+trait PhtOps extends StateTOps {
+  extension (st: Rep[State])
+    def pht: Rep[Array[Int]] = st.get("pht").asInstanceOf[Rep[Array[Int]]]
 }

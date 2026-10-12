@@ -63,6 +63,19 @@ object Init {
   def nonblocking(stateT: String): String =
     body(stateT, saved = false, cache = true, stack = false, ready = true)
 
+  // [Predictive]'s state plus the table a [GlobalHistory] reads its guess
+  // from. Every entry starts not-taken, which is the cold start the per-branch
+  // predictor gets from an absent map key.
+  def globalHistory(stateT: String): String =
+    speculative(stateT).replace(
+      "\n}",
+      """
+        |  for (int i=0; i<PHT_ENTRIES; i++) {
+        |    s->pht[i] = 0;
+        |  }
+        |}""".stripMargin
+    )
+
   // Every field there is, for a suite that runs one program against several
   // models. Which fields a model leaves untouched is not what [RiscVBranchyTests]
   // is measuring, and a per-model initializer there would only make its six
