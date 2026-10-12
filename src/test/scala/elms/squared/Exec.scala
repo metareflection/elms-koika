@@ -3,7 +3,7 @@ package elms.koika.test.squared
 import elms.prelude.given
 import elms.core.macros.virtualize
 
-import elms.koika.test.riscv.{Multiplier, RiscV}
+import elms.koika.test.riscv.{Flow, Multiplier, RiscV}
 import RiscV.*
 
 // RV32I and RV32M's multiplies, over a pair of runs.
@@ -16,6 +16,13 @@ import RiscV.*
 // [elms.koika.test.riscv.Exec], which is where the ISA arguments live.
 @virtualize
 trait Exec extends Squared with Multiplier {
+  // Computed once per driver rather than per call site: it is a fact about
+  // `prog` and every call asks the same question of it.
+  private lazy val consulted: Set[Int] = Flow.consultedAfterAnyCall(prog)
+
+  override def shareable(target: Int): Boolean =
+    !carriesHistory || Flow.historySafe(prog, target, consulted)
+
   // A conditional direct branch: what it tests, and where it goes. Static,
   // because the operands are register names and the target is an offset.
   type Cond = (Cmp, Reg, Reg)
@@ -199,7 +206,17 @@ trait Exec extends Squared with Multiplier {
         // register's.
         case Instr.Call(rd, target) => {
           each(s)(h => write(h, rd, unit(4 * (pc + 1))))
-          withStack(deepen(pc, pc + 1)) { call(target, s) }
+          if (inlineCalls || !shareable(target)) {
+            withStack(deepen(pc, pc + 1)) { call(target, s) }
+          } else {
+            // A real call, so the callee is a function this one returns from
+            // rather than a continuation it hands control to. Both runs come
+            // back through the one emitted call, which is what keeps the
+            // clocks comparable on the way out of it.
+            val back = withStack(Nil) { call(target, s) }
+            each(back)(h => returnsTo(untimed { readReg(h, RiscV.Reg(1)) }, pc + 1))
+            call(pc + 1, back)
+          }
         }
         // An unconditional jump, like [Jal], except that the target is a
         // prediction and has to be checked. Each run's `ra` is checked against
@@ -208,14 +225,21 @@ trait Exec extends Squared with Multiplier {
         // [sameWay] has nothing left to reconcile here. A program that reaches
         // this having overwritten `ra` is the ret2spec shape, and the
         // assertions are where it shows up.
+        //
+        // With a real return there is no prediction left to check here, so the
+        // obligation moves to the call site: the callee's residue function
+        // returns exactly where its `ret` ran, so `ra` on the way out is the
+        // value that `ret` read.
         case Instr.Ret => retstack match {
           case r :: rest => {
             each(s)(h => returnsTo(readReg(h, RiscV.Reg(1)), r))
             withStack(rest) { call(r, s) }
           }
-          // Nothing to return through, which is what a leaf's `ret` means and
-          // what the reader used to encode by hand as a jump past the end.
-          case Nil => call(prog.length, s)
+          // Nothing to return through. A callee's own `ret` under a tower that
+          // shares, and a leaf's under one that inlines; the jump past the end
+          // is kept for the latter because [Predictive.slot] interns what it is
+          // asked for and every slot number after it would move.
+          case Nil => if (inlineCalls) { call(prog.length, s) } else { s }
         }
       }
     } else { s }

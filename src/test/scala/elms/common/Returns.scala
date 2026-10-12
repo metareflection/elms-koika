@@ -14,6 +14,39 @@ package elms.koika.test.common
 // arrived at under two different stacks is two different continuations, and
 // sharing a slot between them returns one of the calls to the wrong place.
 trait Returns {
+  // Whether a source-level call is specialized into the caller.
+  //
+  // True is the scheme this trait was written for: the callee is staged once
+  // per call site, every transfer in the residue is a tail call, and the
+  // return stack below is what makes the second copy come back somewhere
+  // different from the first.
+  //
+  // False keys a slot on its pc alone, so the callee is one residue function
+  // however many sites reach it, and a `ret` is a C `return` rather than a
+  // tail call to a predicted pc. The return stack then stays empty and
+  // nothing in here is reached. What it costs is in [Predictive]: a shared
+  // function has one exit and the staging-time history at that exit depends
+  // on the path taken inside it, so a predictor's history cannot flow back
+  // out to the caller.
+  def inlineCalls: Boolean = true
+
+  // Whether the call to [target] in particular may be shared, once
+  // [inlineCalls] has said the tower is willing to share at all.
+  //
+  // The two are separate because the second question is the program's and not
+  // the model's. A model that carries staging-time state a `ret` would have to
+  // carry back answers this per callee, and [riscv.Flow] is where that is
+  // worked out; everything else shares every call it is offered.
+  def shareable(target: Int): Boolean = true
+
+  // Whether this model keeps a branch predictor's history at staging time.
+  //
+  // The one piece of state a shared callee cannot hand back, because a
+  // function with one exit cannot say which path reached it. [Predictive] is
+  // what sets this, and [Static] is what puts it back: a predictor that
+  // records nothing has nothing to lose at a `ret`.
+  def carriesHistory: Boolean = false
+
   protected var retstack: List[Int] = Nil
 
   // How deep the stack is allowed to get.

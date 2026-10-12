@@ -23,6 +23,17 @@ trait Exec extends Direct with Multiplier {
 
   override def regIndex(r: Reg): Int = r.i
 
+  // Computed once per driver rather than per call site: it is a fact about
+  // `prog` and every call asks the same question of it.
+  private lazy val consulted: Set[Int] = Flow.consultedAfterAnyCall(prog)
+
+  override def shareable(target: Int): Boolean =
+    !carriesHistory || Flow.historySafe(prog, target, consulted)
+
+  // The branches still reachable from [pc], for a model that keys a slot on
+  // the live part of the predictor's history. Anything a return can land on is
+  // counted, because where control goes once this function returns is not
+  // something one pc can see.
   // A byte offset lands on an instruction index, and a misaligned one is a bug
   // in the demo rather than something the generated C should have to check.
   private def target(pc: Int, offset: Imm): Int = {
@@ -189,23 +200,56 @@ trait Exec extends Direct with Multiplier {
         // business and not this register's.
         case Instr.Call(rd, target) => {
           write(s, rd, unit(4 * (pc + 1)))
-          withStack(deepen(pc, pc + 1)) { call(target, s) }
+          if (inlineCalls || !shareable(target)) {
+            withStack(deepen(pc, pc + 1)) { call(target, s) }
+          } else {
+            // A real call, so the callee is a function this one returns from
+            // rather than a continuation it hands control to. What comes back
+            // is the same state pointer, which is why the assertion below can
+            // read `ra` off it.
+            //
+            // The stack is emptied for the callee rather than pushed to, which
+            // is what makes a `ret` down there return instead of jumping. It
+            // also keeps the two kinds of call from meeting: a frame left on
+            // the stack by an outer call that inlined is not one this callee's
+            // `ret` may pop.
+            val back = withStack(Nil) { call(target, s) }
+            // [untimed], unlike the read at a `ret` below. The program does no
+            // register access at this point; the `jalr` that read `ra` ran
+            // inside the callee and was charged for there.
+            ret_assert(untimed { readReg(back, RiscV.Reg(1)) }, 4 * (pc + 1))
+            call(pc + 1, back)
+          }
         }
         // Two things could say where this returns. The stack is the tower's
         // prediction and `x1` is what the machine would actually jump to, and
         // the residue asserts they agree rather than picking one. A program
         // that reaches here having overwritten `ra` is the ret2spec shape, and
         // the assertion is where it shows up.
+        //
+        // With a real return there is no prediction left to check here, so the
+        // obligation moves to the call site: the callee's residue function
+        // returns exactly where its `ret` ran, so `ra` on the way out is the
+        // value that `ret` read.
         case Instr.Ret => retstack match {
           case r :: rest => {
-            val ra = readReg(s, RiscV.Reg(1))
-            unsafeReflect[Unit](Op.Custom("ret_assert", UNIT), ra === unit(4 * r))
+            ret_assert(readReg(s, RiscV.Reg(1)), 4 * r)
             withStack(rest) { call(r, s) }
           }
-          // Nothing to return through, which is what a leaf's `ret` means and
-          // what the reader used to encode by hand as a jump past the end.
-          case Nil => call(prog.length, s)
+          // Nothing to return through. Under a tower that shares, that is a
+          // callee's own `ret` and returning the state is the whole of it.
+          // Under one that inlines it is a leaf's, and the jump past the end
+          // is what the reader used to encode by hand; it is kept rather than
+          // simplified to `s` because [Predictive.slot] interns what it is
+          // asked for and every slot number after it would move.
+          case Nil => if (inlineCalls) { call(prog.length, s) } else { s }
         }
       }
     } else { s }
+
+  // [ra] against where the tower says control belongs. Whether that read is
+  // the program's is the caller's to decide, because the two sites this is
+  // reached from differ on it.
+  private def ret_assert(ra: Rep[Int], to: Int): Unit =
+    unsafeReflect[Unit](Op.Custom("ret_assert", UNIT), ra === unit(to))
 }

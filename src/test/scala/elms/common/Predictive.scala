@@ -23,6 +23,11 @@ import elms.prelude.given
 // the generated C is the predictor any more; it is which function you are in.
 @virtualize
 trait Predictive extends Cached {
+  // The history is this model's whole specialization, so it is also the thing
+  // a shared callee would drop on the way out. [Flow] decides which calls that
+  // actually costs anything at.
+  override def carriesHistory: Boolean = true
+
   // A branch that has been guessed at and not yet resolved. [at] is its pc,
   // which is also what [Key.learned] keys it by, and [recovery] is where control
   // belongs if [guess] was wrong.
@@ -74,6 +79,13 @@ trait Predictive extends Cached {
       pc: Int,
       s: Rep[State]
   ): Rep[State] = under(w, l) { call(pc, s) }
+
+  // Whether a slot is keyed on the whole history or only on the part of it
+  // anything downstream can still read.
+  //
+
+  // The branches [pc] can still reach, with a window's recovery path counted
+  // too since that is somewhere control may yet go.
 
   override def slot(pc: Int): Int = intern(Key(pc, window, learned, retstack))
 
@@ -233,4 +245,8 @@ trait Predictive extends Cached {
 @virtualize
 trait Static extends Predictive {
   override def learn(at: Int, taken: Boolean): Map[Int, Boolean] = Map.empty
+
+  // Nothing is ever recorded, so there is no history for a `ret` to carry and
+  // every call is shareable whatever [Flow] would say about it.
+  override def carriesHistory: Boolean = false
 }

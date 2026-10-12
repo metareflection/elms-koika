@@ -31,6 +31,11 @@ import elms.koika.test.riscv.RiscV.Reg
 // The saved registers travel in [Window] as a [Vector] rather than in a
 // mutable set, so none of the bookkeeping has to be hoisted out of [each].
 trait Predictive extends Cached with Exec {
+  // The history is this model's whole specialization, so it is also the thing
+  // a shared callee would drop on the way out. [Flow] decides which calls that
+  // actually costs anything at.
+  override def carriesHistory: Boolean = true
+
   // A branch that has been guessed at and not yet resolved. [at] is its pc,
   // which is also what [Key.learned] keys it by, and [recovery] is where
   // control belongs if [guess] was wrong.
@@ -227,4 +232,8 @@ trait Predictive extends Cached with Exec {
 // code.
 trait Static extends Predictive {
   override def learn(at: Int, taken: Boolean): Map[Int, Boolean] = Map.empty
+
+  // Nothing is ever recorded, so there is no history for a `ret` to carry and
+  // every call is shareable whatever [Flow] would say about it.
+  override def carriesHistory: Boolean = false
 }
