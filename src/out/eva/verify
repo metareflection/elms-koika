@@ -85,20 +85,24 @@ here=${0:a:h}
 # the grouping is theirs and the holdback is for matching it.
 corpus_only='(*/pht/*|*/stl/*)'
 
-# The other three are `--full`'s. `lockstep/` is five of the demos `squared/`
+# The other four are `--full`'s. `lockstep/` is five of the demos `squared/`
 # answers, built by rewriting a residue rather than by interpreting the program
 # over two states, and it is kept for the day the two constructions disagree
 # rather than for coverage it adds, which is none. `dynamic/` is those demos
 # again with the control-flow assumption dropped, so a conditional comes out
 # two ways, which is an open question rather than a second opinion on a settled
 # one. `probe/` is `riscv/cache/branchy` at six probe counts under both towers,
-# where the point is that the last settings are expensive.
+# where the point is that the last settings are expensive. `ghr/` is the demos
+# again with the branch predictor's history bounded to a shift register instead
+# of specialized away, which is a question about how far the tower reaches
+# rather than about any program, and the cells worth reading in it are
+# `retrain` and `retrain_far`, where the two predictors stop agreeing.
 #
-# None of those three reasons is Eva's either, and the answer is the same one:
+# None of those four reasons is Eva's either, and the answer is the same one:
 # a default run of all three scripts covering the same files is what makes a
 # three-way disagreement mean something about the backends rather than about
 # which tree somebody remembered to check.
-full_only='(*/lockstep/*|*/dynamic/*|*/probe/*)'
+full_only='(*/lockstep/*|*/dynamic/*|*/probe/*|*/ghr/*)'
 
 corpus=0
 full=0
@@ -166,7 +170,7 @@ if (( ! $#files )); then
         files=(${files:#${~full_only}})
     fi
     (( corpus_held )) && print -- "skip     $corpus_held under pht/ and stl/ (pass --corpus to check them)"
-    (( deep_held )) && print -- "skip     $deep_held under lockstep/, dynamic/ and probe/ (pass --full to check them)"
+    (( deep_held )) && print -- "skip     $deep_held under lockstep/, dynamic/, probe/ and ghr/ (pass --full to check them)"
     held_back=$(( corpus_held + deep_held ))
 fi
 

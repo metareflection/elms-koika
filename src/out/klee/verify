@@ -94,8 +94,19 @@ corpus_only='(*/pht/*|*/stl/*)'
 # 41s, 222s and 929s self-composed at one through four, with five and six never
 # seen to finish. Twelve files, most of a budget apiece at the top of the dial,
 # and no verdict the tree does not already have. It is here to be measured
-# rather than to be run.
-full_only='(*/lockstep/*|*/dynamic/*|*/probe/*)'
+# rather than to be run.#
+# `ghr/` is the fourth, and it is a question about the tower rather than about
+# a program. Every column the README tabulates is computed with the predictor's
+# history specialized away, one bit per branch pc, so the residue carries no
+# predictor at all. `ghr/` is the same demos with the history bounded to a
+# shift register instead and the table put in the struct beside the cache,
+# where a checker reads it. It costs more on every demo here and is meant to:
+# the crossover is at as many live branches as the register has bits, and
+# nothing in this tree has more than four. What the trade buys is on the other
+# side of that, and `HistoryFanoutSuite` is where it is measured. The cells
+# worth reading are `retrain` and `retrain_far`, which are where the two
+# predictors stop agreeing.
+full_only='(*/lockstep/*|*/dynamic/*|*/probe/*|*/ghr/*)'
 
 slow=0
 only_slow=0
@@ -212,7 +223,7 @@ if (( ! $#files )); then
         files=(${files:#${~full_only}})
     fi
     (( corpus_held )) && print -- "skip     $corpus_held under pht/ and stl/ (pass --corpus to check them)"
-    (( deep_held )) && print -- "skip     $deep_held under lockstep/, dynamic/ and probe/ (pass --full to check them)"
+    (( deep_held )) && print -- "skip     $deep_held under lockstep/, dynamic/, probe/ and ghr/ (pass --full to check them)"
     held_back=$(( corpus_held + deep_held ))
 fi
 

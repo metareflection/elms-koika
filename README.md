@@ -82,7 +82,8 @@ and [`verify`](src/out/cbmc/verify) reads it back out and runs the checker:
 
 Three tiers, nested. With no arguments it takes the main suite. `--corpus` adds
 the ported litmus variants under `pht/` and `stl/`. `--full` adds `lockstep/`,
-`dynamic/` and `probe/` on top of that, which is every snapshot in the tree.
+`dynamic/`, `probe/` and `ghr/` on top of that, which is every snapshot in the
+tree: 389 files, and 12 minutes of CBMC on the machine that measured it.
 
 The corpus tier is the ported litmus variants, held back on volume. `pht/` is
 six of Kocher's Spectre v1 variants and a seventh that probes the cache after
@@ -94,7 +95,7 @@ default run is for noticing that a model stopped detecting what it detected; a
 corpus is for reading across, and the flag is so that reading across does not
 mean running everything.
 
-The `--full` tier is three trees held back for reasons of their own, none of
+The `--full` tier is four trees held back for reasons of their own, none of
 them volume. `lockstep/` is five demos `squared/` also answers, by the
 construction `squared/` replaced, and it is held back because it agrees and
 costs time. `dynamic/` is held back because it is not settled. It drops the
@@ -102,6 +103,15 @@ control-flow assumption rather than making it, which is an open question about
 the construction and not a second opinion on a closed one.
 [`probe/`](doc/probe-dial.md) is held back on cost alone: it is one demo at six
 sizes under both towers, and the sizes at the top are the whole point.
+[`ghr/`](doc/global-history.md) is the fourth and is held back for `dynamic/`'s
+reason rather than for cost. Every column of the table above is computed with
+the predictor's history in the slot key, a bit per branch pc, so its state is
+the residue's control flow; `ghr/` bounds the history to a shift register and
+puts the table in the struct beside the cache instead. It is more expensive
+on every demo here and is meant to be, since the crossover is at as many live
+branches as the register has bits and nothing in this tree has more than four.
+What it is for is the other side of that crossover, which is the code this
+project has not reached yet.
 
 `sbt testFull` regenerates all five whichever flag anybody passes, so what the
 two flags buy is the check rather than the C. Naming files runs exactly those,
@@ -169,6 +179,21 @@ the main suite.
 for, where the chain of models stops being a chain, and why the two columns on
 the right take rows away rather than adding them.
 
+Four of those seven columns have a branch predictor in them, and all four
+specialize over its history rather than reifying it. A slot is keyed on what
+the predictor believes, so the predictor in the generated C is which function
+you are in: the functions one pc is numbered into are its state, written as
+control flow instead of as a table. Nothing is missing from the end-to-end
+account, since the unstaged interpreter has the predictor whichever side of the
+staging boundary it ends up on. What moves is the representation, and the slot
+key is the line it moves across.
+
+That is the model the whole table is computed on and it is the cheaper
+representation on every demo here.
+[`doc/global-history.md`](doc/global-history.md) moves the same state to the
+other side of that line, held back behind `--full`, and it is where the
+question of how far any of this reaches gets asked.
+
 ## Documentation
 
 The README is the map. Everything measured, and every model written out in
@@ -187,6 +212,7 @@ full, lives under [`doc/`](doc).
 | [`klee.md`](doc/klee.md) | the second backend, how a verdict is read out of it, and which files run out of budget |
 | [`frama-c.md`](doc/frama-c.md) | the third backend, which answers a weaker question and says where that stops |
 | [`fact.md`](doc/fact.md) | the FaCT ports, and the three of five objects that leak |
+| [`global-history.md`](doc/global-history.md) | the predictor as a bounded register, what it costs on this tree and what it buys past it |
 
 Those files carry timings. Every one was measured on one machine at one commit
 and none of them is a number a test checks, so treat them as the shape of a
