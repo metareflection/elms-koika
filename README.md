@@ -213,6 +213,7 @@ full, lives under [`doc/`](doc).
 | [`frama-c.md`](doc/frama-c.md) | the third backend, which answers a weaker question and says where that stops |
 | [`fact.md`](doc/fact.md) | the FaCT ports, and the three of five objects that leak |
 | [`global-history.md`](doc/global-history.md) | the predictor as a bounded register, what it costs on this tree and what it buys past it |
+| [`candidates.md`](doc/candidates.md) | screening real-world crypto objects for a port: what gates one, and which one is next |
 
 Those files carry timings. Every one was measured on one machine at one commit
 and none of them is a number a test checks, so treat them as the shape of a
