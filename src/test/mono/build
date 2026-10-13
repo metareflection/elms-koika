@@ -1,0 +1,52 @@
+#!/usr/bin/env zsh
+
+# usage: ./build
+#
+# `ccopy.c` to four RV32IM objects, one per variant, each holding exactly one
+# function. The source is one file because the four bodies differ by a word and
+# a loop and are only worth anything read side by side; the objects are four
+# because the tower enters a program at pc 0 and four entries in one `.text`
+# would need `Common.entryPc` to tell them apart.
+
+here=${0:a:h}
+
+for tool in opt llc; do
+    (( $+commands[$tool] )) || { echo "no $tool on PATH; install LLVM" >&2; exit 1 }
+done
+
+if ! echo 'addi x1, x0, 1' | clang --target=riscv32 -march=rv32im -mabi=ilp32 \
+        -c -x assembler -o /dev/null - 2>/dev/null; then
+    echo "clang cannot target riscv32; this suite has no gcc fallback" >&2
+    exit 1
+fi
+
+cc=(clang --target=riscv32 -march=rv32im -mabi=ilp32 -mno-relax)
+
+# -O2 is the whole experiment. The leak is something the optimizer introduces,
+# so a fixture built at -O0 or -O1 would be a fixture about nothing; `-O1` is
+# enough to fold the mask back into a `select` but not to inline the body into
+# the entry, and it is the inlined form the source comment is written about.
+#
+# `-ffreestanding -fno-builtin` for the reason every port here carries them:
+# a call to a libc symbol no `auipc` in the object computed is a dynamic jump
+# the reader refuses. Nothing in this file calls one, and they stay so that
+# stays true if a variant grows.
+echo "Compiling ccopy.c"
+$cc -O2 -ffreestanding -fno-builtin -emit-llvm -S -o $here/ccopy.ll $here/ccopy.c || exit 1
+
+# One object per entry. `internalize` is what makes the other three private so
+# `globaldce` can drop them, and it is also what would clear a `R_RISCV_CALL_PLT`
+# if one of these ever called out; `doc/candidates.md` is where that recipe is
+# written down.
+#
+# The entry keeps external linkage and every other symbol loses it, so what
+# comes out is a `.text` with one function in it at offset 0.
+for v in shipped unrolled volatile plain; do
+    echo "Extracting ccopy_$v"
+    opt -passes='internalize,globaldce' -internalize-public-api-list=ccopy_$v \
+        -S $here/ccopy.ll -o $here/$v.int.ll || exit 1
+    llc -mtriple=riscv32 -mattr=+m -O2 --relocation-model=static \
+        -o $here/$v.s $here/$v.int.ll || exit 1
+    $cc -c $here/$v.s -o $here/$v.o || exit 1
+    rm -f $here/$v.int.ll
+done

@@ -38,6 +38,11 @@ and a suite that cannot find one aborts with a message naming the script.
 them, because what is checked in is the LLVM it emitted. Skip this and the five
 FaCT suites fail twenty-five times over with a missing object.
 
+`./src/test/mono/build` is the third, for the four `fe_ccopy` variants, and wants
+the same three tools. What it does differently is build at `-O2` and extract one
+object per entry, because the thing under test is a transformation the optimizer
+performs and a fixture built at `-O0` would be a fixture about nothing.
+
 Running `sbt testFull` from the root will run all the tests, generating
 `.actual` files and checking them against the `.check` files under
 [`src/out/cbmc`](src/out/cbmc), [`src/out/klee`](src/out/klee) and
@@ -213,7 +218,7 @@ full, lives under [`doc/`](doc).
 | [`frama-c.md`](doc/frama-c.md) | the third backend, which answers a weaker question and says where that stops |
 | [`fact.md`](doc/fact.md) | the FaCT ports, and the three of five objects that leak |
 | [`global-history.md`](doc/global-history.md) | the predictor as a bounded register, what it costs on this tree and what it buys past it |
-| [`candidates.md`](doc/candidates.md) | screening real-world crypto objects for a port: what gates one, and which one is next |
+| [`candidates.md`](doc/candidates.md) | screening real-world crypto objects for a port, and the one that landed: Monocypher's `fe_ccopy`, where one word decides it |
 
 Those files carry timings. Every one was measured on one machine at one commit
 and none of them is a number a test checks, so treat them as the shape of a

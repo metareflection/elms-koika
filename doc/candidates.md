@@ -4,13 +4,19 @@ The tree's largest port is `salsa20`, 277 instructions and two branches. This is
 the screen that was run to find the next one, what it measured, and which
 candidate came out of it.
 
-The answer is Monocypher's field arithmetic, entered at `fe_mul`. 1215
-instructions, no branch, no call and no loop, and it verifies clean in 4 seconds
-under `naive` and 29 seconds and 1.8 GB under `cache`. That is 4.4 times the
-largest object in the tree and, under `naive`, faster in absolute terms than the
-277-instruction program it replaces. `fe_tobytes` at 666 instructions is clean
-too, and the same function with its conditional subtraction written as a branch
-leaks on both models, which is what makes the clean cells worth quoting.
+The answer is Monocypher's field arithmetic. The screen reached it through
+`fe_mul`, 1215 instructions with no branch, no call and no loop, which verifies
+clean in 4 seconds under `naive` and 29 seconds and 1.8 GB under `cache`. That is
+4.4 times the largest object in the tree and, under `naive`, faster in absolute
+terms than the 277-instruction program it replaces.
+
+What landed is not `fe_mul`. Straight-line multiply-accumulate is constant-time by
+construction and nobody ever suspected it, so a clean cell on it says the pipeline
+works rather than that the library is safe. The port that says something is
+[`fe_ccopy`](#what-landed-fe_ccopy-four-ways), the masked conditional copy, whose
+own source comment names two mitigations against a compiler turning it into a
+timing leak and claims either works alone. For clang targeting RV32IM at -O2 that
+claim is half wrong, and `src/test/mono` is four objects that say which half.
 
 Monocypher's `crypto_x25519` whole is the thing that does not fit, and the reason
 is measured below.
@@ -99,8 +105,23 @@ instructions and no branches, `kyber_verify` at 14, `kyber_cmov` at 13,
 ### A screening tool has to count calls
 
 Max live branches is the number of distinct conditional branches reachable from a
-pc, maximised over pcs. A screen that walks the CFG without following `jalr` only
-reaches a callee's branches when the linker happened to lay it next, which is
+pc, maximised over pcs. Two warnings before the table, one about how the walk is
+done and one about what the number is good for.
+
+The second is the sharper one and it was learned the hard way, in
+[Twelve branches is not twelve live branches](#twelve-branches-is-not-twelve-live-branches).
+This is a static reachability count and it is not what the tower computes.
+`Exec.liveBranchesAt` keys on the branches whose recorded outcome something still
+goes on to read, so a program whose branches each execute once and are never
+consulted again keys at zero of them however many the CFG holds. Straight-line
+unrolled code is exactly that shape. The number below is a sound upper bound and a
+fine filter for "could this be expensive"; it is not a prediction of what the
+predictor models will charge, and it does not say which side of `ghr/`'s crossover
+an object falls on. Only reuse of a branch outcome does that, and reuse means a
+loop.
+
+The first is about the walk. A screen that walks the CFG without following `jalr`
+only reaches a callee's branches when the linker happened to lay it next, which is
 sound for a one-function leaf and wrong for everything in the table above. The two
 readings differ by about half:
 
@@ -252,6 +273,12 @@ off the object before the tower runs.
 The section to write about these five leaves is that they verify free of
 secret-dependent control flow and addressing. Not that a finding came out of one.
 
+[`fe_ccopy`](#what-landed-fe_ccopy-four-ways) is the one a finding came out of,
+and the difference is not that it is more important code. It is that its
+constant-time property is one the compiler can take away, so there is a pair to
+run and a sentence of the library's own documentation to check. A routine nothing
+could plausibly break is a routine whose clean cell was never in doubt.
+
 ### The positive control
 
 So the clean cell is run against a broken one. `fe_tobytes` reduces by folding the
@@ -288,9 +315,292 @@ The broken variant is not functionally equivalent and is not meant to be; it is
 [`guarded`](fact.md#guarded)'s construction aimed at a shipped library rather than
 at a FaCT program.
 
-Neither object is in the tree. Both are built by a script and a Monocypher checkout
-that are not in the tree either, so landing the pair means vendoring the source or
-scripting the build.
+Neither object is in the tree, and neither needs to be. The pair below is the same
+construction with the branch supplied by the compiler instead of by hand, which is
+a different class of evidence, and it is what `src/test/mono` holds.
+
+## What landed: `fe_ccopy`, four ways
+
+`fe_ccopy` is the masked conditional copy `invsqrt` finishes on. Monocypher's
+comment above it says a compiler may
+
+> replace the arithmetic by a secret dependent branch, or (as has been observed),
+> swap pointers instead of values, which introduces a secret dependent index
+
+and names two mitigations, `volatile` on the mask and unrolling the copy loop,
+with the claim that "those mitigation work when applied separately or together".
+
+Four objects, built by [`src/test/mono/build`](../src/test/mono/build) out of one
+source file holding all four bodies verbatim, so the differences are readable side
+by side:
+
+| object | mitigations | insns | branches | loads | frame |
+|---|---|---|---|---|---|
+| `shipped` | both | 82 | 0 | 32 | 16 B |
+| `volatile` | `volatile` only | 82 | 0 | 32 | 16 B |
+| `unrolled` | unrolling only | 68 | **12** | 14 | none |
+| `plain` | neither | 68 | **12** | 14 | none |
+
+`unrolled` is the row the comment does not predict. It carries one of the two
+mitigations, applied separately, exactly as the comment says is sufficient, and it
+leaks as hard as carrying neither.
+
+The four objects are two. Disassemble all four, drop the leading address on each
+line and the function name inside each branch annotation, and `shipped` and
+`volatile` hash to one value while `unrolled` and `plain` hash to another.
+
+Say what was normalized or the check disagrees with itself. The annotation on
+every branch carries the name of the function it is in, and those differ by
+construction, so stripping only the address reports all four objects as distinct.
+That is the first answer anyone reproducing this gets, and it is wrong. The
+partition into two was run twice, independently, with different stripping details
+and so different hash values, which is why the procedure is written out here and
+no hash is quoted to match against.
+
+So the unrolling mitigation does not reach the object at all. At -O2 clang unrolls
+a ten-iteration loop over a literal bound whether or not the source already did,
+which makes the written-out version redundant rather than weak, and `volatile` is
+carrying the whole thing alone.
+
+That is a statement about this compiler at this optimization level. Monocypher's
+comment is defending against compilers in general, including ones that do not
+unroll, and on such a compiler the written-out loop is doing exactly what it was
+put there to do. Nobody measured one. What is measured here is that the unrolling
+is not load bearing on clang at -O2 for RV32IM, not that writing it was a mistake.
+
+Twenty cells, five models each, and every one agrees with the row above it:
+
+| | `naive` | `cache` | `static` | `predictive` | `forwarding` |
+|---|---|---|---|---|---|
+| `shipped` | clean | clean | clean | clean | clean |
+| `volatile` | clean | clean | clean | clean | clean |
+| `unrolled` | **leak** | **leak** | **leak** | **leak** | **leak** |
+| `plain` | **leak** | **leak** | **leak** | **leak** | **leak** |
+
+Uniform across the five columns is the claim. The branch is on the secret and its
+arms are unbalanced, so `naive` finds it with neither a cache nor a predictor in
+the model, which is the sentence [`folded`](fact.md#choose-and-folded) and
+[`fscalar_product`](fact.md#fscalar_product) both earn. Nothing here needs a
+machine to speculate; the leak is in what llc emitted.
+
+The cost is not uniform. The four `naive` cells answer in 53 seconds together and
+the other sixteen take 17 minutes, almost all of it on the two leaking objects
+under `predictive` and `forwarding`, which peaked near 3 GB.
+
+### Twelve branches is not twelve live branches
+
+The obvious thing to say about a twelve-branch object is that it is finally past
+the crossover [`global-history.md`](global-history.md) measures, where the tree's
+own maximum is four live branches and nothing in it is on the winning side of the
+dial. That was said here, and it is wrong. Measured, against `predictive`'s 84
+slots on the same object:
+
+| | slots | | slots |
+|---|---|---|---|
+| `h=1` | 200 | `h=3` | 618 |
+| `h=2` | 342 | `h=4` | 1117 |
+
+The bounded register is more expensive at every width, and at the width the
+argument named it does not answer at all. Under an 8 GB cap, `predictive` settles
+in 128s and 2.94 GB, `h=1` and `h=2` in 138s and 147s, and `h=3` and `h=4` are
+killed at the cap after about six minutes.
+
+The reason is the correction worth carrying, because it is about screening rather
+than about this object. `live.py` and its successor count every branch in the
+program as live. [`Exec.liveBranchesAt`](../src/test/scala/elms/riscv/Exec.scala)
+does not: it keys on `Flow.trains(prog, pc) ++ consulted`, the branches whose
+recorded outcome something still goes on to read. These twelve are twelve copies of
+one unrolled body, each executed once, so nothing ever consults what they recorded
+and the key drops all twelve. That is why `predictive` stays at 84 slots on a
+twelve-branch program, and why `predictive` being slow here is not branch fanout
+either.
+
+So branch count does not decide the trade and neither does a screening tool's
+maximum-live figure. Reuse of a branch outcome decides it, and reuse means a loop.
+`HistoryFanoutSuite`'s `loop-same` family has one and this object does not, and no
+number either session was quoting tells those two apart.
+
+What would qualify, stated so the retired claim is replaced rather than deleted: a
+loop whose branch outcomes are still being read by later branches, so the key has
+to carry them. A bignum modular exponentiation with fifteen live branches inside
+its ladder is the candidate, which is what
+[`global-history.md`](global-history.md) already says the dial is waiting for, and
+that admission stands untouched by anything here.
+
+The unwind bound was ruled out as the explanation rather than assumed away.
+`RiscVGhrDriver` raises `unwind` to `phtEntries + 1`, so `h=3` and `h=4` run at 97
+and 193 where `h=2` runs at 65, and that alone could have been the whole effect.
+Staging `h=2` and checking it at 193 costs 148s and 3.30 GB against 147s and
+3.15 GB at 65. The bound is nearly free. The slots are not.
+
+What is in the tree is four cells at two bits, the widest register that answers
+about this object. All four agree with `predictive`, which is the point: the
+register changes the bill and not the verdict.
+
+They are worth keeping for a reason the slot counts do not show. Every other place
+the two predictor representations meet in this tree is a program written to make
+them meet: `GhrSuite`'s eight demos are built to exercise a predictor, and
+`GhrFidelitySuite`'s `retrain` is a fixture built specifically to make the two
+models disagree. The leaking pair is the only object a compiler produced on which
+the two are compared, and the two agreeing there is a claim neither of the others
+makes.
+
+The clean pair is the control and a good one, 0 branches, 82 slots under both
+models and two seconds under both, so a bounded register costs exactly nothing
+where there is no history to keep.
+
+The cost is lopsided, which decides what to drop first if the `--full` budget ever
+binds. The set is 300 seconds and the clean pair is about 3 of them. The control is
+nearly free and the interesting half is all of the bill.
+
+If a number is wanted for the leaking pair at four bits, the honest one is that the
+register cannot check them inside 8 GB.
+
+Residue size runs the other way, and the pair is the cleanest test of why that this
+tree has. The clean objects emit the larger residues, 8490 lines against 5903 under
+`cache` and 13290 against 6438 under `forwarding`, because doing the work
+unconditionally is 32 loads to model rather than 14. They are also enormously
+cheaper to check:
+
+| `predictive` | loads | time | memory |
+|---|---|---|---|
+| `shipped` | 32, all at literal offsets | 2s | 0.10 GB |
+| `unrolled` | 14, some secret-derived | 128s | 2.94 GB |
+
+Fewer than half the loads and sixty times the time. What costs is a load at an
+address the solver cannot pin down, and the broken pair's `addi a3, a1, 0x8`
+against `addi a3, a0, 0x8` followed by a `lw` is exactly that shape, while reading
+both operands at fixed offsets and masking is exactly what is not. The tree already
+had this measured on a synthetic 401-instruction program, 1.3s with no loads, 4.9s
+with literal-offset loads and 62.8s with one secret-derived address per five
+instructions; this is the same effect on an object a compiler produced.
+
+It inverts the obvious reading of the load column. The constant-time version does
+twice the memory traffic and is sixty times cheaper to verify, and it is cheaper
+for the same property that makes it constant-time. The tower is cheapest on exactly
+the programs worth checking.
+
+The load column is the better number, because zero branches only says the hazard
+you already know about is absent. 32 loads against 14 is the constant-time property
+itself: the clean pair reads both operands every time and masks between them, and
+the leaking pair reads whichever operand the branch selected. The frame column is
+the mechanism in one number, since the sixteen bytes the clean pair spills are the
+`volatile` mask, and a mask the optimizer must keep in memory is one it cannot
+fold.
+
+Both hazards the comment names turn up in the same compile. In `plain.o` the
+`bnez a2, 0x40` at `0x24` guards an extra `lw a5, 0x0(a1)`, so its two arms differ
+by a load and the leak needs no cache to find it. By the third limb the shape has
+changed: `0x38` computes `addi a3, a0, 0x8` and `0x58` computes `addi a3, a1, 0x8`,
+the two paths meet at `0x5c`, and what that `lw a3, 0x0(a3)` reads is an address
+the secret chose. One compile, both hazards, neither written by hand.
+
+### Why `fe_ccopy` and not `fe_cswap`
+
+The comment covers both and says the problem "has yet to surface in `fe_cswap()`".
+Two things keep it there, and neither is distance.
+
+A conditional swap writes both destinations, so there is no `select` to fold back
+into. A conditional copy chooses one of two values for one destination, which is a
+`select` exactly.
+
+And the condition has to arrive as a comparison, in the same basic block, where
+instcombine can see it. That is what gives it an `i1` and lets it recognise `-b`
+as a mask. The ladder's condition is `scalar_bit`, a shift and an `and`, so there
+is no comparison and no `i1`; taking the `volatile` out of `fe_cswap` and inlining
+it into a ladder-step driver gives 98 instructions and zero branches.
+
+The entries here write that comparison inline, and that is a construction rather
+than a transcription. `invsqrt` calls `fe_ccopy(isr, t0, 1 - (m1 | ms))` where `m1`
+and `ms` come from `fe_isequal`, which at -O2 clang leaves out of line, so what
+reaches the copy is a returned `int` and not an `i1` and the fold never happens.
+The next section is what repairs the gap between the two.
+
+This is [`src/test/fact/build`](../src/test/fact/build)'s mechanism, which already
+records that instcombine folds FaCT's selection idiom into a `select` and that
+RV32I, having no conditional move, lowers a `select` as a branch. The tree
+demonstrates that on a synthetic `.fact` file. These four objects are the same
+mechanism firing on a shipped library, and the `i1`-from-comparison detail is the
+part the synthetic version cannot show, because it is what decides which of two
+near-identical functions in the same library is affected.
+
+### The shipped library is fine, and the reason is not the one you would guess
+
+Worth stating plainly, because the table above reads like a vulnerability report
+and is not one. Nothing here says Monocypher leaks.
+
+The strong version of that is a diff rather than a reading. Build `monocypher.c`
+as shipped, build it again with `volatile` deleted from both `fe_ccopy` and
+`fe_cswap`, and compare four entries:
+
+| entry | shipped | mitigation deleted |
+|---|---|---|
+| `crypto_x25519` | 5101 insns, 5 br | 5220 insns, 5 br |
+| `crypto_elligator_map` | 4143 insns, 3 br | 4121 insns, 3 br |
+| `crypto_eddsa_sign` | 13468 insns, 51 br | 13473 insns, 51 br |
+| `crypto_x25519_dirty_small` | 5146 insns, 6 br | 5265 insns, 6 br |
+
+Taking the mitigation away changes no branch count anywhere, `crypto_elligator_map`
+and `crypto_eddsa_sign` included, and those are the two entries whose conditions
+come from comparisons. So at -O2 on this clang the library is not relying on
+`volatile`. The trigger does not fire, because `fe_isequal` stays out of line and
+what reaches the copy is a returned `int`.
+
+Which is a worse reason to be safe than having a mitigation, because it is one
+inlining decision wide. Force `fe_isequal` inline and nothing else:
+
+| `invsqrt`, `fe_isequal` inlined | unrolled | rolled |
+|---|---|---|
+| `volatile` | 3 branches | 3 branches |
+| no `volatile` | **13 branches** | **13 branches** |
+
+Three branches is the loop back-edges and is the clean answer. Thirteen is those
+three plus ten the compiler put on the secret, in Monocypher's own `invsqrt`, with
+no edit to it beyond the mitigation. So `volatile` is load bearing in the real
+library; it is simply not being exercised at this optimization level.
+
+Those two results have to be read together or the first one is dangerous. On its
+own, "deleting the mitigation changes nothing" reads as "the mitigation is
+unnecessary", which is advice someone might act on, and the matrix underneath it is
+the only thing that says otherwise.
+
+`always_inline` is a construction too, and saying so is the point rather than a
+hedge. What makes it a better construction than writing the comparison inline is an
+asymmetry worth one sentence. Writing the comparison out by hand is a change to the
+source that nobody would make, so it produces a shape the library does not have.
+Inlining a small leaf function is a decision this compiler already makes everywhere
+else and declines here for reasons that have nothing to do with security, so it
+produces a shape the library has not been given yet. Neither is what ships. Only one
+of them is a plausible next build.
+
+That is the comment doing its job. It says the mitigations "may help delay the day
+compilers grow clever enough to defeat it", and one inlining decision is that day.
+What the four objects add is which of the two would survive it.
+
+One claim here carries no caveat, and it is the one worth keeping. Unrolling is
+inert in every configuration measured: with `volatile` and without it, in the
+fixture and in `invsqrt`, at both -O2 shapes. clang unrolls the loop whether or not
+the source does, so the written-out version never reaches the object, and `volatile`
+is doing all of the work in every cell where any work was needed.
+
+### What it costs to land
+
+A source file and a build line. `ccopy.c` is four functions and a macro, `build`
+runs clang once and then `opt -passes='internalize,globaldce'` once per entry, and
+what comes out is four objects with one function apiece that the tower enters at
+pc 0 like every other fixture.
+
+That matters more than the size does. The earlier plan for the `fe_tobytes` pair
+needed a vendored Monocypher checkout and `port.sh`, which is why it was parked;
+this needs neither, so what the branch is waiting on is no longer a frontend for
+vendoring. It is whatever handles the calls in a multi-function port, which is
+what `crypto_poly1305` needs and a leaf never did.
+
+Four single-entry objects rather than one object with four entries, deliberately.
+`Common.entryPc` has no override anywhere in the tree, so the first fixture to use
+it is the first to find out whether the seam is right; a fixture whose verdicts are
+the finding is the wrong place to discover that. Poly1305 is where it gets
+exercised, because there it is load bearing rather than a convenience.
 
 ### What a leaf port costs now
 
@@ -350,7 +660,8 @@ instruction instances:
 | 255 | 2,412,555 |
 
 The 1455 MB cell above is 5400 instances. At 255 trips this is 447 times that, and
-the dial does not rescue it: eight bits is still fourteen times the fixture. So
+turning `nb_bits` down does not rescue it: eight bits is still fourteen times the
+fixture. So
 `scalarmult` is not a first port at any setting, and the five leaves are, because
 none of them has a loop for the bound to cover.
 
@@ -372,6 +683,15 @@ live, against the tree's four, and the measured fanout at seven live branches is
 Twenty-four is far past where either of those was measured. A hand-written 16-limb
 modexp built the same way reads 42 branches at 42 max live, which is the same
 verdict from a second source.
+
+Max live is a static count and
+[Twelve branches is not twelve live branches](#twelve-branches-is-not-twelve-live-branches)
+is where it fails, so it is worth saying why it is trusted here and was not there.
+`fe_ccopy`'s twelve are twelve copies of one body, each executed once, and nothing
+reads back what they recorded. A modexp's are a ladder: the same branches run every
+trip and later trips consult what earlier ones did, which is the reuse the tower's
+key actually charges for. Same number, opposite meaning, and the loop is what
+separates them.
 
 `br_i31_modpow` is the same algorithm at 31-bit limbs, 649 instructions, 13 `mul`
 and 11 `mulhu` where i15 has 13 and none. That pair is `choose` and `folded`'s
@@ -401,20 +721,42 @@ reading.
 
 ## What is not measured
 
-`fe_mul` and `fe_tobytes` are the two objects here a tower has run on. Everything else is static:
-instruction counts, branch counts, call resolution, section counts, opcode
-screening and `auipc`/`jalr` pairing, each checked against the rejection sites in
-`Decode.scala` and `Elf.scala`. No other object in this document has been loaded
-through the Scala reader, and no checker has seen a residue from one.
+The four `fe_ccopy` objects are in the tree and `MonoNaiveTests` and its four
+siblings are what run them, so those twenty cells are a test rather than a
+measurement in a document. `fe_mul` and `fe_tobytes` are two more objects a tower
+has run on, out of tree, one run each.
 
-So the three remaining leaves are inference from two cells plus a screen, and the
-inference is that zero branches is what those cells are about rather than 1215
-being a safe size.
+Everything else here is static: instruction counts, branch counts, call
+resolution, section counts, opcode screening and `auipc`/`jalr` pairing, each
+checked against the rejection sites in `Decode.scala` and `Elf.scala`. No other
+object in this document has been loaded through the Scala reader, and no checker
+has seen a residue from one. So the three remaining leaves are inference from two
+cells plus a screen, and the inference is that zero branches is what those cells
+are about rather than 1215 being a safe size.
 
-Both clean verdicts are close to structural, for the reason written out above, and
-what makes them mean anything is the broken `fe_tobytes` beside them rather than
-either cell alone. That pair is three cells and one source edit, on two objects
-neither of which is in the tree.
+`crypto_poly1305` has been screened and not run. Zero relocations, one `.text`, no
+undefined symbols, 609 instructions over five functions, and five calls between
+them reaching three deep through `crypto_poly1305` to `update` to `poly_blocks`.
+Whether the multi-function residue path handles that is not something any cell
+here answers.
+
+The claim about `fe_cswap` is one compile, not a sweep. Four variants of it
+inlined into a ladder-step driver emit no branch, which says the condition's shape
+is what keeps it clean on this compiler at this optimization level. A different
+clang could fold it tomorrow, which is the possibility Monocypher's comment is
+written against and the reason it keeps a mitigation it believes is redundant.
+
+The library audit is static and narrow in the same way. Four entries, one clang,
+one optimization level, branch counts off `llvm-objdump` and no checker involved.
+It says the mitigation is not exercised at -O2 and becomes load bearing when one
+inlining decision changes. It does not sweep optimization levels, clang versions,
+LTO, or targets with a conditional move, where a folded `select` lowers to `cmov`
+and stays constant-time. That last case is probably why the comment's claim about
+unrolling held wherever it was written, and nobody here measured it.
+
+Nothing in this document is a leak in shipped Monocypher. The two objects that
+leak are variants built by deleting a word, and they are in the tree as a control
+for the two that do not.
 
 The unwind sweep was run on a fixture of 21 instructions and the ladder estimate
 scales it by 450, which is a long way outside it. What that supports is a refusal

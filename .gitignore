@@ -46,3 +46,8 @@ src/test/fact/*.o
 src/test/fact/*.s
 src/test/fact/.factc-src/
 src/test/fact/.fact-eval/
+
+# Monocypher test fixtures, built by src/test/mono/build
+src/test/mono/*.o
+src/test/mono/*.s
+src/test/mono/*.ll
