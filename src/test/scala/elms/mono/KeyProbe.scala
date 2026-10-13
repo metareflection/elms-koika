@@ -2,6 +2,8 @@ package elms.koika.test.mono
 
 import org.scalatest.funsuite.AnyFunSuite
 
+import scala.collection.mutable
+
 import elms.koika.test.riscv.{Flow, RiscV, elf}
 
 // What a [Predictive] slot key carries, per object, and why calls decide it.
@@ -21,22 +23,54 @@ import elms.koika.test.riscv.{Flow, RiscV, elf}
 // Not a cell: it reports rather than asserting, because the numbers are a
 // property of objects the tree does not otherwise promise anything about.
 class KeyProbe extends AnyFunSuite {
-  private def report(name: String, path: String): Unit = {
+  // Old: `trains(pc) ++ consultedAfterAnyCall`, where the second term is one
+  // set for the whole program and goes into every key.
+  // New: [Flow.trainsUnder], walked over the (pc, stack) pairs the staging
+  // actually reaches from the entry, so a `ret` follows one edge.
+  private def report(name: String, path: String, entry: String = ""): Unit = {
     if (!java.nio.file.Files.exists(java.nio.file.Path.of(path))) {
       info(f"$name%-18s not built")
       return
     }
-    val prog = elf.Elf.load(path).prog
+    val img = elf.Elf.load(path)
+    val prog = img.prog
+    val from = if (entry.isEmpty) 0 else img.entries(entry)
     val consulted = Flow.consultedAfterAnyCall(prog)
-    val live = prog.indices.map(pc => (Flow.trains(prog, pc) ++ consulted).size)
+
+    // Every (pc, stack) the walk from [from] can be at, which is what a slot
+    // key ranges over.
+    val seen = mutable.Set[(Int, List[Int])]()
+    val todo = mutable.Stack((from, List.empty[Int]))
+    while (todo.nonEmpty) {
+      val (pc, st) = todo.pop()
+      if (pc >= 0 && pc < prog.length && st.length <= 32 && seen.add((pc, st))) {
+        prog(pc) match {
+          case RiscV.Instr.Ret => st match {
+              case r :: rest => todo.push((r, rest))
+              case Nil       => ()
+            }
+          case RiscV.Instr.Call(_, t)          => todo.push((t, (pc + 1) :: st))
+          case RiscV.Instr.Jal(_, off)         => todo.push((pc + off.i / 4, st))
+          case RiscV.Instr.Branch(_, _, _, off) =>
+            todo.push((pc + 1, st)); todo.push((pc + off.i / 4, st))
+          case _ => todo.push((pc + 1, st))
+        }
+      }
+    }
+
+    val oldKeys = prog.indices.map(pc => (Flow.trains(prog, pc) ++ consulted).size)
+    val newKeys = seen.toSeq.map { case (pc, st) =>
+      Flow.trainsUnder(prog, pc, st, 32).map(_.size).getOrElse(oldKeys(pc))
+    }.sorted
     val calls = prog.count { case RiscV.Instr.Call(_, _) => true; case _ => false }
     val brs = prog.count { case RiscV.Instr.Branch(_, _, _, _) => true; case _ => false }
-    info(f"$name%-18s calls=$calls%-3d branches=$brs%-3d consulted=${consulted.size}%-3d " +
-      f"maxKey=${live.max}%-3d medianKey=${live.sorted.apply(live.size / 2)}%-3d")
+    info(f"$name%-18s calls=$calls%-2d br=$brs%-3d | old max=${oldKeys.max}%-3d " +
+      f"med=${oldKeys.sorted.apply(oldKeys.size / 2)}%-3d | new max=${newKeys.max}%-3d " +
+      f"med=${newKeys(newKeys.size / 2)}%-3d states=${seen.size}%d")
   }
 
   test("what a predictive slot key carries") {
-    report("poly1305", "src/test/mono/poly.o")
+    report("poly1305", "src/test/mono/poly.o", "crypto_poly1305")
     report("ccopy/unrolled", "src/test/mono/unrolled.o")
     report("hsalsa20", "src/test/fact/hsalsa20.o")
     report("fscalar_product", "src/test/fact/fscalar_product.o")
