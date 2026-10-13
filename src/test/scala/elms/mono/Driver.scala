@@ -3,8 +3,11 @@ package elms.koika.test.mono
 import elms.prelude.*
 import elms.prelude.given
 
+import elms.core.StructManifest
+
 import elms.koika.test.Verdict
-import elms.koika.test.riscv.{RiscV, RiscVDriver, elf}
+import elms.koika.test.common.{StateG, StateT}
+import elms.koika.test.riscv.{RiscV, RiscVDriver, RiscVGhrDriver, RiscVShell, elf}
 
 // One of the four objects `src/test/mono/build` produces, and what every model
 // owes it.
@@ -57,8 +60,13 @@ object Program {
 // What it keeps from that file is the threat model: a pointer the caller chose
 // is public and identical in both runs, and only what it points at is drawn
 // twice.
-abstract class MonoDriver(val program: Program) extends RiscVDriver[64] {
-  override val prog: Vector[RiscV.Instr] =
+trait MonoShell[S: StructManifest] extends RiscVShell[64, S] {
+  def program: Program
+
+  // [program] is a constructor parameter of the class that mixes this in,
+  // and a parameter accessor is assigned before the superclass constructor
+  // runs, so it is readable here. A `val` in a subclass body would not be.
+  val prog: Vector[RiscV.Instr] =
     elf.Elf.load(s"src/test/mono/${program.name}.o").prog
 
   private val limbs = 10
@@ -133,3 +141,18 @@ abstract class MonoDriver(val program: Program) extends RiscVDriver[64] {
     regs + public
   }
 }
+
+// The four objects over the state every model but one takes.
+abstract class MonoDriver(val program: Program)
+    extends RiscVDriver[64]
+    with MonoShell[StateT[32, 64, 24, 12]]
+
+// The same four over a state that carries a pattern history table.
+//
+// [P] is spelled at the use site rather than fixed here, because what the
+// table has to hold is the program's branch count times `2^historyBits` and
+// the two objects that leak have twelve branches where the two that do not
+// have none.
+abstract class MonoGhrDriver[P <: Int: ValueOf](val program: Program)
+    extends RiscVGhrDriver[64, P]
+    with MonoShell[StateG[32, 64, 24, 12, P]]
