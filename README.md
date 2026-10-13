@@ -207,6 +207,7 @@ full, lives under [`doc/`](doc).
 | | |
 |---|---|
 | [`models.md`](doc/models.md) | the table above, read across: which demo says what about which model, and why |
+| [`shared-structure.md`](doc/shared-structure.md) | what every model in that table shares, and why the join of the two hardest ones has an empty body |
 | [`cache.md`](doc/cache.md) | the three-level set-associative cache, what each knob costs, and where a store stops |
 | [`store-forwarding.md`](doc/store-forwarding.md) | the store queue, the bypass, and the forward that should not have happened |
 | [`non-blocking.md`](doc/non-blocking.md) | loads that land after the instruction that issued them, and the rows that go away when they do |
