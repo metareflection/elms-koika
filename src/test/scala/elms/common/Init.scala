@@ -63,11 +63,11 @@ object Init {
   def nonblocking(stateT: String): String =
     body(stateT, saved = false, cache = true, stack = false, ready = true)
 
-  // [Predictive]'s state plus the table a [GlobalHistory] reads its guess
-  // from. Every entry starts not-taken, which is the cold start the per-branch
-  // predictor gets from an absent map key.
-  def globalHistory(stateT: String): String =
-    speculative(stateT).replace(
+  // The table a [GlobalHistory] reads its guess from, appended to whichever
+  // body the caller already built. Every entry starts not-taken, which is the
+  // cold start the per-branch predictor gets from an absent map key.
+  private def withPht(body: String): String =
+    body.replace(
       "\n}",
       """
         |  for (int i=0; i<PHT_ENTRIES; i++) {
@@ -75,6 +75,9 @@ object Init {
         |  }
         |}""".stripMargin
     )
+
+  // [Predictive]'s state plus that table.
+  def globalHistory(stateT: String): String = withPht(speculative(stateT))
 
   // Every field there is, for a suite that runs one program against several
   // models. Which fields a model leaves untouched is not what [RiscVBranchyTests]
@@ -90,5 +93,14 @@ object Init {
     def speculative(stateT: String): String =
       body(stateT, saved = true, cache = true, stack = true)
     def forwarding(stateT: String): String = speculative(stateT)
+
+    // The one a program that spills and carries a history register needs, and
+    // the reason this is spelled out rather than inherited: [Init.globalHistory]
+    // builds on the non-spilling [Init.speculative], so it leaves `sp` at zero.
+    // A program with a frame then decrements from there and stores through a
+    // negative index. `--no-standard-checks` means CBMC never reports that, and
+    // the lesson is the one [lru] already carries about `mem[-1]`: KLEE found
+    // this on `crypto_poly1305` and CBMC could not have.
+    def globalHistory(stateT: String): String = withPht(speculative(stateT))
   }
 }
