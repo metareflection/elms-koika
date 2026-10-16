@@ -96,6 +96,67 @@ object Flow {
       }
     }
 
+  // The same question as [trains] and [consultedAfterAnyCall] together, asked
+  // of a pc that knows which calls are still in flight.
+  //
+  // Those two are separate because [trains] stops at a `ret`, having no idea
+  // where it goes, and [consultedAfterAnyCall] then answers "anywhere a call
+  // returns to" for the whole program at once. The union is added to every
+  // pc's key, so an object with calls keys every slot on every branch it has,
+  // including branches that have already run and that nothing will read again.
+  // `crypto_poly1305` is 609 instructions with six call sites, and its median
+  // pc keys on all thirteen of its branches: 2^13 against 1792 slots.
+  //
+  // Given [stack], a `ret` has exactly one successor and the walk follows it.
+  // A pc late in the program then reaches the few branches genuinely ahead of
+  // it rather than all of them, which is what the liveness restriction was for.
+  //
+  // [None] when the walk needs a stack deeper than [maxDepth], which is the
+  // recursion guard: a self-recursive program grows one without bound, and
+  // every frame is a distinct state. The caller falls back to the conservative
+  // pair, so a program this cannot answer about is slower to stage and not
+  // wrong. A fixed point over the return edges would replace the guard.
+  def trainsUnder(
+      prog: Vector[Instr],
+      from: Int,
+      stack: List[Int],
+      maxDepth: Int
+  ): Option[Set[Int]] = {
+    val seen = mutable.Set[(Int, List[Int])]()
+    val todo = mutable.Stack((from, stack))
+    val out = mutable.Set[Int]()
+    while (todo.nonEmpty) {
+      val (pc, st) = todo.pop()
+      if (pc >= 0 && pc < prog.length && seen.add((pc, st))) {
+        prog(pc) match {
+          case Instr.Branch(_, _, _, _) => out += pc
+          case _                        => ()
+        }
+        prog(pc) match {
+          // The one edge the stack buys. An empty stack is the entry
+          // returning, which ends the program rather than going anywhere.
+          case Instr.Ret =>
+            st match {
+              case r :: rest => todo.push((r, rest))
+              case Nil       => ()
+            }
+          // Into the callee, carrying where it comes back to. `pc + 1` is not
+          // pushed here: it is reached through the callee's `ret`, which is
+          // the whole point.
+          case Instr.Call(_, target) =>
+            if (st.length >= maxDepth) { return None }
+            todo.push((target, (pc + 1) :: st))
+          case Instr.Jal(_, off) => todo.push((pc + off.i / 4, st))
+          case Instr.Branch(_, _, _, off) =>
+            todo.push((pc + 1, st))
+            todo.push((pc + off.i / 4, st))
+          case _ => todo.push((pc + 1, st))
+        }
+      }
+    }
+    Some(out.toSet)
+  }
+
   // Whether a call to [target] may be shared by a model that specializes on
   // the predictor's history. True when the branches the call can write are
   // ones nothing downstream of any return reads back.

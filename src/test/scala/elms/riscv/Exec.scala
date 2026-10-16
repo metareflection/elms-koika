@@ -39,10 +39,21 @@ trait Exec extends Direct with Multiplier {
   // Memoized, because `slot` asks this once per arrival and the walk behind it
   // is over the whole program. [Predictive] is the only caller and it asks a
   // great many times.
-  private val live = mutable.Map[Int, Set[Int]]()
+  private val live = mutable.Map[(Int, List[Int]), Set[Int]]()
 
+  // Keyed on the stack as well as the pc, because that is what the walk reads.
+  // [Common.retstack] rather than a parameter: `slot` already interns it into
+  // the key beside this, so the two cannot disagree about which continuation
+  // is being asked about.
   override def liveBranchesAt(pc: Int): Option[Set[Int]] =
-    Some(live.getOrElseUpdate(pc, Flow.trains(prog, pc) ++ consulted))
+    Some(
+      live.getOrElseUpdate(
+        (pc, retstack),
+        Flow
+          .trainsUnder(prog, pc, retstack, maxCallDepth)
+          .getOrElse(Flow.trains(prog, pc) ++ consulted)
+      )
+    )
 
   // A byte offset lands on an instruction index, and a misaligned one is a bug
   // in the demo rather than something the generated C should have to check.
